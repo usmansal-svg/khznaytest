@@ -55,6 +55,15 @@ export async function updateSession(request: NextRequest) {
     // /health is a public connectivity check and must not require a session.
     !request.nextUrl.pathname.startsWith("/health")
   ) {
+    // API callers get a 401 they can act on. Redirecting a fetch() to the
+    // login page hands the caller an HTML document with a 200, which is
+    // indistinguishable from success until it fails to parse.
+    if (request.nextUrl.pathname.startsWith("/api/")) {
+      const denied = NextResponse.json({ error: "Not signed in." }, { status: 401 });
+      for (const cookie of supabaseResponse.cookies.getAll()) denied.cookies.set(cookie);
+      return denied;
+    }
+
     // no user, potentially respond by redirecting the user to the login page
     const url = request.nextUrl.clone();
     url.pathname = "/auth/login";
