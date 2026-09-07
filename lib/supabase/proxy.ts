@@ -53,7 +53,11 @@ export async function updateSession(request: NextRequest) {
     !request.nextUrl.pathname.startsWith("/login") &&
     !request.nextUrl.pathname.startsWith("/auth") &&
     // /health is a public connectivity check and must not require a session.
-    !request.nextUrl.pathname.startsWith("/health")
+    !request.nextUrl.pathname.startsWith("/health") &&
+    // TEMPORARY: the pricing page and its endpoint are open so they can be
+    // tried without an account. Re-gate both before any production deploy.
+    !request.nextUrl.pathname.startsWith("/price") &&
+    !request.nextUrl.pathname.startsWith("/api/price")
   ) {
     // API callers get a 401 they can act on. Redirecting a fetch() to the
     // login page hands the caller an HTML document with a 200, which is
