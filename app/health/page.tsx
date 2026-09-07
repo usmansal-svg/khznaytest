@@ -1,6 +1,9 @@
 import { createServerClient } from "@supabase/ssr";
 import { connection } from "next/server";
-import { Suspense } from "react";
+
+// This route must never be served from the prerender cache: every request
+// has to actually run the checks. `instant = false` makes it blocking.
+export const instant = false;
 
 type Check = { name: string; ok: boolean; detail: string };
 
@@ -118,16 +121,14 @@ async function Checks() {
   );
 }
 
-export default function HealthPage() {
+export default async function HealthPage() {
   return (
     <main className="mx-auto max-w-2xl px-6 py-16 font-mono text-sm">
       <h1 className="mb-1 text-2xl font-bold">Connection health</h1>
       <p className="mb-8 text-muted-foreground">
         Live check of Vercel hosting and the Supabase database.
       </p>
-      <Suspense fallback={<p>Running checks…</p>}>
-        <Checks />
-      </Suspense>
+      <Checks />
     </main>
   );
 }
