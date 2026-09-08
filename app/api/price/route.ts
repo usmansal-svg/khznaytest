@@ -4,17 +4,18 @@
  * This is the single source of pricing truth (section 13). The tagging form
  * must never compute a price client-side: if it does, the browser and the
  * server will disagree the first time settings change.
+ *
+ * Settings, grades, profiles and sub-categories come from the database, so
+ * whatever the pricing sidebar last saved is what prices here. The logic
+ * itself lives in lib/pricing/quote.ts so it can be tested without a request.
  */
 
 import { NextResponse } from "next/server";
 
-import { DEFAULT_SETTINGS, SETTINGS_VERSION, type Adjustment, type GradeCode } from "@/lib/pricing/constants";
-import { computePrice } from "@/lib/pricing/engine";
-import { resolveBrand } from "@/lib/pricing/brands";
-import { SUB_CATEGORIES } from "@/lib/pricing/sub-categories";
-
-const GRADE_CODES: GradeCode[] = ["bnwt", "premium", "excellent", "very_good"];
-const ADJUSTMENTS: Adjustment[] = ["below", "standard", "above"];
+import { createClient } from "@/lib/supabase/server";
+import { type Adjustment, type GradeCode } from "@/lib/pricing/constants";
+import { ADJUSTMENTS, GRADE_CODES, quote } from "@/lib/pricing/quote";
+import { loadPricingContext, resolveBrandDb } from "@/lib/pricing/repo";
 
 type Body = {
   sub_category_id?: string;
@@ -33,63 +34,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Body must be JSON." }, { status: 400 });
   }
 
-  const subCategory = SUB_CATEGORIES.find((s) => s.slug === body.sub_category_id);
+  const grade = (body.grade ?? "premium") as GradeCode;
+  if (!GRADE_CODES.includes(grade)) return NextResponse.json({ error: `Unknown grade: ${body.grade}` }, { status: 400 });
+  const adjustment = (body.adjustment ?? "standard") as Adjustment;
+  if (!ADJUSTMENTS.includes(adjustment)) return NextResponse.json({ error: `Unknown adjustment: ${body.adjustment}` }, { status: 400 });
+
+  const supabase = await createClient();
+  const [ctx, brand] = await Promise.all([loadPricingContext(supabase), resolveBrandDb(supabase, body.brand_text ?? body.brand_id)]);
+
+  const subCategory = ctx.subCategories.find((s) => s.slug === body.sub_category_id);
   if (!subCategory) {
     return NextResponse.json({ error: `Unknown sub_category_id: ${body.sub_category_id ?? "(missing)"}` }, { status: 400 });
   }
 
-  const grade = (body.grade ?? "premium") as GradeCode;
-  if (!GRADE_CODES.includes(grade)) {
-    return NextResponse.json({ error: `Unknown grade: ${body.grade}` }, { status: 400 });
-  }
-
-  const adjustment = (body.adjustment ?? "standard") as Adjustment;
-  if (!ADJUSTMENTS.includes(adjustment)) {
-    return NextResponse.json({ error: `Unknown adjustment: ${body.adjustment}` }, { status: 400 });
-  }
-
-  const brand = resolveBrand(body.brand_text ?? body.brand_id);
-
-  const result = computePrice({
-    weightKg: subCategory.weightKg,
-    profileCode: subCategory.profileCode,
-    valueIndex: subCategory.valueIndex,
-    perPieceShare: subCategory.perPieceShare,
-    perPieceCost: subCategory.perPieceCost ?? undefined,
-    gradeCode: grade,
-    tier: brand.tier,
-    adjustment,
-  });
-
-  // A rare piece is priced by hand even when the brand is priceable — two or
-  // more special triggers send it to the Set Aside rail (section 7.2).
-  const blockReason = body.is_rare
-    ? "Rare piece — set aside and price by hand against resale listings."
-    : result.blockReason;
-
-  const warnings = [brand.warning].filter(Boolean);
-  if (result.price > DEFAULT_SETTINGS.highValueThreshold) {
-    warnings.push(`Above PKR ${DEFAULT_SETTINGS.highValueThreshold.toLocaleString()} — goes to the QC review queue.`);
-  }
-
-  return NextResponse.json({
-    sub_category: { id: subCategory.slug, name: subCategory.name, measure_type: subCategory.measureType },
-    landed_cost: round2(result.landedCost),
-    price: blockReason ? null : result.price,
-    premium_price: blockReason ? null : result.premiumPrice,
-    grade_prices: blockReason ? null : result.gradePrices,
-    markdowns: blockReason ? [] : result.markdowns,
-    gp_pct: blockReason ? null : round4(result.gpPct),
-    brand: { name: brand.name, tier: brand.tier, matched: brand.matched },
-    brand_tier: brand.tier,
-    grade,
-    adjustment,
-    multiple: round4(result.multiple),
-    settings_version: SETTINGS_VERSION,
-    ...(blockReason ? { block_reason: blockReason } : {}),
-    ...(warnings.length ? { warnings } : {}),
-  });
+  return NextResponse.json(quote({ subCategory, brand, grade, adjustment, isRare: Boolean(body.is_rare) }, ctx));
 }
-
-const round2 = (n: number) => Math.round(n * 100) / 100;
-const round4 = (n: number) => Math.round(n * 10000) / 10000;

@@ -57,7 +57,22 @@ export async function updateSession(request: NextRequest) {
     // TEMPORARY: the pricing page and its endpoint are open so they can be
     // tried without an account. Re-gate both before any production deploy.
     !request.nextUrl.pathname.startsWith("/price") &&
-    !request.nextUrl.pathname.startsWith("/api/price")
+    !request.nextUrl.pathname.startsWith("/api/price") &&
+    // TEMPORARY: the till is open for a look without an account. Re-gate
+    // before any production deploy, and drop the anon grants migration.
+    !request.nextUrl.pathname.startsWith("/pos") &&
+    !request.nextUrl.pathname.startsWith("/api/pos") &&
+    // TEMPORARY: tagging, items, admin and their read APIs are viewable
+    // without an account. Saving and every admin write still require a
+    // session (401) and RLS. Re-gate before production use.
+    !request.nextUrl.pathname.startsWith("/tag") &&
+    !request.nextUrl.pathname.startsWith("/items") &&
+    !request.nextUrl.pathname.startsWith("/admin") &&
+    !request.nextUrl.pathname.startsWith("/api/reference") &&
+    !request.nextUrl.pathname.startsWith("/api/items") &&
+    !request.nextUrl.pathname.startsWith("/api/brands") &&
+    !request.nextUrl.pathname.startsWith("/api/tags") &&
+    !request.nextUrl.pathname.startsWith("/api/admin")
   ) {
     // API callers get a 401 they can act on. Redirecting a fetch() to the
     // login page hands the caller an HTML document with a 200, which is

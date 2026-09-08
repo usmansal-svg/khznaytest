@@ -7,6 +7,10 @@
  * if it does, the browser and the server will disagree the first time
  * settings change.
  *
+ * Everything that can be edited in the admin sidebar arrives as a parameter:
+ * `settings` (section 1–2 constants) and `refs` (grades, profiles, brand
+ * tiers). The code constants are only the defaults and the seed.
+ *
  * The chain has many multiplicative terms and a single misplaced one is
  * invisible until margin has already leaked, so engine.test.ts pins the
  * section 8 verification table. Keep it.
@@ -20,17 +24,50 @@ import {
   DEFAULT_SETTINGS,
   GRADES,
   LADDER_DEPTHS,
-  brandTier,
-  grade,
-  profile,
+  PROFILES,
   type Adjustment,
   type BrandTier,
+  type BrandTierInfo,
   type ColourTag,
+  type Grade,
   type GradeCode,
   type LadderStage,
+  type Profile,
   type ProfileCode,
   type Settings,
 } from "./constants";
+
+/* ------------------------------------------------------------- references */
+
+export type PricingRefs = {
+  grades: readonly Grade[];
+  profiles: readonly Profile[];
+  brandTiers: readonly BrandTierInfo[];
+};
+
+export const DEFAULT_REFS: PricingRefs = {
+  grades: GRADES,
+  profiles: PROFILES,
+  brandTiers: BRAND_TIERS,
+};
+
+function findGrade(refs: PricingRefs, code: GradeCode): Grade {
+  const g = refs.grades.find((x) => x.code === code);
+  if (!g) throw new Error(`Unknown grade: ${code}`);
+  return g;
+}
+
+function findProfile(refs: PricingRefs, code: ProfileCode): Profile {
+  const p = refs.profiles.find((x) => x.code === code);
+  if (!p) throw new Error(`Unknown profile: ${code}`);
+  return p;
+}
+
+function findTier(refs: PricingRefs, tier: BrandTier): BrandTierInfo {
+  const t = refs.brandTiers.find((x) => x.tier === tier);
+  if (!t) throw new Error(`Unknown brand tier: ${tier}`);
+  return t;
+}
 
 /* ------------------------------------------------------------------- cost */
 
@@ -57,9 +94,7 @@ export function landedCost(inputs: CostInputs, settings: Settings = DEFAULT_SETT
   const perPieceCost = inputs.perPieceCost ?? 0;
 
   const byWeight = inputs.weightKg * settings.blendedRate * settings.fx + inputs.weightKg * settings.dutyPerKg;
-  const byPiece = perPieceCost;
-
-  const blended = (1 - ppShare) * byWeight + ppShare * byPiece;
+  const blended = (1 - ppShare) * byWeight + ppShare * perPieceCost;
   const taxCredit = 1 - settings.inputTaxRate * settings.inputTaxRecover;
 
   return blended * taxCredit + settings.sortingPerPiece;
@@ -73,19 +108,19 @@ export function landedCost(inputs: CostInputs, settings: Settings = DEFAULT_SETT
  * Shares are of total intake, so they are divided by the sellable share to
  * become shares of what actually reaches the floor.
  */
-export function gradeSum(settings: Settings = DEFAULT_SETTINGS): number {
+export function gradeSum(settings: Settings = DEFAULT_SETTINGS, refs: PricingRefs = DEFAULT_REFS): number {
   const sellable = 1 - settings.rejectedShare;
-  return GRADES.reduce((sum, g) => sum + (g.shareOfIntake / sellable) * g.multiplier, 0);
+  return refs.grades.reduce((sum, g) => sum + (g.shareOfIntake / sellable) * g.multiplier, 0);
 }
 
 /** The blended brand uplift, SUM(share * multiplier) = 1.05 at current tiers. */
-export function blendedBrandUplift(): number {
-  return BRAND_TIERS.reduce((sum, t) => sum + t.share * (t.multiplier ?? 0), 0);
+export function blendedBrandUplift(refs: PricingRefs = DEFAULT_REFS): number {
+  return refs.brandTiers.reduce((sum, t) => sum + t.share * (t.multiplier ?? 0), 0);
 }
 
 /** Blended discount depth, D = SUM(depth[i] * volume[i]). */
-export function blendedDiscount(profileCode: ProfileCode): number {
-  const p = profile(profileCode);
+export function blendedDiscount(profileCode: ProfileCode, refs: PricingRefs = DEFAULT_REFS): number {
+  const p = findProfile(refs, profileCode);
   const volumes: Record<LadderStage, number> = {
     full: p.volFull,
     promo: p.volPromo,
@@ -107,12 +142,16 @@ export function blendedDiscount(profileCode: ProfileCode): number {
  * Yields 3.3947 / 3.9640 / 4.5766 for fast / standard / slow at the
  * current settings.
  */
-export function profileMultiple(profileCode: ProfileCode, settings: Settings = DEFAULT_SETTINGS): number {
-  const p = profile(profileCode);
+export function profileMultiple(
+  profileCode: ProfileCode,
+  settings: Settings = DEFAULT_SETTINGS,
+  refs: PricingRefs = DEFAULT_REFS,
+): number {
+  const p = findProfile(refs, profileCode);
 
-  const gsum = gradeSum(settings);
+  const gsum = gradeSum(settings, refs);
   const fullShare = 1 - settings.rejectedShare - p.pulledShare;
-  const d = blendedDiscount(profileCode);
+  const d = blendedDiscount(profileCode, refs);
 
   const revenueTarget = 1 / (1 - settings.targetGP);
   const bulkCredit = (p.pulledShare + settings.rejectedShare) * settings.bulkRecovery;
@@ -123,7 +162,7 @@ export function profileMultiple(profileCode: ProfileCode, settings: Settings = D
   // uplift so the whole book hits target together and everyday prices fall
   // about 5%. Off by default, which leaves luxury as pure upside.
   if (settings.brandFeedbackEnabled) {
-    multiple /= blendedBrandUplift();
+    multiple /= blendedBrandUplift(refs);
   }
 
   return multiple;
@@ -211,7 +250,11 @@ export type PriceResult = {
  *
  * Other grades derive from the *rounded* Premium price, not the raw figure.
  */
-export function computePrice(inputs: PriceInputs, settings: Settings = DEFAULT_SETTINGS): PriceResult {
+export function computePrice(
+  inputs: PriceInputs,
+  settings: Settings = DEFAULT_SETTINGS,
+  refs: PricingRefs = DEFAULT_REFS,
+): PriceResult {
   const gradeCode = inputs.gradeCode ?? BASE_GRADE;
   const tier = inputs.tier ?? "regular";
   const adjustment = inputs.adjustment ?? "standard";
@@ -220,8 +263,8 @@ export function computePrice(inputs: PriceInputs, settings: Settings = DEFAULT_S
     { weightKg: inputs.weightKg, perPieceShare: inputs.perPieceShare, perPieceCost: inputs.perPieceCost },
     settings,
   );
-  const multiple = profileMultiple(inputs.profileCode, settings);
-  const tierInfo = brandTier(tier);
+  const multiple = profileMultiple(inputs.profileCode, settings, refs);
+  const tierInfo = findTier(refs, tier);
   const adjustmentMultiplier = ADJUSTMENT_MULTIPLIERS[adjustment];
 
   // Ultra luxury blocks automatic pricing: set aside, authenticate, and price
@@ -235,9 +278,9 @@ export function computePrice(inputs: PriceInputs, settings: Settings = DEFAULT_S
 
   const premiumPrice = charm(cost * multiple * inputs.valueIndex * brandMultiplier * adjustmentMultiplier, settings);
 
-  const baseMultiplier = grade(BASE_GRADE).multiplier;
+  const baseMultiplier = findGrade(refs, BASE_GRADE).multiplier;
   const gradePrices = Object.fromEntries(
-    GRADES.map((g) => [g.code, charm((premiumPrice * g.multiplier) / baseMultiplier, settings)]),
+    refs.grades.map((g) => [g.code, charm((premiumPrice * g.multiplier) / baseMultiplier, settings)]),
   ) as Record<GradeCode, number>;
 
   const price = gradePrices[gradeCode];

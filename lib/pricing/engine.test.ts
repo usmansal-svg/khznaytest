@@ -283,6 +283,13 @@ describe("reference data", () => {
     assert.equal(new Set(SUB_CATEGORIES.map((s) => s.slug)).size, SUB_CATEGORIES.length);
   });
 
+  it("has unique three-letter SKU codes", () => {
+    // Codes are embedded in every SKU, so a collision would make two
+    // different garments indistinguishable on the shelf tag.
+    for (const sc of SUB_CATEGORIES) assert.match(sc.code, /^[A-Z]{3}$/, `${sc.slug} code ${sc.code}`);
+    assert.equal(new Set(SUB_CATEGORIES.map((s) => s.code)).size, SUB_CATEGORIES.length);
+  });
+
   it("every sub-category belongs to a known category", () => {
     const slugs = new Set(CATEGORIES.map((c) => c.slug));
     for (const sc of SUB_CATEGORIES) {
