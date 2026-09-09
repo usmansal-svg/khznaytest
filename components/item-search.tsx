@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Printer } from "lucide-react";
+import { Download, Printer } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,6 +30,15 @@ export function ItemSearch() {
   const [rows, setRows] = useState<Row[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
+  const today = new Date().toISOString().slice(0, 10);
+  const [from, setFrom] = useState(today.slice(0, 8) + "01");
+  const [to, setTo] = useState(today);
+  useEffect(() => {
+    fetch("/api/auth/me").then((r) => r.json()).then((j) => setRole(j.staff?.role ?? null)).catch(() => {});
+  }, []);
+  const canExport = role === "manager" || role === "founder";
+  const exportUrl = (format: "xlsx" | "csv") => `/api/export?what=items&format=${format}&from=${from}&to=${to}`;
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -72,6 +81,19 @@ export function ItemSearch() {
         className="h-12 max-w-md text-base"
       />
       {error && <p className="text-sm text-destructive">{error}</p>}
+
+      {canExport && (
+        <Card>
+          <CardContent className="flex flex-wrap items-end gap-3 pt-6 text-sm">
+            <div className="mr-2"><div className="font-medium">Export tagged items</div><div className="text-xs text-muted-foreground">Every field on the tag plus tagger, lot, outlet, shipment and received dates.</div></div>
+            <label className="grid gap-1 text-xs text-muted-foreground">Tagged from<input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-10 rounded-md border border-input bg-transparent px-2 text-sm text-foreground" /></label>
+            <label className="grid gap-1 text-xs text-muted-foreground">to<input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-10 rounded-md border border-input bg-transparent px-2 text-sm text-foreground" /></label>
+            <Button asChild className="h-10"><a href={exportUrl("xlsx")}><Download className="size-4" /> Excel</a></Button>
+            <Button asChild variant="outline" className="h-10"><a href={exportUrl("csv")}><Download className="size-4" /> CSV</a></Button>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center justify-between text-base">
