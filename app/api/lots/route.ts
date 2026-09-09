@@ -82,7 +82,7 @@ export async function POST(request: Request) {
   return NextResponse.json({ lot: serialise(lotFromRow(data as Parameters<typeof lotFromRow>[0], ctx.settings)) });
 }
 
-type PatchBody = { id?: number; action?: "close" | "reopen" | "split"; kg_tagged?: number | null; piles?: { kg?: number; pieces?: number; note?: string }[]; rate?: number; provisional_yield?: number; supplier?: string; notes?: string | null; description?: string | null; kg?: number | null; pieces?: number | null; arrived_on?: string | null };
+type PatchBody = { id?: number; action?: "close" | "reopen" | "split"; kg_tagged?: number | null; piles?: { kg?: number; pieces?: number; description?: string; note?: string }[]; rate?: number; provisional_yield?: number; supplier?: string; notes?: string | null; description?: string | null; kg?: number | null; pieces?: number | null; arrived_on?: string | null };
 
 export async function PATCH(request: Request) {
   let body: PatchBody;
@@ -121,7 +121,7 @@ export async function PATCH(request: Request) {
       const code = `${parent.code}-${String.fromCharCode(65 + i)}`;
       const { data: child, error } = await supabase
         .from("lots")
-        .insert({ code, supplier: parent.supplier, basis: parent.basis, rate: parent.rate, rate_usd_per_kg: byKg ? parent.rate : null, kg: byKg ? piles[i].kg : null, pieces: byKg ? null : piles[i].pieces, provisional_yield: parent.provisional_yield, arrived_on: parent.arrived_on, description: parent.description, notes: piles[i].note?.trim() || null, parent_lot_id: parent.id })
+        .insert({ code, supplier: parent.supplier, basis: parent.basis, rate: parent.rate, rate_usd_per_kg: byKg ? parent.rate : null, kg: byKg ? piles[i].kg : null, pieces: byKg ? null : piles[i].pieces, provisional_yield: parent.provisional_yield, arrived_on: parent.arrived_on, description: piles[i].description?.trim() || parent.description, notes: piles[i].note?.trim() || null, parent_lot_id: parent.id })
         .select(LOT_COLUMNS)
         .single();
       if (error) return NextResponse.json({ error: `${code}: ${error.message}` }, { status: error.code === "23505" ? 409 : 500 });

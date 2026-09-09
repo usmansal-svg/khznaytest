@@ -157,23 +157,28 @@ function EditCard({ lot, busy, onCancel, onSave }: { lot: Lot; busy: boolean; on
 
 /* ----------------------------------------------------------------- split */
 
-function SplitCard({ lot, busy, onCancel, onSplit }: { lot: Lot; busy: boolean; onCancel: () => void; onSplit: (piles: { kg?: number; pieces?: number }[]) => void }) {
-  const [piles, setPiles] = useState<string[]>(["", ""]);
+function SplitCard({ lot, busy, onCancel, onSplit }: { lot: Lot; busy: boolean; onCancel: () => void; onSplit: (piles: { kg?: number; pieces?: number; description?: string }[]) => void }) {
+  const [piles, setPiles] = useState<{ qty: string; description: string }[]>([{ qty: "", description: "" }, { qty: "", description: "" }]);
   const byKg = lot.basis === "kg";
   const unit = byKg ? "kg" : "pieces";
   const bought = byKg ? lot.kg_bought : lot.pieces_bought;
-  const total = piles.reduce((a, p) => a + (Number(p) || 0), 0);
+  const total = piles.reduce((a, p) => a + (Number(p.qty) || 0), 0);
   return (
     <Card className="border-amber-500">
       <CardHeader className="pb-3"><CardTitle className="text-base">Split {lot.code}{bought ? ` · ${bought} ${unit}` : ""} into piles</CardTitle></CardHeader>
       <CardContent className="space-y-3">
         <p className="text-xs text-muted-foreground">{byKg ? "Weigh each pile as you separate it." : "Count each pile as you separate it."} The piles become {lot.code}-A, -B, … with the same rate{byKg ? " and yield" : ""}; {lot.code} keeps the cost and can no longer be tagged from.{bought ? ` Piles so far: ${total} of ${bought} ${unit}.` : ""}</p>
-        <div className="flex flex-wrap gap-2">
-          {piles.map((p, i) => <div key={i} className="grid gap-1"><Label className="text-xs">{lot.code}-{String.fromCharCode(65 + i)} · {unit}</Label><Input type="number" step={byKg ? "0.1" : "1"} min="0" value={p} onChange={(x) => setPiles((ps) => ps.map((v, j) => (j === i ? x.target.value : v)))} className="h-10 w-28" /></div>)}
-          <Button type="button" variant="outline" className="self-end" onClick={() => setPiles((ps) => [...ps, ""])}>+ pile</Button>
+        <div className="space-y-2">
+          {piles.map((p, i) => (
+            <div key={i} className="grid gap-2 sm:grid-cols-[110px_1fr]">
+              <div className="grid gap-1"><Label className="text-xs">{lot.code}-{String.fromCharCode(65 + i)} · {unit}</Label><Input type="number" step={byKg ? "0.1" : "1"} min="0" value={p.qty} onChange={(x) => setPiles((ps) => ps.map((v, j) => (j === i ? { ...v, qty: x.target.value } : v)))} className="h-10" /></div>
+              <div className="grid gap-1"><Label className="text-xs">What this pile is</Label><Input value={p.description} onChange={(x) => setPiles((ps) => ps.map((v, j) => (j === i ? { ...v, description: x.target.value } : v)))} placeholder={i === 0 ? "e.g. Men's sport shirts" : i === 1 ? "e.g. Men's button-down shirts" : "e.g. Men's polo shirts"} className="h-10" /></div>
+            </div>
+          ))}
+          <Button type="button" variant="outline" onClick={() => setPiles((ps) => [...ps, { qty: "", description: "" }])}>+ pile</Button>
         </div>
         <div className="flex gap-2">
-          <Button disabled={busy || total <= 0} onClick={() => onSplit(piles.map((p) => Number(p)).filter((n) => n > 0).map((n) => (byKg ? { kg: n } : { pieces: n })))}>Create piles</Button>
+          <Button disabled={busy || total <= 0} onClick={() => onSplit(piles.filter((p) => Number(p.qty) > 0).map((p) => ({ ...(byKg ? { kg: Number(p.qty) } : { pieces: Number(p.qty) }), description: p.description })))}>Create piles</Button>
           <Button variant="ghost" onClick={onCancel}>Cancel</Button>
         </div>
       </CardContent>
