@@ -31,10 +31,13 @@ export function ItemSearch() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [role, setRole] = useState<string | null>(null);
-  const today = new Date().toISOString().slice(0, 10);
-  const [from, setFrom] = useState(today.slice(0, 8) + "01");
-  const [to, setTo] = useState(today);
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   useEffect(() => {
+    // Dates are set on the client: the prerenderer refuses new Date() in render.
+    const today = new Date().toISOString().slice(0, 10);
+    setFrom(today.slice(0, 8) + "01");
+    setTo(today);
     fetch("/api/auth/me").then((r) => r.json()).then((j) => setRole(j.staff?.role ?? null)).catch(() => {});
   }, []);
   const canExport = role === "manager" || role === "founder";

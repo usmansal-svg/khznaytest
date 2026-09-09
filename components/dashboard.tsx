@@ -191,10 +191,13 @@ export function Dashboard() {
 }
 
 function ExportCard() {
-  const today = new Date().toISOString().slice(0, 10);
-  const monthStart = today.slice(0, 8) + "01";
-  const [from, setFrom] = useState(monthStart);
-  const [to, setTo] = useState(today);
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  useEffect(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    setFrom(today.slice(0, 8) + "01");
+    setTo(today);
+  }, []);
   const link = (what: string, format: "xlsx" | "csv") => `/api/export?what=${what}&format=${format}${what === "items" ? `&from=${from}&to=${to}` : ""}`;
   return (
     <Card>
