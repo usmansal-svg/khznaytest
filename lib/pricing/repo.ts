@@ -34,6 +34,7 @@ export type DbSubCategory = {
   slug: string;
   code: string;
   categorySlug: string;
+  gender: string;
   name: string;
   weightKg: number;
   profileCode: ProfileCode;
@@ -148,6 +149,7 @@ function defaultsContext(warning: string): PricingContext {
       slug: s.slug,
       code: s.code,
       categorySlug: s.categorySlug,
+      gender: /women/.test(s.categorySlug) ? "women" : /children/.test(s.categorySlug) ? "kid" : /men/.test(s.categorySlug) ? "men" : "women",
       name: s.name,
       weightKg: s.weightKg,
       profileCode: s.profileCode,
@@ -175,7 +177,7 @@ export async function loadPricingContext(supabase: SupabaseClient): Promise<Pric
     supabase.from("profiles").select("code, name, pulled_share, vol_full, vol_promo, vol_md1, vol_md2, vol_md3"),
     supabase
       .from("sub_categories")
-      .select("slug, code, category_slug, name, weight_kg, profile_code, value_index, measure_type, market_ceiling, per_piece_cost, per_piece_share, active"),
+      .select("slug, code, category_slug, gender, name, weight_kg, profile_code, value_index, measure_type, market_ceiling, per_piece_cost, per_piece_share, active"),
   ]);
 
   const firstError = settingsRes.error ?? gradesRes.error ?? profilesRes.error ?? subsRes.error;
@@ -208,6 +210,7 @@ export async function loadPricingContext(supabase: SupabaseClient): Promise<Pric
     slug: s.slug,
     code: s.code,
     categorySlug: s.category_slug,
+    gender: s.gender ?? "men",
     name: s.name,
     weightKg: num(s.weight_kg),
     profileCode: s.profile_code as ProfileCode,

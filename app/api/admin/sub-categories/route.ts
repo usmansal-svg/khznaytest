@@ -13,16 +13,17 @@ import { computePrice } from "@/lib/pricing/engine";
 import { loadPricingContext } from "@/lib/pricing/repo";
 
 const PROFILES = ["fast", "standard", "slow"];
-const EDITABLE = ["weight_kg", "profile_code", "value_index", "market_ceiling", "market_price", "per_piece_cost", "per_piece_share", "active"] as const;
+const EDITABLE = ["gender", "name", "weight_kg", "profile_code", "value_index", "market_ceiling", "market_price", "per_piece_cost", "per_piece_share", "active"] as const;
+const GENDERS = ["men", "women", "teenage", "kid", "toddler", "infant"];
 
 export async function GET() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("sub_categories")
-    .select("slug, code, category_slug, name, weight_kg, profile_code, value_index, measure_type, market_ceiling, market_price, per_piece_cost, per_piece_share, active, categories(name, sort_order)")
-    .order("slug");
+    .select("slug, code, category_slug, gender, name, weight_kg, profile_code, value_index, measure_type, market_ceiling, market_price, per_piece_cost, per_piece_share, active")
+    .order("name");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  const one = (v: unknown) => (Array.isArray(v) ? v[0] : v) as { name: string; sort_order: number } | null;
+  const genderOrder = ["men", "women", "teenage", "kid", "toddler", "infant"];
   // Planning estimate, the way the Excel sheet does it: default weight at the
   // planning rate, imported. Real garments price from their lot and scale.
   const ctx = await loadPricingContext(supabase);
@@ -30,11 +31,11 @@ export async function GET() {
     .map((r) => {
       const est = computePrice({ weightKg: Number(r.weight_kg), profileCode: r.profile_code, valueIndex: Number(r.value_index) }, ctx.settings, ctx.refs);
       return {
-        ...r, category: one(r.categories)?.name ?? "", category_order: one(r.categories)?.sort_order ?? 0, categories: undefined,
+        ...r,
         estimate: { landed_cost: Math.round(est.landedCost), bnwt: est.gradePrices.bnwt, premium: est.gradePrices.premium, excellent: est.gradePrices.excellent, very_good: est.gradePrices.very_good, gp_pct: est.gpPct },
       };
     })
-    .sort((a, b) => a.category_order - b.category_order || a.name.localeCompare(b.name));
+    .sort((a, b) => genderOrder.indexOf(a.gender) - genderOrder.indexOf(b.gender) || a.name.localeCompare(b.name));
   return NextResponse.json({ rows, basis: { planning_rate: ctx.settings.blendedRate, fx: ctx.settings.fx } });
 }
 
@@ -91,7 +92,7 @@ function suggestCode(name: string, used: Set<string>): string {
 export async function PUT(request: Request) {
   const gate = await requireManager();
   if ("response" in gate) return gate.response;
-  let body: { name?: string; category_slug?: string; weight_kg?: number; profile_code?: string; value_index?: number; measure_type?: string; code?: string; market_ceiling?: number | null; market_price?: number | null };
+  let body: { name?: string; gender?: string; weight_kg?: number; profile_code?: string; value_index?: number; measure_type?: string; code?: string; market_ceiling?: number | null; market_price?: number | null };
   try {
     body = await request.json();
   } catch {
@@ -99,8 +100,8 @@ export async function PUT(request: Request) {
   }
   const name = body.name?.trim();
   if (!name) return NextResponse.json({ error: "Name is required." }, { status: 400 });
-  const { data: cat } = await gate.db.from("categories").select("slug").eq("slug", body.category_slug ?? "").maybeSingle();
-  if (!cat) return NextResponse.json({ error: "Pick a category." }, { status: 400 });
+  if (!GENDERS.includes(String(body.gender))) return NextResponse.json({ error: "Pick a gender: Men, Women, Teenage, Kid, Toddler or Infant." }, { status: 400 });
+  const cat = { slug: `gender-${body.gender}` };
   const err = check({ weight_kg: body.weight_kg, profile_code: body.profile_code, value_index: body.value_index, market_ceiling: body.market_ceiling ?? null, market_price: body.market_price ?? null });
   if (err) return NextResponse.json({ error: err }, { status: 400 });
   if (!MEASURE_TYPES.includes(String(body.measure_type))) return NextResponse.json({ error: "Measurement type must be top, bottom, dress, outer, kids_top or kids_bottom." }, { status: 400 });
@@ -115,10 +116,10 @@ export async function PUT(request: Request) {
   } else {
     code = suggestCode(name, usedCodes);
   }
-  let slug = `${slugify(cat.slug).split("-").map((w) => w[0]).join("")}-${slugify(name)}`;
+  let slug = `${body.gender}-${slugify(name)}`;
   for (let i = 2; usedSlugs.has(slug); i++) slug = `${slug}-${i}`;
 
-  const row = { slug, code, category_slug: cat.slug, name, weight_kg: body.weight_kg, profile_code: body.profile_code, value_index: body.value_index, measure_type: body.measure_type, market_ceiling: body.market_ceiling ?? null, market_price: body.market_price ?? null, per_piece_share: 0, active: true };
+  const row = { slug, code, category_slug: cat.slug, gender: body.gender, name, weight_kg: body.weight_kg, profile_code: body.profile_code, value_index: body.value_index, measure_type: body.measure_type, market_ceiling: body.market_ceiling ?? null, market_price: body.market_price ?? null, per_piece_share: 0, active: true };
   const { data, error } = await gate.db.from("sub_categories").insert(row).select("slug, code, name").single();
   if (error) return NextResponse.json({ error: error.message }, { status: error.code === "23505" ? 409 : 500 });
   await audit(gate.db, gate.staff.id, "sub_categories", slug, null, row, "created");
@@ -152,7 +153,7 @@ export async function PATCH(request: Request) {
 
     const { data: before } = await supabase
       .from("sub_categories")
-      .select("weight_kg, profile_code, value_index, market_ceiling, market_price, per_piece_cost, per_piece_share, active")
+      .select("gender, name, weight_kg, profile_code, value_index, market_ceiling, market_price, per_piece_cost, per_piece_share, active")
       .eq("slug", slug)
       .maybeSingle();
     if (!before) {
@@ -175,6 +176,8 @@ function check(p: Record<string, unknown>): string | null {
   if ("weight_kg" in p && !(typeof p.weight_kg === "number" && p.weight_kg > 0 && p.weight_kg <= 10)) return "weight_kg must be between 0 and 10.";
   if ("value_index" in p && !(typeof p.value_index === "number" && p.value_index > 0 && p.value_index <= 5)) return "value_index must be between 0 and 5.";
   if ("profile_code" in p && !PROFILES.includes(String(p.profile_code))) return "profile_code must be fast, standard or slow.";
+  if ("gender" in p && !GENDERS.includes(String(p.gender))) return "gender must be men, women, teenage, kid, toddler or infant.";
+  if ("name" in p && !String(p.name ?? "").trim()) return "name cannot be empty.";
   for (const k of ["market_ceiling", "market_price", "per_piece_cost"] as const) {
     if (k in p && p[k] !== null && !(typeof p[k] === "number" && (p[k] as number) >= 0)) return `${k} must be a non-negative number or empty.`;
   }

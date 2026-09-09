@@ -12,16 +12,18 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import type { Adjustment, ColourTag, GradeCode } from "@/lib/pricing/constants";
 import { ADULT_SIZES, KIDS_SIZES } from "@/lib/pricing/kids-sizes";
-import { SEASONS, WEARERS, type Season, type Wearer } from "@/lib/pricing/sku";
+import { GENDERS, GENDER_LABELS, SEASONS, type Gender, type Season } from "@/lib/pricing/sku";
 
 /* ---------------------------------------------------------------- types */
 
 type Reference = {
+  genders: { code: Gender; name: string }[];
   categories: { slug: string; name: string }[];
   sub_categories: {
     slug: string;
     code: string;
     category_slug: string;
+    gender: Gender;
     name: string;
     measure_type: string;
     measure_fields: string[];
@@ -69,7 +71,7 @@ const ADJUSTMENTS: { code: Adjustment; label: string }[] = [
   { code: "above", label: "Above" },
 ];
 const SEASON_LABELS: Record<Season, string> = { summer: "Summer", winter: "Winter", all_season: "All season" };
-const WEARER_LABELS: Record<Wearer, string> = { men: "Men", women: "Women", boy: "Boy", girl: "Girl", infant: "Infant", unisex: "Unisex" };
+
 const COLOUR_CLASS: Record<ColourTag, string> = {
   red: "bg-red-500",
   blue: "bg-blue-500",
@@ -77,7 +79,7 @@ const COLOUR_CLASS: Record<ColourTag, string> = {
   yellow: "bg-yellow-400",
 };
 const MARKDOWN_LABELS: Record<string, string> = { md1: "25% OFF", md2: "HALF PRICE", md3: "LAST CHANCE 75%" };
-const KIDS = new Set<Wearer>(["boy", "girl", "infant"]);
+const KIDS = new Set<Gender>(["kid", "toddler", "infant"]);
 
 const pkr = (n: number) => `Rs ${Math.round(n).toLocaleString("en-PK")}`;
 
@@ -92,8 +94,7 @@ export function TagForm() {
   const [channel, setChannel] = useState<"outlet" | "online">("outlet");
   const [outletId, setOutletId] = useState<string>("");
   const [season, setSeason] = useState<Season>("summer");
-  const [wearer, setWearer] = useState<Wearer>("men");
-  const [category, setCategory] = useState("");
+  const [gender, setGender] = useState<Gender>("men");
   const [sub, setSub] = useState("");
 
   // Cleared after save
@@ -131,7 +132,6 @@ export function TagForm() {
       })
       .then((data) => {
         setRef(data);
-        if (!category && data.categories[0]) setCategory(data.categories[0].slug);
         if (!outletId && data.outlets[0]) setOutletId(String(data.outlets[0].id));
         if (!lotId && data.lots[0]) setLotId(String(data.lots[0].id));
       })
@@ -139,12 +139,12 @@ export function TagForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const subs = useMemo(() => (ref?.sub_categories ?? []).filter((s) => s.category_slug === category), [ref, category]);
+  const subs = useMemo(() => (ref?.sub_categories ?? []).filter((s) => s.gender === gender).sort((a, b) => a.name.localeCompare(b.name)), [ref, gender]);
   useEffect(() => {
     if (subs.length && !subs.some((s) => s.slug === sub)) setSub(subs[0].slug);
   }, [subs, sub]);
   const selectedSub = subs.find((s) => s.slug === sub);
-  const isKids = KIDS.has(wearer);
+  const isKids = KIDS.has(gender);
   const selectedLot = ref?.lots.find((l) => String(l.id) === lotId) ?? null;
   const needsWeight = selectedLot?.basis === "kg";
   const weightKg = Number(weight) || 0;
@@ -240,7 +240,6 @@ export function TagForm() {
           is_unsure: unsure,
           flaw_note: showFlaw ? flaw : null,
           season,
-          wearer,
           size_label: size,
           colour,
           fabric,
@@ -353,17 +352,12 @@ export function TagForm() {
                 {SEASONS.map((s) => <option key={s} value={s}>{SEASON_LABELS[s]}</option>)}
               </select>
             </Field>
-            <Field label="Wearer">
-              <select className={selectClass} value={wearer} onChange={(e) => setWearer(e.target.value as Wearer)}>
-                {WEARERS.map((w) => <option key={w} value={w}>{WEARER_LABELS[w]}</option>)}
+            <Field label="Gender">
+              <select className={selectClass} value={gender} onChange={(e) => setGender(e.target.value as Gender)}>
+                {GENDERS.map((g) => <option key={g} value={g}>{GENDER_LABELS[g]}</option>)}
               </select>
             </Field>
-            <Field label="Category">
-              <select className={selectClass} value={category} onChange={(e) => setCategory(e.target.value)}>
-                {ref.categories.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}
-              </select>
-            </Field>
-            <Field label="Sub-category" hint={selectedSub ? `${selectedSub.code} · ${selectedSub.weight_kg} kg · ${selectedSub.profile_code}` : undefined}>
+            <Field label="Category" hint={selectedSub ? `${selectedSub.code} · ${selectedSub.weight_kg} kg · ${selectedSub.profile_code}` : subs.length ? undefined : "No categories for this gender yet — add them under Pricing"}>
               <select className={selectClass} value={sub} onChange={(e) => setSub(e.target.value)}>
                 {subs.map((s) => <option key={s.slug} value={s.slug}>{s.name}</option>)}
               </select>
@@ -576,7 +570,7 @@ export function TagForm() {
                     <RotateCcw className="size-4" /> Next garment
                   </Button>
                 </div>
-                <p className="text-center text-xs text-muted-foreground">Enter for next · lot, outlet, season and category are kept</p>
+                <p className="text-center text-xs text-muted-foreground">Enter for next · lot, outlet, season, gender and category are kept</p>
               </>
             ) : (
               <>

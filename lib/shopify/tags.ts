@@ -24,7 +24,7 @@ export type TaggableItem = {
   is_rare: boolean;
 };
 
-const WEARER: Record<string, string> = { men: "Men", women: "Women", boy: "Boys", girl: "Girls", infant: "Infants", unisex: "Unisex" };
+const WEARER: Record<string, string> = { men: "Men", women: "Women", teenage: "Teens", kid: "Kids", toddler: "Toddlers", infant: "Infants", boy: "Boys", girl: "Girls", unisex: "Unisex" };
 const SEASON: Record<string, string> = { summer: "Summer", winter: "Winter", all_season: "All Season" };
 const GRADE: Record<string, string> = { bnwt: "Brand New With Tags", premium: "Premium", excellent: "Excellent", very_good: "Very Good" };
 const TIER: Record<string, string> = { affordable_luxury: "Affordable Luxury", ultra_luxury: "Luxury" };
@@ -50,10 +50,10 @@ export function shopifyTags(item: TaggableItem): string[] {
   const tags: string[] = [];
   const wearer = item.wearer ? WEARER[item.wearer] : undefined;
   const type = title(garmentType(item.sub_category));
-  const kids = item.wearer === "boy" || item.wearer === "girl" || item.wearer === "infant";
+  const kids = ["boy", "girl", "infant", "kid", "toddler"].includes(item.wearer ?? "");
 
   if (wearer) tags.push(wearer);
-  if (kids) tags.push("Kids");
+  if (kids && item.wearer !== "kid") tags.push("Kids");
   tags.push(type);
   if (wearer) tags.push(`${wearer} ${type}`); // the collection tag: "Men Hoodie"
   if (kids) tags.push(`Kids ${type}`);

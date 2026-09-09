@@ -52,11 +52,9 @@ export async function POST(request: Request) {
   const grade = (body.grade ?? "premium") as GradeCode;
   const adjustment = (body.adjustment ?? "standard") as Adjustment;
   const season = body.season as Season;
-  const wearer = body.wearer as Wearer;
   if (!GRADE_CODES.includes(grade)) return bad(`Unknown grade: ${body.grade}`);
   if (!ADJUSTMENTS.includes(adjustment)) return bad(`Unknown adjustment: ${body.adjustment}`);
   if (!SEASONS.includes(season)) return bad(`Season must be one of ${SEASONS.join(", ")}.`);
-  if (!WEARERS.includes(wearer)) return bad(`Wearer must be one of ${WEARERS.join(", ")}.`);
   if (body.lot_id == null) return bad("Pick the lot the garment came from.");
   if (body.weight_kg != null && !(typeof body.weight_kg === "number" && body.weight_kg > 0 && body.weight_kg < 50)) {
     return bad("weight_kg must be a positive number of kilograms.");
@@ -72,7 +70,9 @@ export async function POST(request: Request) {
   if (lot.status !== "open") return bad(`Lot ${lot.code} is closed — reopen it to tag from it.`);
 
   const subCategory = ctx.subCategories.find((s) => s.slug === body.sub_category_id);
-  if (!subCategory) return bad(`Unknown sub_category_id: ${body.sub_category_id ?? "(missing)"}`);
+  if (!subCategory) return bad(`Unknown category: ${body.sub_category_id ?? "(missing)"}`);
+  // The category's gender is the garment's wearer; it drives the SKU letter.
+  const wearer = (WEARERS.includes(subCategory.gender as Wearer) ? subCategory.gender : "unisex") as Wearer;
 
   const q = quote({ subCategory, brand, grade, adjustment, isRare: Boolean(body.is_rare), lot, weightKg: body.weight_kg ?? null }, ctx);
   if (q.error) return bad(q.error);

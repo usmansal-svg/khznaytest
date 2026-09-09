@@ -11,6 +11,7 @@ import { currentStaff, dbFor } from "@/lib/auth/staff";
 import { colourForMonth } from "@/lib/pricing/engine";
 import { loadOpenLots, loadPricingContext } from "@/lib/pricing/repo";
 import { MEASUREMENT_FIELDS } from "@/lib/pricing/sub-categories";
+import { GENDERS, GENDER_LABELS } from "@/lib/pricing/sku";
 
 export async function GET() {
   const me = await currentStaff();
@@ -30,6 +31,7 @@ export async function GET() {
   if (outletsRes.error) warnings.push(`Outlets could not be loaded (${outletsRes.error.message}); reload the page.`);
 
   return NextResponse.json({
+    genders: GENDERS.map((g) => ({ code: g, name: GENDER_LABELS[g] })),
     categories: categoriesRes.data ?? [],
     sub_categories: ctx.subCategories
       .filter((s) => s.active)
@@ -37,6 +39,7 @@ export async function GET() {
         slug: s.slug,
         code: s.code,
         category_slug: s.categorySlug,
+        gender: s.gender,
         name: s.name,
         measure_type: s.measureType,
         measure_fields: MEASUREMENT_FIELDS[s.measureType],
