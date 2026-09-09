@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, Package, Receipt, Search, SlidersHorizontal, Tag, Tags, type LucideIcon } from "lucide-react";
+import { Activity, Package, Receipt, Search, SlidersHorizontal, Tag, Tags, Users, type LucideIcon } from "lucide-react";
 
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,7 @@ const WORK: NavItem[] = [
 const ADMIN: NavItem[] = [
   { href: "/admin/pricing", label: "Pricing", icon: SlidersHorizontal, hint: "Constants & weights" },
   { href: "/admin/brands", label: "Brands", icon: Tags, hint: "Tiers & import" },
+  { href: "/admin/staff", label: "Staff", icon: Users, hint: "Names & PINs" },
   { href: "/health", label: "Health", icon: Activity },
 ];
 

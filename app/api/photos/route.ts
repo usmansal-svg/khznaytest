@@ -8,14 +8,14 @@
 
 import { NextResponse } from "next/server";
 
-import { createClient } from "@/lib/supabase/server";
+import { requireStaff } from "@/lib/auth/staff";
 
 type Photo = { path: string; url: string; kind: "original" | "cutout"; bytes: number; taken_at: string };
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) return NextResponse.json({ error: "Sign in to add photos." }, { status: 401 });
+  const gate = await requireStaff();
+  if ("response" in gate) return gate.response;
+  const supabase = gate.db;
 
   const form = await request.formData();
   const sku = String(form.get("sku") ?? "").trim().toUpperCase();
@@ -48,9 +48,9 @@ export async function DELETE(request: Request) {
   } catch {
     return NextResponse.json({ error: "Body must be JSON." }, { status: 400 });
   }
-  const supabase = await createClient();
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) return NextResponse.json({ error: "Sign in to remove photos." }, { status: 401 });
+  const gate = await requireStaff();
+  if ("response" in gate) return gate.response;
+  const supabase = gate.db;
 
   const sku = body.sku?.trim().toUpperCase();
   if (!sku || !body.path?.startsWith(`${sku}/`)) return NextResponse.json({ error: "sku and a matching path are required." }, { status: 400 });

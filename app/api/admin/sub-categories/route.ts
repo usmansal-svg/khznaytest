@@ -36,9 +36,9 @@ export async function PATCH(request: Request) {
   }
   if (!Array.isArray(body.rows) || body.rows.length === 0) return NextResponse.json({ error: "rows is required." }, { status: 400 });
 
-  const supabase = await createClient();
-  const gate = await requireManager(supabase);
+  const gate = await requireManager();
   if ("response" in gate) return gate.response;
+  const supabase = gate.db;
 
   const results: { slug: string; ok: boolean; error?: string }[] = [];
   for (const row of body.rows) {

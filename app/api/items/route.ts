@@ -10,7 +10,7 @@
 
 import { NextResponse } from "next/server";
 
-import { createClient } from "@/lib/supabase/server";
+import { currentStaff, dbFor, requireStaff } from "@/lib/auth/staff";
 import { REJECTED, type Adjustment, type GradeCode } from "@/lib/pricing/constants";
 import { ADJUSTMENTS, GRADE_CODES, quote } from "@/lib/pricing/quote";
 import { loadLot, loadPricingContext, resolveBrandDb } from "@/lib/pricing/repo";
@@ -45,9 +45,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Body must be JSON." }, { status: 400 });
   }
 
-  const supabase = await createClient();
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) return NextResponse.json({ error: "Sign in to save items." }, { status: 401 });
+  const gate = await requireStaff();
+  if ("response" in gate) return gate.response;
+  const { staff, db: supabase } = gate;
 
   const grade = (body.grade ?? "premium") as GradeCode;
   const adjustment = (body.adjustment ?? "standard") as Adjustment;
@@ -66,9 +66,7 @@ export async function POST(request: Request) {
   }
 
   const ctx = await loadPricingContext(supabase);
-  const [brand, lot, staffRes] = await Promise.all([resolveBrandDb(supabase, body.brand_text), loadLot(supabase, Number(body.lot_id), ctx.settings), supabase.rpc("ensure_staff")]);
-  if (staffRes.error) return NextResponse.json({ error: staffRes.error.message }, { status: 500 });
-  const staff = staffRes.data as { id: number; name: string; role: string };
+  const [brand, lot] = await Promise.all([resolveBrandDb(supabase, body.brand_text), loadLot(supabase, Number(body.lot_id), ctx.settings)]);
   if (!lot) return bad(`Unknown lot: ${body.lot_id}`);
   if (lot.status !== "open") return bad(`Lot ${lot.code} is closed — reopen it to tag from it.`);
 
@@ -135,7 +133,7 @@ export async function POST(request: Request) {
 
 export async function GET(request: Request) {
   const q = new URL(request.url).searchParams.get("q")?.trim() ?? "";
-  const supabase = await createClient();
+  const supabase = await dbFor(await currentStaff());
 
   let query = supabase
     .from("items")

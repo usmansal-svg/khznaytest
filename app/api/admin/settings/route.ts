@@ -38,18 +38,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Body must be JSON." }, { status: 400 });
   }
 
-  const supabase = await createClient();
   const preview = new URL(request.url).searchParams.get("preview") === "1";
 
   // Previews are read-only and open; saves are gated before anything else.
-  const gate = preview ? null : await requireManager(supabase);
+  const gate = preview ? null : await requireManager();
   if (gate && "response" in gate) return gate.response;
+  const supabase = gate && "db" in gate ? gate.db : await createClient();
 
   const proposed = validate(body.settings);
   if ("error" in proposed) return NextResponse.json({ error: proposed.error }, { status: 400 });
 
   const ctx = await loadPricingContext(supabase);
-  if (preview || !gate) {
+  if (preview || !gate || !("db" in gate)) {
     return NextResponse.json({ version: ctx.settingsVersion, ...repricePreview(ctx, proposed.settings) });
   }
 

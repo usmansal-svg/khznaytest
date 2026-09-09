@@ -9,7 +9,7 @@
 
 import { NextResponse } from "next/server";
 
-import { createClient } from "@/lib/supabase/server";
+import { currentStaff, dbFor } from "@/lib/auth/staff";
 import { type Adjustment, type GradeCode } from "@/lib/pricing/constants";
 import { ADJUSTMENTS, GRADE_CODES, quote } from "@/lib/pricing/quote";
 import { loadLot, loadPricingContext, resolveBrandDb } from "@/lib/pricing/repo";
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "weight_kg must be a positive number of kilograms." }, { status: 400 });
   }
 
-  const supabase = await createClient();
+  const supabase = await dbFor(await currentStaff());
   const ctx = await loadPricingContext(supabase);
   const [brand, lot] = await Promise.all([
     resolveBrandDb(supabase, body.brand_text),

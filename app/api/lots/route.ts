@@ -11,12 +11,12 @@
 
 import { NextResponse } from "next/server";
 
-import { createClient } from "@/lib/supabase/server";
+import { currentStaff, dbFor, requireStaff } from "@/lib/auth/staff";
 import { lotPnl, type LotItem } from "@/lib/pricing/lot-pnl";
 import { LOT_COLUMNS, loadPricingContext, lotFromRow, type DbLot } from "@/lib/pricing/repo";
 
 export async function GET() {
-  const supabase = await createClient();
+  const supabase = await dbFor(await currentStaff());
   const ctx = await loadPricingContext(supabase);
   const [lotsRes, itemsRes] = await Promise.all([
     supabase.from("lots").select(LOT_COLUMNS).order("created_at", { ascending: false }).limit(200),
@@ -46,9 +46,9 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: "Body must be JSON." }, { status: 400 });
   }
-  const supabase = await createClient();
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) return NextResponse.json({ error: "Sign in to create lots." }, { status: 401 });
+  const gate = await requireStaff();
+  if ("response" in gate) return gate.response;
+  const supabase = gate.db;
 
   const code = body.code?.trim().toUpperCase();
   if (!code) return bad("Lot code is required.");
@@ -88,9 +88,9 @@ export async function PATCH(request: Request) {
   } catch {
     return NextResponse.json({ error: "Body must be JSON." }, { status: 400 });
   }
-  const supabase = await createClient();
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) return NextResponse.json({ error: "Sign in to change lots." }, { status: 401 });
+  const gate = await requireStaff();
+  if ("response" in gate) return gate.response;
+  const supabase = gate.db;
   if (!Number.isInteger(body.id)) return bad("id is required.");
 
   const patch: Record<string, unknown> = {};

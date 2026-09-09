@@ -5,13 +5,13 @@
 
 import { NextResponse } from "next/server";
 
-import { createClient } from "@/lib/supabase/server";
+import { currentStaff, dbFor } from "@/lib/auth/staff";
 
 export async function GET(request: Request) {
   const q = new URL(request.url).searchParams.get("q")?.trim() ?? "";
   if (!q) return NextResponse.json({ brands: [] });
 
-  const supabase = await createClient();
+  const supabase = await dbFor(await currentStaff());
   const { data, error } = await supabase
     .from("brands")
     .select("id, name, tier")

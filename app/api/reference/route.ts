@@ -7,26 +7,22 @@
 
 import { NextResponse } from "next/server";
 
-import { createClient } from "@/lib/supabase/server";
+import { currentStaff, dbFor } from "@/lib/auth/staff";
 import { colourForMonth } from "@/lib/pricing/engine";
 import { loadOpenLots, loadPricingContext } from "@/lib/pricing/repo";
 import { MEASUREMENT_FIELDS } from "@/lib/pricing/sub-categories";
 
 export async function GET() {
-  const supabase = await createClient();
+  const me = await currentStaff();
+  const supabase = await dbFor(me);
   const ctx = await loadPricingContext(supabase);
-  const [categoriesRes, outletsRes, lots, authRes] = await Promise.all([
+  const [categoriesRes, outletsRes, lots] = await Promise.all([
     supabase.from("categories").select("slug, name, sort_order, planning_rate_usd_per_kg").order("sort_order"),
     supabase.from("outlets").select("id, name, is_online").eq("active", true).order("id"),
     loadOpenLots(supabase, ctx.settings),
-    supabase.auth.getUser(),
   ]);
 
-  let tagger: { name: string; role: string } | null = null;
-  if (authRes.data.user) {
-    const { data } = await supabase.rpc("ensure_staff");
-    if (data) tagger = { name: (data as { name: string }).name, role: (data as { role: string }).role };
-  }
+  const tagger = me ? { name: me.name, role: me.role, outlet_id: me.outlet_id } : null;
 
   // A failed lookup must not masquerade as an empty list: say so, visibly.
   const warnings = [ctx.warning];

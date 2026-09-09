@@ -8,7 +8,7 @@
 
 import { NextResponse } from "next/server";
 
-import { createClient } from "@/lib/supabase/server";
+import { requireStaff } from "@/lib/auth/staff";
 import { createProduct, shopifyConfig, unlistProduct, updateProduct, ShopifyError } from "@/lib/shopify/client";
 import { shopifyTags, shopifyTitle } from "@/lib/shopify/tags";
 
@@ -34,9 +34,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Shopify is not connected. Set SHOPIFY_STORE_DOMAIN and SHOPIFY_ADMIN_ACCESS_TOKEN in Vercel." }, { status: 503 });
   }
 
-  const supabase = await createClient();
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) return NextResponse.json({ error: "Sign in to publish." }, { status: 401 });
+  const gate = await requireStaff();
+  if ("response" in gate) return gate.response;
+  const supabase = gate.db;
 
   const { data: item, error } = await supabase
     .from("items")

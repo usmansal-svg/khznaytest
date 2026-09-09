@@ -1,4 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
+
+import { SESSION_COOKIE, sessionSecret, verifySession } from "@/lib/auth/session";
 import { NextResponse, type NextRequest } from "next/server";
 import { hasEnvVars } from "../utils";
 
@@ -47,36 +49,30 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const user = data?.claims;
 
-  if (
-    request.nextUrl.pathname !== "/" &&
-    !user &&
-    !request.nextUrl.pathname.startsWith("/login") &&
-    !request.nextUrl.pathname.startsWith("/auth") &&
+  // Staff PIN session (shared iPads). Verified with Web Crypto so this runs
+  // at the edge; the cookie carries no secret, only a signature.
+  const secret = sessionSecret();
+  const staff = secret ? await verifySession(request.cookies.get(SESSION_COOKIE)?.value, secret) : null;
+
+  const path = request.nextUrl.pathname;
+  const isPublic =
+    path === "/" ||
+    path.startsWith("/login") ||
+    path.startsWith("/auth") ||
+    path.startsWith("/api/auth") ||
     // /health is a public connectivity check and must not require a session.
-    !request.nextUrl.pathname.startsWith("/health") &&
-    // TEMPORARY: the pricing page and its endpoint are open so they can be
-    // tried without an account. Re-gate both before any production deploy.
-    !request.nextUrl.pathname.startsWith("/price") &&
-    !request.nextUrl.pathname.startsWith("/api/price") &&
-    // TEMPORARY: the till is open for a look without an account. Re-gate
-    // before any production deploy, and drop the anon grants migration.
-    !request.nextUrl.pathname.startsWith("/pos") &&
-    !request.nextUrl.pathname.startsWith("/api/pos") &&
-    // TEMPORARY: tagging, items, admin and their read APIs are viewable
-    // without an account. Saving and every admin write still require a
-    // session (401) and RLS. Re-gate before production use.
-    !request.nextUrl.pathname.startsWith("/tag") &&
-    !request.nextUrl.pathname.startsWith("/items") &&
-    !request.nextUrl.pathname.startsWith("/admin") &&
-    !request.nextUrl.pathname.startsWith("/lots") &&
-    !request.nextUrl.pathname.startsWith("/api/lots") &&
-    !request.nextUrl.pathname.startsWith("/api/reference") &&
-    !request.nextUrl.pathname.startsWith("/api/items") &&
-    !request.nextUrl.pathname.startsWith("/api/brands") &&
-    !request.nextUrl.pathname.startsWith("/api/tags") &&
-    !request.nextUrl.pathname.startsWith("/api/shopify") &&
-    !request.nextUrl.pathname.startsWith("/api/admin")
-  ) {
+    path.startsWith("/health") ||
+    // TEMPORARY: the pricing demo and the till are open for a look without
+    // an account. Re-gate before production use, and drop the anon grants
+    // migration for the till.
+    path.startsWith("/price") ||
+    path.startsWith("/api/price") ||
+    path.startsWith("/pos") ||
+    path.startsWith("/api/pos") ||
+    // Tags print from a plain image URL; the SKU is the only payload.
+    path.startsWith("/api/tags");
+
+  if (!user && !staff && !isPublic) {
     // API callers get a 401 they can act on. Redirecting a fetch() to the
     // login page hands the caller an HTML document with a 200, which is
     // indistinguishable from success until it fails to parse.
@@ -86,9 +82,10 @@ export async function updateSession(request: NextRequest) {
       return denied;
     }
 
-    // no user, potentially respond by redirecting the user to the login page
+    // Send people to the PIN screen, and back to where they were after.
     const url = request.nextUrl.clone();
-    url.pathname = "/auth/login";
+    url.pathname = "/login";
+    url.search = `?next=${encodeURIComponent(path)}`;
     return NextResponse.redirect(url);
   }
 

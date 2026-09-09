@@ -4,7 +4,7 @@
 
 import { NextResponse } from "next/server";
 
-import { createClient } from "@/lib/supabase/server";
+import { currentStaff, dbFor, requireStaff } from "@/lib/auth/staff";
 import { markdownLadder } from "@/lib/pricing/engine";
 import { loadPricingContext } from "@/lib/pricing/repo";
 import { MEASUREMENT_FIELDS, type MeasureType } from "@/lib/pricing/sub-categories";
@@ -13,7 +13,7 @@ import { shopifyTags, shopifyTitle } from "@/lib/shopify/tags";
 export async function GET(_request: Request, { params }: { params: Promise<{ sku: string }> }) {
   const { sku: raw } = await params;
   const sku = decodeURIComponent(raw).trim().toUpperCase();
-  const supabase = await createClient();
+  const supabase = await dbFor(await currentStaff());
 
   const [{ data, error }, ctx] = await Promise.all([
     supabase
@@ -95,9 +95,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sk
   } catch {
     return NextResponse.json({ error: "Body must be JSON." }, { status: 400 });
   }
-  const supabase = await createClient();
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) return NextResponse.json({ error: "Sign in to change items." }, { status: 401 });
+  const gate = await requireStaff();
+  if ("response" in gate) return gate.response;
+  const supabase = gate.db;
 
   const patch: Record<string, unknown> = {};
   if ("outlet_id" in body) patch.outlet_id = body.outlet_id ?? null;

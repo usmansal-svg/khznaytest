@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 
 import { AppShell } from "@/components/app-shell";
-import { AuthButton } from "@/components/auth-button";
+import { StaffBadge } from "@/components/staff-badge";
 
 export const metadata = { title: "Khazanay" };
 
@@ -10,7 +10,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <AppShell
       auth={
         <Suspense>
-          <AuthButton />
+          <StaffBadge />
         </Suspense>
       }
     >

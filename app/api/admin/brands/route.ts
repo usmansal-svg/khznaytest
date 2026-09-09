@@ -27,9 +27,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Body must be JSON." }, { status: 400 });
   }
 
-  const supabase = await createClient();
-  const gate = await requireManager(supabase);
+  const gate = await requireManager();
   if ("response" in gate) return gate.response;
+  const supabase = gate.db;
 
   const isCsv = new URL(request.url).searchParams.get("csv") === "1";
   const incoming = isCsv ? parseCsv(body.csv ?? "") : (body.brands ?? []).map((b) => ({ name: b.name ?? "", tier: b.tier ?? "", active: b.active ?? true }));

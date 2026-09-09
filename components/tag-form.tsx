@@ -307,7 +307,7 @@ export function TagForm() {
                 <Input value={ref.tagger.name} readOnly className="bg-muted" />
               ) : (
                 <p className="text-sm text-amber-600 dark:text-amber-400">
-                  Not signed in — <Link href="/auth/login" className="underline">sign in</Link> to save.
+                  Not signed in — <Link href="/login?next=/tag" className="underline">sign in with your PIN</Link> to save.
                 </p>
               )}
             </Field>
