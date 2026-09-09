@@ -58,9 +58,9 @@ export async function POST(request: Request) {
   if (body.provisional_yield != null && !(body.provisional_yield > 0 && body.provisional_yield <= 1)) return bad("Provisional yield must be between 0 and 1.");
 
   const ctx = await loadPricingContext(supabase);
-  // Codes are issued in sequence, never typed — and a deleted number is
-  // reused, so the list never has holes. The unique code guards a race;
-  // on collision we take the next free number.
+  // Codes are issued in strictly increasing sequence, never typed. A deleted
+  // number is retired for good — reuse would make two lots share a name in
+  // the history.
   const row = {
       imported: body.imported ?? true,
       supplier: body.supplier?.trim() || "Unknown vendor",
@@ -74,22 +74,18 @@ export async function POST(request: Request) {
       arrived_on: body.arrived_on || null,
       notes: body.notes?.trim() || null,
   };
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const code = await nextLotCode(supabase);
-    const { data, error } = await supabase.from("lots").insert({ code, ...row }).select(LOT_COLUMNS).single();
-    if (!error) return NextResponse.json({ lot: serialise(lotFromRow(data as Parameters<typeof lotFromRow>[0], ctx.settings)) });
-    if (error.code !== "23505") return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-  return NextResponse.json({ error: "Could not number the lot — try again." }, { status: 500 });
+  const { data: seq, error: seqErr } = await supabase.rpc("next_lot_seq");
+  if (seqErr || typeof seq !== "number") return NextResponse.json({ error: `Could not number the lot: ${seqErr?.message ?? "no sequence"}` }, { status: 500 });
+  const code = `LOT-${String(seq).padStart(4, "0")}`;
+  const { data, error } = await supabase.from("lots").insert({ code, ...row }).select(LOT_COLUMNS).single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ lot: serialise(lotFromRow(data as Parameters<typeof lotFromRow>[0], ctx.settings)) });
 }
 
-/** The lowest LOT-#### not in use. Piles (LOT-0001-A) don't count. */
+/** The number the next lot will get — the counter only ever goes up. */
 async function nextLotCode(db: Awaited<ReturnType<typeof dbFor>>): Promise<string> {
-  const { data } = await db.from("lots").select("code").like("code", "LOT-____");
-  const used = new Set((data ?? []).map((l) => Number(l.code.slice(4))).filter((n) => Number.isInteger(n)));
-  let n = 1;
-  while (used.has(n)) n++;
-  return `LOT-${String(n).padStart(4, "0")}`;
+  const { data } = await db.from("lot_counter").select("seq").eq("id", 1).maybeSingle();
+  return `LOT-${String((data?.seq ?? 0) + 1).padStart(4, "0")}`;
 }
 
 type PatchBody = { id?: number; action?: "close" | "reopen" | "split"; imported?: boolean; kg_tagged?: number | null; piles?: { kg?: number; pieces?: number; description?: string; note?: string }[]; rate?: number; provisional_yield?: number; supplier?: string; notes?: string | null; description?: string | null; kg?: number | null; pieces?: number | null; arrived_on?: string | null };
