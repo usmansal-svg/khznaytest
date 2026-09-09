@@ -37,7 +37,7 @@ export async function GET() {
   return NextResponse.json({ lots, settings: { default_provisional_yield: ctx.settings.defaultProvisionalYield, fx: ctx.settings.fx } });
 }
 
-type CreateBody = { code?: string; supplier?: string; basis?: string; rate?: number; kg?: number | null; provisional_yield?: number | null; arrived_on?: string | null; notes?: string | null; parent_lot_id?: number | null };
+type CreateBody = { code?: string; supplier?: string; basis?: string; rate?: number; kg?: number | null; pieces?: number | null; provisional_yield?: number | null; arrived_on?: string | null; notes?: string | null; description?: string | null; parent_lot_id?: number | null };
 
 export async function POST(request: Request) {
   let body: CreateBody;
@@ -56,6 +56,7 @@ export async function POST(request: Request) {
   if (!basis) return bad("Basis must be kg or pc.");
   if (!(typeof body.rate === "number" && body.rate > 0)) return bad(basis === "kg" ? "Rate must be USD per kg, above 0." : "Rate must be PKR per piece, above 0.");
   if (basis === "kg" && !(typeof body.kg === "number" && body.kg > 0)) return bad("kg bought is required for kg lots.");
+  if (basis === "pc" && body.pieces != null && !(Number.isInteger(body.pieces) && body.pieces > 0)) return bad("Pieces bought must be a whole number.");
   if (body.provisional_yield != null && !(body.provisional_yield > 0 && body.provisional_yield <= 1)) return bad("Provisional yield must be between 0 and 1.");
 
   const ctx = await loadPricingContext(supabase);
@@ -68,6 +69,8 @@ export async function POST(request: Request) {
       rate: body.rate,
       rate_usd_per_kg: basis === "kg" ? body.rate : null,
       kg: basis === "kg" ? body.kg : null,
+      pieces: basis === "pc" ? body.pieces ?? null : null,
+      description: body.description?.trim() || null,
       provisional_yield: body.provisional_yield ?? ctx.settings.defaultProvisionalYield,
       arrived_on: body.arrived_on || null,
       notes: body.notes?.trim() || null,
@@ -79,7 +82,7 @@ export async function POST(request: Request) {
   return NextResponse.json({ lot: serialise(lotFromRow(data as Parameters<typeof lotFromRow>[0], ctx.settings)) });
 }
 
-type PatchBody = { id?: number; action?: "close" | "reopen" | "split"; kg_tagged?: number | null; piles?: { kg?: number; note?: string }[]; rate?: number; provisional_yield?: number; supplier?: string; notes?: string | null; kg?: number | null };
+type PatchBody = { id?: number; action?: "close" | "reopen" | "split"; kg_tagged?: number | null; piles?: { kg?: number; pieces?: number; note?: string }[]; rate?: number; provisional_yield?: number; supplier?: string; notes?: string | null; description?: string | null; kg?: number | null; pieces?: number | null; arrived_on?: string | null };
 
 export async function PATCH(request: Request) {
   let body: PatchBody;
@@ -102,21 +105,23 @@ export async function PATCH(request: Request) {
   } else if (body.action === "split") {
     // Weigh each pile as it is separated; the children inherit rate and
     // yield, the parent keeps the cost and stops being taggable.
-    const piles = (body as { piles?: { kg?: number; note?: string }[] }).piles ?? [];
-    if (!piles.length || piles.some((p) => !(typeof p.kg === "number" && p.kg > 0))) return bad("Give the kg of each pile.");
+    const piles = body.piles ?? [];
     const { data: parent } = await supabase.from("lots").select(LOT_COLUMNS).eq("id", body.id).maybeSingle();
     if (!parent) return bad("No such lot.");
-    if (parent.basis !== "kg") return bad("Only kg lots split — per-piece lots have no weight to divide.");
     if (parent.status !== "open") return bad(`Lot ${parent.code} is ${parent.status}.`);
-    const total = piles.reduce((s, p) => s + p.kg!, 0);
-    if (parent.kg && total > Number(parent.kg) * 1.02) return bad(`Piles total ${total} kg but the lot is ${parent.kg} kg.`);
+    const byKg = parent.basis === "kg";
+    const qty = (p: { kg?: number; pieces?: number }) => (byKg ? p.kg : p.pieces);
+    if (!piles.length || piles.some((p) => !(typeof qty(p) === "number" && qty(p)! > 0))) return bad(byKg ? "Give the kg of each pile." : "Give the number of pieces in each pile.");
+    const total = piles.reduce((s, p) => s + qty(p)!, 0);
+    const bought = byKg ? Number(parent.kg ?? 0) : Number(parent.pieces ?? 0);
+    if (bought && total > bought * (byKg ? 1.02 : 1)) return bad(`Piles total ${total} ${byKg ? "kg" : "pieces"} but the lot is ${bought}.`);
     const ctx = await loadPricingContext(supabase);
     const created = [];
     for (let i = 0; i < piles.length; i++) {
       const code = `${parent.code}-${String.fromCharCode(65 + i)}`;
       const { data: child, error } = await supabase
         .from("lots")
-        .insert({ code, supplier: parent.supplier, basis: "kg", rate: parent.rate, rate_usd_per_kg: parent.rate, kg: piles[i].kg, provisional_yield: parent.provisional_yield, arrived_on: parent.arrived_on, notes: piles[i].note?.trim() || null, parent_lot_id: parent.id })
+        .insert({ code, supplier: parent.supplier, basis: parent.basis, rate: parent.rate, rate_usd_per_kg: byKg ? parent.rate : null, kg: byKg ? piles[i].kg : null, pieces: byKg ? null : piles[i].pieces, provisional_yield: parent.provisional_yield, arrived_on: parent.arrived_on, description: parent.description, notes: piles[i].note?.trim() || null, parent_lot_id: parent.id })
         .select(LOT_COLUMNS)
         .single();
       if (error) return NextResponse.json({ error: `${code}: ${error.message}` }, { status: error.code === "23505" ? 409 : 500 });
@@ -136,9 +141,18 @@ export async function PATCH(request: Request) {
       if (!(typeof body.provisional_yield === "number" && body.provisional_yield > 0 && body.provisional_yield <= 1)) return bad("Provisional yield must be between 0 and 1.");
       patch.provisional_yield = body.provisional_yield;
     }
-    if ("kg" in body) patch.kg = body.kg;
+    if ("kg" in body) {
+      if (body.kg != null && !(typeof body.kg === "number" && body.kg > 0)) return bad("kg bought must be above 0.");
+      patch.kg = body.kg;
+    }
+    if ("pieces" in body) {
+      if (body.pieces != null && !(Number.isInteger(body.pieces) && body.pieces > 0)) return bad("Pieces bought must be a whole number.");
+      patch.pieces = body.pieces;
+    }
     if ("supplier" in body) patch.supplier = body.supplier?.trim();
     if ("notes" in body) patch.notes = body.notes?.trim() || null;
+    if ("description" in body) patch.description = body.description?.trim() || null;
+    if ("arrived_on" in body) patch.arrived_on = body.arrived_on || null;
   }
   if (!Object.keys(patch).length) return bad("Nothing to change.");
 
@@ -157,6 +171,8 @@ function serialise(l: DbLot) {
     rate: l.rate,
     kg_bought: l.kgBought,
     kg_tagged: l.kgTagged,
+    pieces_bought: l.pieces,
+    description: l.description,
     provisional_yield: l.provisionalYield,
     yield: Math.round(l.yield * 10000) / 10000,
     effective_rate: l.effectiveRate == null ? null : Math.round(l.effectiveRate * 10000) / 10000,

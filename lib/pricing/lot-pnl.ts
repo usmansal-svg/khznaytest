@@ -59,7 +59,12 @@ export function lotPnl(lot: DbLot, items: LotItem[], subCategories: DbSubCategor
   // Landed cost of everything bought, for kg lots: kg × rate × fx + duty,
   // less recoverable input tax. Per-piece lots have no fixed quantity.
   const taxCredit = 1 - settings.inputTaxRate * settings.inputTaxRecover;
-  const lotCost = lot.basis === "kg" && lot.kgBought && lot.rate ? (lot.kgBought * lot.rate * settings.fx + lot.kgBought * settings.dutyPerKg) * taxCredit : null;
+  const lotCost =
+    lot.basis === "kg" && lot.kgBought && lot.rate
+      ? (lot.kgBought * lot.rate * settings.fx + lot.kgBought * settings.dutyPerKg) * taxCredit
+      : lot.basis === "pc" && lot.pieces && lot.rate
+        ? lot.pieces * lot.rate * taxCredit
+        : null;
 
   const gp = expected - cost;
   return {
@@ -67,7 +72,7 @@ export function lotPnl(lot: DbLot, items: LotItem[], subCategories: DbSubCategor
     rejects,
     reject_pct: pieces ? rejects / pieces : 0,
     kg_tagged_so_far: round3(kg),
-    pct_done: lot.basis === "kg" && lot.kgBought ? Math.min(1, kg / (lot.kgBought * lot.yield)) : null,
+    pct_done: lot.basis === "kg" && lot.kgBought ? Math.min(1, kg / (lot.kgBought * lot.yield)) : lot.basis === "pc" && lot.pieces ? Math.min(1, pieces / lot.pieces) : null,
     lot_cost: lotCost == null ? null : Math.round(lotCost),
     cost_tagged: Math.round(cost),
     expected_revenue: Math.round(expected),

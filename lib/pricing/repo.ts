@@ -256,6 +256,9 @@ export type DbLot = {
   parentLotId: number | null;
   arrivedOn: string | null;
   notes: string | null;
+  description: string | null;
+  /** Pieces bought — per-piece lots only */
+  pieces: number | null;
   /** Null when the lot has no rate yet — it cannot price garments */
   effectiveRate: number | null;
   yield: number;
@@ -274,9 +277,11 @@ type LotRow = {
   parent_lot_id: number | null;
   arrived_on: string | null;
   notes: string | null;
+  description?: string | null;
+  pieces?: number | null;
 };
 
-export const LOT_COLUMNS = "id, code, supplier, basis, rate, kg, kg_tagged, provisional_yield, status, parent_lot_id, arrived_on, notes";
+export const LOT_COLUMNS = "id, code, supplier, basis, rate, kg, kg_tagged, provisional_yield, status, parent_lot_id, arrived_on, notes, description, pieces";
 
 export function lotFromRow(row: LotRow, settings: Settings): DbLot {
   const cost: LotCost = {
@@ -299,6 +304,8 @@ export function lotFromRow(row: LotRow, settings: Settings): DbLot {
     parentLotId: row.parent_lot_id,
     arrivedOn: row.arrived_on,
     notes: row.notes,
+    description: row.description ?? null,
+    pieces: row.pieces ?? null,
     effectiveRate: row.rate == null ? null : effectiveRate(cost, settings),
     yield: lotYield(cost, settings),
   };
