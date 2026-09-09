@@ -121,9 +121,12 @@ export function TagForm() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState<Saved | null>(null);
   const [sessionSkus, setSessionSkus] = useState<string[]>([]);
+  const [last, setLast] = useState<{ brand: string; size: string; colour: string; fabric: string } | null>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   const brandRef = useRef<HTMLInputElement>(null);
   const weightRef = useRef<HTMLInputElement>(null);
+  const sizeRef = useRef<HTMLInputElement>(null);
   const printRef = useRef<HTMLIFrameElement>(null);
   const photoRef = useRef<HTMLInputElement>(null);
   const [photo, setPhoto] = useState<{ blob: Blob; url: string } | null>(null);
@@ -136,6 +139,7 @@ export function TagForm() {
     const blob = await downscale(f);
     if (photo) URL.revokeObjectURL(photo.url);
     setPhoto({ blob, url: URL.createObjectURL(blob) });
+    requestAnimationFrame(() => (needsWeight && !weightKg ? weightRef.current : brandRef.current)?.focus());
   }
   const [autoPrint, setAutoPrint] = useState(true);
   const [printing, setPrinting] = useState<string | null>(null);
@@ -314,6 +318,7 @@ export function TagForm() {
       if (!res.ok) throw new Error(json.error ?? "Save failed.");
       setSaved(json.item);
       setSessionSkus((list) => [...list, json.item.sku]);
+      setLast({ brand, size, colour, fabric });
       // The photo is the record of the garment; it goes up the moment the SKU exists.
       if (photo) {
         try {
@@ -486,7 +491,10 @@ export function TagForm() {
                 }
                 hintTone={price?.brand && brand && (!price.brand.matched || price.brand.corrected_from) ? "warn" : undefined}
               >
-                <Input ref={brandRef} list="brands" value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Start typing…" autoComplete="off" autoFocus />
+                <div className="flex gap-2">
+                  <Input ref={brandRef} list="brands" value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Start typing…" autoComplete="off" autoFocus onKeyDown={(e) => { if (e.key === "Enter" && !(needsWeight && !weightKg)) { e.preventDefault(); e.stopPropagation(); sizeRef.current?.focus(); } }} />
+                  {last && <Button type="button" variant="outline" className="h-11 shrink-0 md:h-9" title={`${last.brand || "no brand"} · ${last.size || "no size"}`} onClick={() => { setBrand(last.brand); setSize(last.size); setColour(last.colour); setFabric(last.fabric); }}>Same as last</Button>}
+                </div>
                 <datalist id="brands">{brandHits.map((b) => <option key={b.name} value={b.name}>{tierLabel(b.tier)}</option>)}</datalist>
               </Field>
               {needsWeight && (
@@ -495,25 +503,33 @@ export function TagForm() {
                 </Field>
               )}
               <Field label="Size on label" hint={isKids ? kidsHint(size) : undefined}>
-                <Input list="sizes" value={size} onChange={(e) => setSize(e.target.value)} placeholder={isKids ? "e.g. 4–5 Y or 4T" : "e.g. M or 32"} autoComplete="off" />
+                <Input ref={sizeRef} list="sizes" value={size} onChange={(e) => setSize(e.target.value)} placeholder={isKids ? "e.g. 4–5 Y or 4T" : "e.g. M or 32"} autoComplete="off" />
                 <datalist id="sizes">
                   {(isKids ? KIDS_SIZES.map((k) => k.label) : ADULT_SIZES).map((s) => <option key={s} value={s} />)}
                 </datalist>
               </Field>
-              <Field label="Colour">
-                <Input list="colours" value={colour} onChange={(e) => setColour(e.target.value)} placeholder="For the online listing" autoComplete="off" />
-                <datalist id="colours">{COLOURS.map((c) => <option key={c} value={c} />)}</datalist>
-              </Field>
-              <Field label="Fabric (optional)">
-                <Input list="fabrics" value={fabric} onChange={(e) => setFabric(e.target.value)} autoComplete="off" />
-                <datalist id="fabrics">{FABRICS.map((f) => <option key={f} value={f} />)}</datalist>
-              </Field>
+            </div>
+
+            <div>
+              <button type="button" className="text-sm text-muted-foreground underline-offset-2 hover:underline" onClick={() => setMoreOpen((o) => !o)}>{moreOpen ? "Hide" : "More details"} · colour, fabric{(colour || fabric) && !moreOpen ? ` (${[colour, fabric].filter(Boolean).join(", ")})` : ""}</button>
+              {moreOpen && (
+                <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                  <Field label="Colour">
+                    <Input list="colours" value={colour} onChange={(e) => setColour(e.target.value)} placeholder="For the online listing" autoComplete="off" />
+                    <datalist id="colours">{COLOURS.map((c) => <option key={c} value={c} />)}</datalist>
+                  </Field>
+                  <Field label="Fabric">
+                    <Input list="fabrics" value={fabric} onChange={(e) => setFabric(e.target.value)} autoComplete="off" />
+                    <datalist id="fabrics">{FABRICS.map((f) => <option key={f} value={f} />)}</datalist>
+                  </Field>
+                </div>
+              )}
             </div>
 
             <ButtonGroup
               label="Condition"
               hint="Tags → BNWT · fabric used → Very Good · stain or repair → Excellent · else Premium. When in doubt, grade up."
-              options={ref.grades.map((g) => ({ code: g.code, label: GRADE_LABELS[g.code] ?? g.name }))}
+              options={ref.grades.map((g) => ({ code: g.code, label: GRADE_LABELS[g.code] ?? g.name, sub: g.code === "rejected" ? "Rs 0" : price?.grade_prices?.[g.code] != null && !needsManual ? pkr(price.grade_prices[g.code]) : undefined }))}
               value={grade}
               onChange={setGrade}
             />
@@ -746,14 +762,15 @@ function Note({ tone, children }: { tone: "ok" | "warn" | "error"; children: Rea
   return <p className={cn("rounded-md border p-3 text-sm", cls)}>{children}</p>;
 }
 
-function ButtonGroup<T extends string>({ label, hint, options, value, onChange }: { label: string; hint?: string; options: { code: T; label: string }[]; value: T; onChange: (v: T) => void }) {
+function ButtonGroup<T extends string>({ label, hint, options, value, onChange }: { label: string; hint?: string; options: { code: T; label: string; sub?: string }[]; value: T; onChange: (v: T) => void }) {
   return (
     <div className="grid gap-2">
       <Label>{label}</Label>
       <div className="flex flex-wrap gap-2">
         {options.map((o) => (
-          <Button key={o.code} type="button" size="sm" variant={o.code === value ? "default" : "outline"} onClick={() => onChange(o.code)} className="h-11 px-4 text-sm md:h-8 md:px-3 md:text-xs">
-            {o.label}
+          <Button key={o.code} type="button" size="sm" variant={o.code === value ? "default" : "outline"} onClick={() => onChange(o.code)} className={cn("px-4 text-sm md:px-3 md:text-xs", o.sub ? "h-14 flex-col gap-0 md:h-12" : "h-11 md:h-8")}>
+            <span>{o.label}</span>
+            {o.sub && <span className={cn("text-[11px] font-normal tabular-nums", o.code === value ? "opacity-80" : "text-muted-foreground")}>{o.sub}</span>}
           </Button>
         ))}
       </div>
