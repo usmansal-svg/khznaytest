@@ -133,6 +133,14 @@ describe("section 9 verification table", () => {
     assert.deepEqual(r.markdowns.map((m) => m.price), [1390, 890, 490]);
   });
 
+  it("markdown depths come from settings — a 30/50/70 ladder reprices the rungs and the multiple", () => {
+    const custom = { ...DEFAULT_SETTINGS, ladderDepths: [0.3, 0.5, 0.7] as [number, number, number] };
+    const r = computePrice({ weightKg: 0.31, effectiveRate: effectiveRate(LOT_B_01_S), profileCode: "fast", valueIndex: 1 }, custom);
+    assert.deepEqual(r.markdowns.map((m) => m.discount), [0.3, 0.5, 0.7]);
+    assert.equal(r.markdowns[0].price, charm(r.price * 0.7, custom));
+    assert.notEqual(profileMultiple("fast", custom).toFixed(4), profileMultiple("fast").toFixed(4));
+  });
+
   it("grade variants derive from the rounded premium: 3190 / 1490 / 1090", () => {
     const r = computePrice({ weightKg: 0.31, effectiveRate: effectiveRate(LOT_B_01_S), profileCode: "fast", valueIndex: 1 });
     assert.equal(r.gradePrices.bnwt, 3190);

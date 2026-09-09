@@ -54,7 +54,7 @@ export async function PATCH(request: Request) {
   if (rejected != null && Math.abs(rejected - before.settings.rejectedShare) > 1e-9) {
     const version = before.settingsVersion + 1;
     const { settingsToRow } = await import("@/lib/pricing/repo");
-    await gate.db.from("settings").insert({ version, ...settingsToRow({ ...before.settings, rejectedShare: rejected }), ladder_depths: [0, 0.25, 0.5, 0.75], ladder_months: [1, 1, 1, 1], note: "Rejected share changed with the grade mix" });
+    await gate.db.from("settings").insert({ version, ...settingsToRow({ ...before.settings, rejectedShare: rejected }), note: "Rejected share changed with the grade mix", changed_by: gate.staff.id });
   }
   await audit(gate.db, gate.staff.id, "grades", "all", before.refs.grades, merged);
   const after = await loadPricingContext(gate.db);

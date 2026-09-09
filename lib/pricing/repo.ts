@@ -73,6 +73,7 @@ type SettingsRow = {
   brand_feedback_enabled: boolean;
   high_value_threshold: number;
   default_provisional_yield?: number | string | null;
+  ladder_depths?: (number | string)[] | null;
 };
 
 const num = (v: number | string | null | undefined, fallback = 0) => (v == null ? fallback : Number(v));
@@ -95,7 +96,16 @@ export function settingsFromRow(row: SettingsRow): Settings {
     brandFeedbackEnabled: Boolean(row.brand_feedback_enabled),
     highValueThreshold: num(row.high_value_threshold),
     defaultProvisionalYield: num(row.default_provisional_yield, DEFAULT_SETTINGS.defaultProvisionalYield),
+    ladderDepths: depthsFromRow(row.ladder_depths),
   };
+}
+
+/** Stored as [0, md1, md2, md3] (full price first); tolerate a bare triple. */
+function depthsFromRow(arr: (number | string)[] | null | undefined): [number, number, number] {
+  const n = (arr ?? []).map(Number).filter((x) => Number.isFinite(x));
+  const tail = n.length >= 4 ? n.slice(-3) : n.length === 3 ? n : null;
+  if (!tail || tail.some((x) => !(x > 0 && x < 1))) return DEFAULT_SETTINGS.ladderDepths;
+  return [tail[0], tail[1], tail[2]];
 }
 
 export function settingsToRow(s: Settings) {
@@ -116,6 +126,8 @@ export function settingsToRow(s: Settings) {
     brand_feedback_enabled: s.brandFeedbackEnabled,
     high_value_threshold: s.highValueThreshold,
     default_provisional_yield: s.defaultProvisionalYield,
+    ladder_depths: [0, ...s.ladderDepths],
+    ladder_months: [1, 1, 1, 1],
   };
 }
 

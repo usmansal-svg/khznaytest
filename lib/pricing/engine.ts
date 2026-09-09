@@ -22,7 +22,7 @@ import {
   COLOUR_ROTATION,
   DEFAULT_SETTINGS,
   GRADES,
-  LADDER_DEPTHS,
+  depthsOf,
   PROFILES,
   REJECTED,
   sellableGrades,
@@ -154,10 +154,11 @@ export function blendedBrandUplift(refs: PricingRefs = DEFAULT_REFS): number {
 }
 
 /** Blended discount depth, D = SUM(ladder_depth[i] * profile.volume[i]). */
-export function blendedDiscount(profileCode: ProfileCode, refs: PricingRefs = DEFAULT_REFS): number {
+export function blendedDiscount(profileCode: ProfileCode, refs: PricingRefs = DEFAULT_REFS, settings: Settings = DEFAULT_SETTINGS): number {
   const p = findProfile(refs, profileCode);
+  const depths = depthsOf(settings);
   const volumes: Record<LadderStage, number> = { full: p.volFull, promo: p.volPromo, md1: p.volMd1, md2: p.volMd2, md3: p.volMd3 };
-  return (Object.keys(volumes) as LadderStage[]).reduce((sum, stage) => sum + LADDER_DEPTHS[stage] * volumes[stage], 0);
+  return (Object.keys(volumes) as LadderStage[]).reduce((sum, stage) => sum + depths[stage] * volumes[stage], 0);
 }
 
 /**
@@ -172,7 +173,7 @@ export function profileMultiple(profileCode: ProfileCode, settings: Settings = D
   const p = findProfile(refs, profileCode);
   const gsum = gradeSum(settings, refs);
   const fullShare = 1 - settings.rejectedShare - p.pulledShare;
-  const d = blendedDiscount(profileCode, refs);
+  const d = blendedDiscount(profileCode, refs, settings);
 
   const revenueTarget = 1 / (1 - settings.targetGP);
   const bulkCredit = (p.pulledShare + settings.rejectedShare) * settings.bulkRecovery;
@@ -281,10 +282,11 @@ export function computePrice(inputs: PriceInputs, settings: Settings = DEFAULT_S
  * The ladder is the only discounting — there are no seasonal promotions.
  */
 export function markdownLadder(fullPrice: number, settings: Settings = DEFAULT_SETTINGS): { stage: LadderStage; discount: number; price: number }[] {
+  const depths = depthsOf(settings);
   return (["md1", "md2", "md3"] as LadderStage[]).map((stage) => ({
     stage,
-    discount: LADDER_DEPTHS[stage],
-    price: charm(fullPrice * (1 - LADDER_DEPTHS[stage]), settings),
+    discount: depths[stage],
+    price: charm(fullPrice * (1 - depths[stage]), settings),
   }));
 }
 
@@ -317,7 +319,7 @@ export function expectedRevenue(
   if (item.gradeCode === REJECTED) return item.landedCost * settings.bulkRecovery;
   const p = findProfile(refs, item.profileCode);
   const sellsShare = 1 - p.pulledShare;
-  const d = blendedDiscount(item.profileCode, refs);
+  const d = blendedDiscount(item.profileCode, refs, settings);
   return (item.price * sellsShare * (1 - d)) / (1 + settings.salesTax) + item.landedCost * p.pulledShare * settings.bulkRecovery;
 }
 

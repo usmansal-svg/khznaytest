@@ -19,6 +19,8 @@ export type Settings = {
   blendedRate: number;
   /** Yield assumed while a lot is open, until its true-up. 0.90 placeholder. */
   defaultProvisionalYield: number;
+  /** Markdown ladder depths for md1, md2, md3 — 25%, 50%, 75% by default. */
+  ladderDepths: [number, number, number];
   /** PKR per kg, charged on weight, so heavier garments carry more */
   dutyPerKg: number;
   /** Deliberately zero — sorting labour sits in overheads */
@@ -61,6 +63,7 @@ export const DEFAULT_SETTINGS: Settings = {
   brandFeedbackEnabled: false,
   highValueThreshold: 4000,
   defaultProvisionalYield: 0.9,
+  ladderDepths: [0.25, 0.5, 0.75],
 };
 
 /* ------------------------------------------------------------------ grades */
@@ -140,14 +143,13 @@ export function profile(code: ProfileCode): Profile {
 
 export type LadderStage = "full" | "promo" | "md1" | "md2" | "md3";
 
-/** Discount depth at each rung. Section 3. */
-export const LADDER_DEPTHS: Readonly<Record<LadderStage, number>> = {
-  full: 0,
-  promo: 0,
-  md1: 0.25,
-  md2: 0.5,
-  md3: 0.75,
-};
+/** Discount depth at each rung, from settings. Section 3. */
+export function depthsOf(settings: Settings): Readonly<Record<LadderStage, number>> {
+  return { full: 0, promo: 0, md1: settings.ladderDepths[0], md2: settings.ladderDepths[1], md3: settings.ladderDepths[2] };
+}
+
+/** The default ladder — for callers with no settings in hand. */
+export const LADDER_DEPTHS: Readonly<Record<LadderStage, number>> = { full: 0, promo: 0, md1: 0.25, md2: 0.5, md3: 0.75 };
 
 /** Months on floor at each rung, in order. */
 export const LADDER_MONTHS: Readonly<Record<LadderStage, number>> = {

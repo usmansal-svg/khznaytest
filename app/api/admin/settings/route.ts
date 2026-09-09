@@ -17,15 +17,18 @@ import { loadPricingContext, settingsToRow } from "@/lib/pricing/repo";
 
 export async function GET() {
   const supabase = await createClient();
-  const [ctx, history] = await Promise.all([
+  const [ctx, versions, audits] = await Promise.all([
     loadPricingContext(supabase),
-    supabase.from("settings").select("version, note, created_at").order("version", { ascending: false }).limit(20),
+    supabase.from("settings").select("version, note, created_at, staff:changed_by(name)").order("version", { ascending: false }).limit(50),
+    supabase.from("admin_audits").select("id, table_name, row_key, before, after, changed_at, note, staff:changed_by(name)").in("table_name", ["settings", "profiles", "grades", "sub_categories", "brands", "staff", "lots"]).order("changed_at", { ascending: false }).limit(200),
   ]);
+  const one = <T,>(v: unknown) => (Array.isArray(v) ? v[0] : v) as T | null | undefined;
   return NextResponse.json({
     settings: ctx.settings,
     version: ctx.settingsVersion,
     source: ctx.source,
-    history: history.data ?? [],
+    history: (versions.data ?? []).map((v) => ({ version: v.version, note: v.note, created_at: v.created_at, by: one<{ name: string }>(v.staff)?.name ?? null })),
+    audits: (audits.data ?? []).map((a) => ({ id: a.id, table: a.table_name, key: a.row_key, at: a.changed_at, by: one<{ name: string }>(a.staff)?.name ?? "—", note: a.note, changes: diff(a.before, a.after) })),
     ...(ctx.warning ? { warning: ctx.warning } : {}),
   });
 }
@@ -57,9 +60,8 @@ export async function POST(request: Request) {
   const { error } = await supabase.from("settings").insert({
     version,
     ...settingsToRow(proposed.settings),
-    ladder_depths: [0, 0.25, 0.5, 0.75],
-    ladder_months: [1, 1, 1, 1],
     note: body.note?.trim() || null,
+    changed_by: gate.staff.id,
   });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -67,7 +69,7 @@ export async function POST(request: Request) {
   return NextResponse.json({ version, ...repricePreview(ctx, proposed.settings) });
 }
 
-const RANGES: Record<keyof Omit<Settings, "brandFeedbackEnabled">, [number, number]> = {
+const RANGES: Record<keyof Omit<Settings, "brandFeedbackEnabled" | "ladderDepths">, [number, number]> = {
   fx: [1, 10000],
   blendedRate: [0.01, 1000],
   dutyPerKg: [0, 100000],
@@ -85,9 +87,24 @@ const RANGES: Record<keyof Omit<Settings, "brandFeedbackEnabled">, [number, numb
   defaultProvisionalYield: [0.3, 1],
 };
 
+/** Human-readable field changes between two audit snapshots. */
+function diff(before: unknown, after: unknown): { field: string; from: string; to: string }[] {
+  if (!after || typeof after !== "object" || Array.isArray(after)) return [];
+  const b = (before && typeof before === "object" && !Array.isArray(before) ? before : {}) as Record<string, unknown>;
+  const a = after as Record<string, unknown>;
+  const fmt = (v: unknown) => (v == null ? "—" : Array.isArray(v) ? v.join("/") : typeof v === "object" ? JSON.stringify(v) : String(v));
+  return Object.keys(a)
+    .filter((k) => !["pin_hash", "pin_set_at"].includes(k) && JSON.stringify(a[k]) !== JSON.stringify(b[k]))
+    .map((k) => ({ field: k, from: fmt(b[k]), to: fmt(a[k]) }));
+}
+
 function validate(input: Partial<Settings> | undefined): { settings: Settings } | { error: string } {
   if (!input) return { error: "settings is required." };
   const out: Settings = { ...DEFAULT_SETTINGS };
+  const d = input.ladderDepths;
+  if (!Array.isArray(d) || d.length !== 3 || d.some((x) => typeof x !== "number" || !(x > 0 && x < 1))) return { error: "Markdown depths must be three percentages between 0 and 100." };
+  if (!(d[0] < d[1] && d[1] < d[2])) return { error: "Markdown depths must increase: markdown 1 < markdown 2 < final." };
+  out.ladderDepths = [d[0], d[1], d[2]];
   for (const key of Object.keys(RANGES) as (keyof typeof RANGES)[]) {
     const v = input[key];
     if (typeof v !== "number" || !Number.isFinite(v)) return { error: `${key} must be a number.` };

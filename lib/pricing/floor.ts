@@ -6,7 +6,7 @@
  * markdown needs a fresh sticker each sweep. Four colours back it is pulled.
  */
 
-import { LADDER_DEPTHS, type LadderStage, type Settings } from "./constants";
+import { depthsOf, type LadderStage, type Settings } from "./constants";
 import { charm, colourForMonth, coloursBack, stageFor } from "./engine";
 
 export const STICKER: Record<Exclude<LadderStage, "full" | "promo">, string> = {
@@ -32,6 +32,7 @@ export type SweepLine = FloorItem & { stage: LadderStage; sticker: string; price
 
 export function sweep(items: FloorItem[], settings: Settings, asOf = new Date()) {
   const current = colourForMonth(asOf);
+  const depths = depthsOf(settings);
   const toPull: FloorItem[] = [];
   const stickers: SweepLine[] = [];
   for (const it of items) {
@@ -42,7 +43,7 @@ export function sweep(items: FloorItem[], settings: Settings, asOf = new Date())
       continue;
     }
     if (stage === "full" || stage === "promo") continue;
-    stickers.push({ ...it, stage, sticker: STICKER[stage], price_today: charm(it.list_price * (1 - LADDER_DEPTHS[stage]), settings) });
+    stickers.push({ ...it, stage, sticker: STICKER[stage], price_today: charm(it.list_price * (1 - depths[stage]), settings) });
   }
   // One sticker type at a time, then sub-category, so the operator works in runs.
   const order: LadderStage[] = ["md1", "md2", "md3"];

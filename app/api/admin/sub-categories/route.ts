@@ -9,6 +9,8 @@ import { NextResponse } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
 import { audit, requireManager } from "@/lib/admin/auth";
+import { computePrice } from "@/lib/pricing/engine";
+import { loadPricingContext } from "@/lib/pricing/repo";
 
 const PROFILES = ["fast", "standard", "slow"];
 const EDITABLE = ["weight_kg", "profile_code", "value_index", "market_ceiling", "market_price", "per_piece_cost", "per_piece_share", "active"] as const;
@@ -21,10 +23,19 @@ export async function GET() {
     .order("slug");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   const one = (v: unknown) => (Array.isArray(v) ? v[0] : v) as { name: string; sort_order: number } | null;
+  // Planning estimate, the way the Excel sheet does it: default weight at the
+  // planning rate, imported. Real garments price from their lot and scale.
+  const ctx = await loadPricingContext(supabase);
   const rows = (data ?? [])
-    .map((r) => ({ ...r, category: one(r.categories)?.name ?? "", category_order: one(r.categories)?.sort_order ?? 0, categories: undefined }))
+    .map((r) => {
+      const est = computePrice({ weightKg: Number(r.weight_kg), profileCode: r.profile_code, valueIndex: Number(r.value_index) }, ctx.settings, ctx.refs);
+      return {
+        ...r, category: one(r.categories)?.name ?? "", category_order: one(r.categories)?.sort_order ?? 0, categories: undefined,
+        estimate: { landed_cost: Math.round(est.landedCost), bnwt: est.gradePrices.bnwt, premium: est.gradePrices.premium, excellent: est.gradePrices.excellent, very_good: est.gradePrices.very_good, gp_pct: est.gpPct },
+      };
+    })
     .sort((a, b) => a.category_order - b.category_order || a.name.localeCompare(b.name));
-  return NextResponse.json({ rows });
+  return NextResponse.json({ rows, basis: { planning_rate: ctx.settings.blendedRate, fx: ctx.settings.fx } });
 }
 
 export async function PATCH(request: Request) {

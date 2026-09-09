@@ -11,9 +11,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import type { Settings } from "@/lib/pricing/constants";
 
-type SettingsResponse = { settings: Settings; version: number; source: string; history: { version: number; note: string | null; created_at: string }[]; warning?: string };
+type SettingsResponse = { settings: Settings; version: number; source: string; history: { version: number; note: string | null; created_at: string; by: string | null }[]; audits: { id: number; table: string; key: string; at: string; by: string; note: string | null; changes: { field: string; from: string; to: string }[] }[]; warning?: string };
 type Preview = { rows: { slug: string; name: string; profile: string; weight_kg: number; current: number; proposed: number; change_pct: number }[]; multiples: { profile: string; current: number; proposed: number }[] };
-type SubRow = { slug: string; code: string; name: string; category: string; weight_kg: number; profile_code: string; value_index: number; market_ceiling: number | null; market_price: number | null; active: boolean };
+type SubRow = { slug: string; code: string; name: string; category: string; weight_kg: number; profile_code: string; value_index: number; market_ceiling: number | null; market_price: number | null; active: boolean; estimate?: { landed_cost: number; bnwt: number; premium: number; excellent: number; very_good: number; gp_pct: number } };
 
 const rs = (n: number) => `Rs ${Math.round(n).toLocaleString("en-PK")}`;
 const pct = (n: number) => `${n >= 0 ? "+" : ""}${(n * 100).toFixed(1)}%`;
@@ -124,6 +124,19 @@ export function PricingAdmin() {
         {/* ------------------------------------------------- constants */}
         <TabsContent value="constants" className="grid gap-6 lg:grid-cols-[1fr_420px]">
           <div className="space-y-4">
+            <Card>
+              <CardHeader className="pb-3"><CardTitle className="text-base">Markdown ladder</CardTitle></CardHeader>
+              <CardContent className="grid gap-4 sm:grid-cols-3">
+                {(["Markdown 1 · 25% OFF sticker", "Markdown 2 · HALF PRICE sticker", "Final · LAST CHANCE sticker"] as const).map((label, i) => (
+                  <div key={label} className="grid gap-1.5">
+                    <Label htmlFor={`md${i}`}>{label} <span className="font-normal text-muted-foreground">· % off</span></Label>
+                    <Input id={`md${i}`} type="number" step="1" min="1" max="99" value={Math.round(draft.ladderDepths[i] * 100)} onChange={(e) => { const d = [...draft.ladderDepths] as [number, number, number]; d[i] = Number(e.target.value) / 100; setDraft({ ...draft, ladderDepths: d }); }} className={cn(draft.ladderDepths[i] !== loaded.settings.ladderDepths[i] && "border-amber-500")} />
+                    <p className="text-xs text-muted-foreground">{i === 0 ? "One colour back." : i === 1 ? "Two colours back." : "Three colours back; four is pulled."}</p>
+                  </div>
+                ))}
+                <p className="text-xs text-muted-foreground sm:col-span-3">Depths feed the blended discount, so a change moves the multiple and every price — not just the stickers. Watch the preview.</p>
+              </CardContent>
+            </Card>
             {groups.map((g) => (
               <Card key={g}>
                 <CardHeader className="pb-3">
@@ -223,17 +236,42 @@ export function PricingAdmin() {
           <SubCategoryEditor />
         </TabsContent>
 
-        <TabsContent value="history">
+        <TabsContent value="history" className="space-y-6">
           <Card>
-            <CardContent className="pt-6">
+            <CardHeader className="pb-2"><CardTitle className="text-base">Settings versions</CardTitle></CardHeader>
+            <CardContent>
               <table className="w-full text-sm">
-                <thead className="text-left text-xs uppercase text-muted-foreground"><tr><th className="pb-2">Version</th><th className="pb-2">Saved</th><th className="pb-2">Note</th></tr></thead>
+                <thead className="text-left text-xs uppercase text-muted-foreground"><tr><th className="pb-2">Version</th><th className="pb-2">By</th><th className="pb-2">When</th><th className="pb-2">Note</th></tr></thead>
                 <tbody className="divide-y">
                   {loaded.history.map((h) => (
-                    <tr key={h.version}><td className="py-2 font-mono">{h.version}</td><td className="py-2">{new Date(h.created_at).toLocaleString("en-PK")}</td><td className="py-2">{h.note ?? <span className="text-muted-foreground">—</span>}</td></tr>
+                    <tr key={h.version}><td className="py-2 font-mono">{h.version}</td><td className="py-2 font-medium">{h.by ?? <span className="text-muted-foreground">system</span>}</td><td className="py-2">{new Date(h.created_at).toLocaleString("en-PK")}</td><td className="py-2">{h.note ?? <span className="text-muted-foreground">—</span>}</td></tr>
                   ))}
                 </tbody>
               </table>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-base">Every change <span className="font-normal text-muted-foreground">· who, when, what</span></CardTitle></CardHeader>
+            <CardContent>
+              {loaded.audits.length === 0 ? <p className="text-sm text-muted-foreground">No changes recorded yet.</p> : (
+                <table className="w-full text-sm">
+                  <thead className="text-left text-xs uppercase text-muted-foreground"><tr><th className="pb-2">When</th><th className="pb-2">By</th><th className="pb-2">Where</th><th className="pb-2">Change</th></tr></thead>
+                  <tbody className="divide-y align-top">
+                    {loaded.audits.map((a) => (
+                      <tr key={a.id}>
+                        <td className="whitespace-nowrap py-2 text-xs">{new Date(a.at).toLocaleString("en-PK", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</td>
+                        <td className="py-2 font-medium">{a.by}</td>
+                        <td className="py-2"><span className="capitalize">{a.table.replace("_", " ")}</span> <span className="font-mono text-xs text-muted-foreground">{a.key}</span></td>
+                        <td className="py-2 text-xs">
+                          {a.note && <div className="mb-0.5 text-muted-foreground">{a.note}</div>}
+                          {a.changes.length === 0 ? <span className="text-muted-foreground">—</span> : a.changes.slice(0, 8).map((c) => <div key={c.field}><span className="font-mono">{c.field}</span>: <span className="text-muted-foreground line-through">{c.from}</span> → <span className="font-semibold">{c.to}</span></div>)}
+                          {a.changes.length > 8 && <div className="text-muted-foreground">+{a.changes.length - 8} more</div>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -291,11 +329,11 @@ function SubCategoryEditor() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="mb-3 text-xs text-muted-foreground">Weights are the spec&apos;s open item #1 — weigh 20 pieces per category and replace the estimates. Market ceiling warns the tagger when cost-led pricing runs above the market; market price is the &quot;new in store&quot; anchor printed on the tag.</p>
+        <p className="mb-3 text-xs text-muted-foreground">Prices shown are planning estimates at the default weight and planning rate (imported), exactly like the Excel sheet; a real garment prices from its lot and scale weight. Edited weights and indices reprice the row after Save. Weights are the spec&apos;s open item #1 — weigh 20 pieces per category and replace the estimates. Market ceiling warns the tagger when cost-led pricing runs above the market; market price is the &quot;new in store&quot; anchor printed on the tag.</p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-left text-xs uppercase text-muted-foreground">
-              <tr><th className="pb-2">Sub-category</th><th className="pb-2">Code</th><th className="pb-2">Weight kg</th><th className="pb-2">Profile</th><th className="pb-2">Value index</th><th className="pb-2">Market ceiling</th><th className="pb-2">Market price</th><th className="pb-2">Active</th></tr>
+              <tr><th className="pb-2">Sub-category</th><th className="pb-2">Code</th><th className="pb-2">Weight kg</th><th className="pb-2">Profile</th><th className="pb-2">Value index</th><th className="pb-2 text-right">Landed</th><th className="pb-2 text-right">BNWT</th><th className="pb-2 text-right">Premium</th><th className="pb-2 text-right">Excellent</th><th className="pb-2 text-right">Very Good</th><th className="pb-2 text-right">GP %</th><th className="pb-2">Market ceiling</th><th className="pb-2">Market price</th><th className="pb-2">Active</th></tr>
             </thead>
             <tbody className="divide-y">
               {rows.map((r) => {
@@ -313,6 +351,12 @@ function SubCategoryEditor() {
                       </select>
                     </td>
                     <td className="py-1.5 pr-2"><Input type="number" step="0.05" min="0.05" value={v.value_index} onChange={(ev) => edit(r.slug, { value_index: Number(ev.target.value) })} className={cn("h-8 w-24", changed("value_index") && "border-amber-500")} /></td>
+                    <td className="py-1.5 pr-2 text-right tabular-nums text-muted-foreground">{r.estimate ? rs(r.estimate.landed_cost) : "—"}</td>
+                    <td className="py-1.5 pr-2 text-right tabular-nums">{r.estimate ? rs(r.estimate.bnwt) : "—"}</td>
+                    <td className="py-1.5 pr-2 text-right font-semibold tabular-nums">{r.estimate ? rs(r.estimate.premium) : "—"}</td>
+                    <td className="py-1.5 pr-2 text-right tabular-nums">{r.estimate ? rs(r.estimate.excellent) : "—"}</td>
+                    <td className="py-1.5 pr-2 text-right tabular-nums">{r.estimate ? rs(r.estimate.very_good) : "—"}</td>
+                    <td className="py-1.5 pr-2 text-right tabular-nums">{r.estimate ? pct(r.estimate.gp_pct) : "—"}</td>
                     <td className="py-1.5 pr-2"><Input type="number" step="100" min="0" value={v.market_ceiling ?? ""} onChange={(ev) => edit(r.slug, { market_ceiling: ev.target.value === "" ? null : Number(ev.target.value) })} className={cn("h-8 w-28", changed("market_ceiling") && "border-amber-500")} placeholder="—" /></td>
                     <td className="py-1.5 pr-2"><Input type="number" step="100" min="0" value={v.market_price ?? ""} onChange={(ev) => edit(r.slug, { market_price: ev.target.value === "" ? null : Number(ev.target.value) })} className={cn("h-8 w-28", changed("market_price") && "border-amber-500")} placeholder="—" /></td>
                     <td className="py-1.5"><Checkbox checked={v.active} onCheckedChange={(c) => edit(r.slug, { active: c === true })} /></td>
