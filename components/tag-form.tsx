@@ -280,7 +280,7 @@ export function TagForm() {
     setSaved(null);
     setSaveError(null);
     requestAnimationFrame(() => brandRef.current?.focus());
-  }, []);
+  }, [photo]);
 
   async function save() {
     if (!canSave) return;
