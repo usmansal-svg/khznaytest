@@ -116,7 +116,7 @@ export function TagForm() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState<Saved | null>(null);
-  const [sessionCount, setSessionCount] = useState(0);
+  const [sessionSkus, setSessionSkus] = useState<string[]>([]);
 
   const brandRef = useRef<HTMLInputElement>(null);
   const weightRef = useRef<HTMLInputElement>(null);
@@ -255,7 +255,7 @@ export function TagForm() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Save failed.");
       setSaved(json.item);
-      setSessionCount((n) => n + 1);
+      setSessionSkus((list) => [...list, json.item.sku]);
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Save failed.");
     } finally {
@@ -474,7 +474,7 @@ export function TagForm() {
       </div>
 
       {/* --------------------------------------------------------- price */}
-      <div className="space-y-4 lg:sticky lg:top-6 lg:self-start">
+      <div className="space-y-4 lg:sticky lg:top-6 lg:self-start max-lg:sticky max-lg:bottom-0 max-lg:z-10 max-lg:-mx-4 max-lg:border-t max-lg:bg-background max-lg:p-4">
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center justify-between text-base">
@@ -550,6 +550,11 @@ export function TagForm() {
           </CardContent>
         </Card>
 
+        {sessionSkus.length > 0 && (
+          <Button asChild variant="outline" className="w-full">
+            <a href={`/print?skus=${sessionSkus.join(",")}`} target="_blank" rel="noreferrer"><Printer className="size-4" /> Print all {sessionSkus.length} tags from this session</a>
+          </Button>
+        )}
         <Card>
           <CardContent className="space-y-3 pt-6">
             {saved ? (
@@ -580,7 +585,7 @@ export function TagForm() {
                   <Save className="size-4" /> {saving ? "Saving…" : "Save & allocate SKU"}
                 </Button>
                 <p className="text-center text-xs text-muted-foreground">
-                  {ref.tagger ? "Enter saves" : "Sign in to save"} · {sessionCount} tagged this session
+                  {ref.tagger ? "Enter saves" : "Sign in to save"} · {sessionSkus.length} tagged this session
                 </p>
               </>
             )}
@@ -594,7 +599,7 @@ export function TagForm() {
 /* -------------------------------------------------------------- helpers */
 
 const selectClass =
-  "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
+  "flex h-11 md:h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base md:text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
 
 const COLOURS = ["Black", "White", "Grey", "Navy", "Blue", "Red", "Green", "Beige", "Brown", "Pink", "Yellow", "Orange", "Purple", "Multi"];
 const FABRICS = ["Cotton", "Polyester", "Denim", "Wool", "Linen", "Silk", "Leather", "Suede", "Cashmere", "Fleece", "Nylon", "Blend"];
@@ -634,7 +639,7 @@ function ButtonGroup<T extends string>({ label, hint, options, value, onChange }
       <Label>{label}</Label>
       <div className="flex flex-wrap gap-2">
         {options.map((o) => (
-          <Button key={o.code} type="button" size="sm" variant={o.code === value ? "default" : "outline"} onClick={() => onChange(o.code)}>
+          <Button key={o.code} type="button" size="sm" variant={o.code === value ? "default" : "outline"} onClick={() => onChange(o.code)} className="h-11 px-4 text-sm md:h-8 md:px-3 md:text-xs">
             {o.label}
           </Button>
         ))}

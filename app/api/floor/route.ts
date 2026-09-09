@@ -1,0 +1,90 @@
+/**
+ * GET  /api/floor?outlet_id=…   this month's colour; garments awaiting flooring;
+ *                               the sticker sweep; garments due to be pulled
+ * POST /api/floor { action: "floor" | "pull", outlet_id, skus?: [] }
+ *
+ * Floor stamps floored_on and the colour and moves tagged → on_floor. Pull
+ * marks four-colour-old stock pulled. Both act on the whole outlet unless a
+ * SKU list is given.
+ */
+
+import { NextResponse } from "next/server";
+
+import { currentStaff, dbFor, requireStaff } from "@/lib/auth/staff";
+import { colourForMonth } from "@/lib/pricing/engine";
+import { sweep, type FloorItem } from "@/lib/pricing/floor";
+import { loadPricingContext } from "@/lib/pricing/repo";
+
+const SELECT = "id, sku, outlet_id, brand_text, size_label, price, price_manual, floored_on, colour_tag, status, sub_categories(name)";
+
+function toFloorItem(r: Record<string, unknown>): FloorItem {
+  const sub = Array.isArray(r.sub_categories) ? r.sub_categories[0] : r.sub_categories;
+  return {
+    id: r.id as number,
+    sku: r.sku as string,
+    outlet_id: (r.outlet_id as number | null) ?? null,
+    sub_category: (sub as { name: string } | null)?.name ?? "",
+    brand: (r.brand_text as string | null) ?? "",
+    size_label: (r.size_label as string | null) ?? null,
+    list_price: Number((r.price_manual as number | null) ?? (r.price as number | null) ?? 0),
+    floored_on: (r.floored_on as string | null) ?? null,
+    colour_tag: (r.colour_tag as string | null) ?? null,
+    status: r.status as string,
+  };
+}
+
+export async function GET(request: Request) {
+  const supabase = await dbFor(await currentStaff());
+  const outletId = Number(new URL(request.url).searchParams.get("outlet_id"));
+  if (!Number.isInteger(outletId) || outletId <= 0) return NextResponse.json({ error: "outlet_id is required." }, { status: 400 });
+  const ctx = await loadPricingContext(supabase);
+  const { data, error } = await supabase.from("items").select(SELECT).eq("outlet_id", outletId).in("status", ["tagged", "on_floor"]).order("sku");
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  const items = (data ?? []).map((r) => toFloorItem(r as Record<string, unknown>));
+  const pending = items.filter((i) => i.status === "tagged");
+  const s = sweep(items, ctx.settings);
+  return NextResponse.json({
+    colour: s.colour,
+    pending: pending.map(({ id, sku, brand, sub_category, size_label, list_price }) => ({ id, sku, brand, sub_category, size_label, list_price })),
+    stickers: s.stickers.map((l) => ({ id: l.id, sku: l.sku, brand: l.brand, sub_category: l.sub_category, size_label: l.size_label, list_price: l.list_price, colour_tag: l.colour_tag, stage: l.stage, sticker: l.sticker, price_today: l.price_today })),
+    to_pull: s.to_pull.map((i) => ({ id: i.id, sku: i.sku, brand: i.brand, sub_category: i.sub_category, size_label: i.size_label, list_price: i.list_price, colour_tag: i.colour_tag, floored_on: i.floored_on })),
+    on_floor: items.filter((i) => i.status === "on_floor").length,
+  });
+}
+
+export async function POST(request: Request) {
+  const gate = await requireStaff();
+  if ("response" in gate) return gate.response;
+  let body: { action?: string; outlet_id?: number; skus?: string[] };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Body must be JSON." }, { status: 400 });
+  }
+  const outletId = Number(body.outlet_id);
+  if (!Number.isInteger(outletId) || outletId <= 0) return NextResponse.json({ error: "outlet_id is required." }, { status: 400 });
+  const db = gate.db;
+  const skus = body.skus?.map((s) => s.trim().toUpperCase()).filter(Boolean);
+
+  if (body.action === "floor") {
+    const today = new Date();
+    let q = db.from("items").update({ status: "on_floor", floored_on: today.toISOString().slice(0, 10), colour_tag: colourForMonth(today) }).eq("outlet_id", outletId).eq("status", "tagged");
+    if (skus?.length) q = q.in("sku", skus);
+    const { data, error } = await q.select("sku");
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ floored: data?.length ?? 0, colour: colourForMonth(today) });
+  }
+
+  if (body.action === "pull") {
+    const ctx = await loadPricingContext(db);
+    const { data } = await db.from("items").select(SELECT).eq("outlet_id", outletId).eq("status", "on_floor");
+    const due = sweep((data ?? []).map((r) => toFloorItem(r as Record<string, unknown>)), ctx.settings).to_pull;
+    const ids = due.filter((i) => !skus?.length || skus.includes(i.sku)).map((i) => i.id);
+    if (!ids.length) return NextResponse.json({ pulled: 0 });
+    const { error } = await db.from("items").update({ status: "pulled" }).in("id", ids);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ pulled: ids.length });
+  }
+
+  return NextResponse.json({ error: "action must be floor or pull." }, { status: 400 });
+}

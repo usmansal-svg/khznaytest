@@ -18,7 +18,7 @@ type StaffOption = { id: number; name: string; role: string };
 export function PinLogin() {
   const router = useRouter();
   const params = useSearchParams();
-  const next = params.get("next") || "/tag";
+  const requested = params.get("next");
 
   const [state, setState] = useState<{ configured: boolean; needs_setup: boolean; staff: StaffOption[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +46,9 @@ export function PinLogin() {
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "Sign-in failed.");
-      router.replace(next);
+      const role = j.staff?.role as string | undefined;
+      const home = role === "manager" || role === "founder" ? "/dashboard" : "/tag";
+      router.replace(requested && requested !== "/" ? requested : home);
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Sign-in failed.");

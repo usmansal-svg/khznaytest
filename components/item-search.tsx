@@ -59,7 +59,18 @@ export function ItemSearch() {
         <h1 className="text-2xl font-bold">Items</h1>
         <p className="text-sm text-muted-foreground">Find by SKU, brand or sub-category. Reprint a lost tag.</p>
       </div>
-      <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="KHZ-… or Zara or Jeans" autoFocus className="max-w-md" />
+      <Input
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        onKeyDown={(e) => {
+          // Scanner guns type the SKU and press Enter: go straight to the garment.
+          if (e.key === "Enter" && /^KHZ-|^DEMO-/i.test(q.trim())) window.location.assign(`/items/${q.trim().toUpperCase()}`);
+        }}
+        placeholder="Scan a tag, or type KHZ-…, Zara, Jeans"
+        autoFocus
+        autoCapitalize="characters"
+        className="h-12 max-w-md text-base"
+      />
       {error && <p className="text-sm text-destructive">{error}</p>}
       <Card>
         <CardHeader className="pb-2">

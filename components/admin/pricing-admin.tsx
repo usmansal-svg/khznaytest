@@ -115,6 +115,8 @@ export function PricingAdmin() {
       <Tabs defaultValue="constants">
         <TabsList>
           <TabsTrigger value="constants">Constants</TabsTrigger>
+          <TabsTrigger value="profiles">Selling profiles</TabsTrigger>
+          <TabsTrigger value="grades">Grades</TabsTrigger>
           <TabsTrigger value="subcategories">Sub-categories</TabsTrigger>
           <TabsTrigger value="history">History</TabsTrigger>
         </TabsList>
@@ -207,6 +209,14 @@ export function PricingAdmin() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="profiles">
+          <ProfilesEditor />
+        </TabsContent>
+
+        <TabsContent value="grades">
+          <GradesEditor />
         </TabsContent>
 
         <TabsContent value="subcategories">
@@ -312,6 +322,107 @@ function SubCategoryEditor() {
             </tbody>
           </table>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ------------------------------------------------- selling profiles */
+
+type ProfileRow = { code: string; name: string; pulledShare: number; volFull: number; volMd1: number; volMd2: number; volMd3: number; multiple: number };
+
+function ProfilesEditor() {
+  const [rows, setRows] = useState<ProfileRow[] | null>(null);
+  const [draft, setDraft] = useState<Record<string, Partial<ProfileRow>>>({});
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/admin/profiles").then((r) => r.json()).then((j) => setRows(j.profiles ?? []));
+  }, []);
+  if (!rows) return <p className="text-muted-foreground">Loading…</p>;
+
+  const v = (r: ProfileRow) => ({ ...r, ...draft[r.code] });
+  const sum = (r: ProfileRow) => { const x = v(r); return x.volFull + x.volMd1 + x.volMd2 + x.volMd3; };
+  const dirty = Object.keys(draft).length > 0;
+
+  async function save() {
+    setBusy(true); setMessage(null);
+    const payload = rows!.filter((r) => draft[r.code]).map((r) => { const x = v(r); return { code: r.code, pulled_share: x.pulledShare, vol_full: x.volFull, vol_md1: x.volMd1, vol_md2: x.volMd2, vol_md3: x.volMd3 }; });
+    const res = await fetch("/api/admin/profiles", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ rows: payload }) });
+    const j = await res.json();
+    if (!res.ok) setMessage({ tone: "error", text: j.error }); else { setRows(j.profiles); setDraft({}); setMessage({ tone: "ok", text: "Profiles saved. New tags use the new multiples." }); }
+    setBusy(false);
+  }
+
+  const Pct = ({ r, k }: { r: ProfileRow; k: keyof ProfileRow }) => (
+    <Input type="number" step="0.5" min="0" max="100" value={Math.round((v(r)[k] as number) * 1000) / 10} onChange={(e) => setDraft((d) => ({ ...d, [r.code]: { ...d[r.code], [k]: Number(e.target.value) / 100 } }))} className={cn("h-8 w-20 text-right", draft[r.code]?.[k] !== undefined && "border-amber-500")} />
+  );
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
+          <span>Selling profiles <span className="font-normal text-muted-foreground">· what share sells at each rung of the ladder</span></span>
+          <span className="flex items-center gap-2">{message && <span className={cn("text-xs", message.tone === "ok" ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400")}>{message.text}</span>}<Button size="sm" onClick={save} disabled={!dirty || busy}>{busy ? "Saving…" : "Save"}</Button></span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="mb-3 text-xs text-muted-foreground">These are the spec&apos;s open item #1 — estimates until one cycle of real sell-through replaces them. Full + 25% + 50% + 75% must add to 100%; &quot;never sells&quot; is on top and gets pulled at month five. The multiple is recomputed from these, never stored.</p>
+        <div className="overflow-x-auto"><table className="w-full text-sm">
+          <thead className="text-left text-xs uppercase text-muted-foreground"><tr><th className="pb-2">Profile</th><th className="pb-2 text-right">Never sells %</th><th className="pb-2 text-right">Full price %</th><th className="pb-2 text-right">25% off</th><th className="pb-2 text-right">50% off</th><th className="pb-2 text-right">75% off</th><th className="pb-2 text-right">Sum</th><th className="pb-2 text-right">Multiple</th></tr></thead>
+          <tbody className="divide-y">{rows.map((r) => (
+            <tr key={r.code}><td className="py-1.5 font-medium">{r.name}</td>
+              <td className="py-1.5 text-right"><Pct r={r} k="pulledShare" /></td><td className="py-1.5 text-right"><Pct r={r} k="volFull" /></td><td className="py-1.5 text-right"><Pct r={r} k="volMd1" /></td><td className="py-1.5 text-right"><Pct r={r} k="volMd2" /></td><td className="py-1.5 text-right"><Pct r={r} k="volMd3" /></td>
+              <td className={cn("py-1.5 text-right tabular-nums", Math.abs(sum(r) - 1) > 0.0005 ? "font-semibold text-red-700 dark:text-red-400" : "text-muted-foreground")}>{(sum(r) * 100).toFixed(1)}%</td>
+              <td className="py-1.5 text-right font-mono tabular-nums">{r.multiple.toFixed(4)}{draft[r.code] && <span className="ml-1 text-xs text-amber-600">→ save to recompute</span>}</td>
+            </tr>))}</tbody>
+        </table></div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ---------------------------------------------------------- grades */
+
+type GradeRow = { code: string; name: string; multiplier: number; shareOfIntake: number };
+
+function GradesEditor() {
+  const [rows, setRows] = useState<GradeRow[] | null>(null);
+  const [draft, setDraft] = useState<Record<string, Partial<GradeRow>>>({});
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  useEffect(() => { fetch("/api/admin/grades").then((r) => r.json()).then((j) => setRows(j.grades ?? [])); }, []);
+  if (!rows) return <p className="text-muted-foreground">Loading…</p>;
+  const v = (r: GradeRow) => ({ ...r, ...draft[r.code] });
+  const shareSum = rows.reduce((s, r) => s + v(r).shareOfIntake, 0);
+  const dirty = Object.keys(draft).length > 0;
+  async function save() {
+    setBusy(true); setMessage(null);
+    const res = await fetch("/api/admin/grades", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ rows: rows!.filter((r) => draft[r.code]).map((r) => ({ code: r.code, multiplier: v(r).multiplier, share_of_intake: v(r).shareOfIntake })) }) });
+    const j = await res.json();
+    if (!res.ok) setMessage({ tone: "error", text: j.error }); else { setRows(j.grades); setDraft({}); setMessage({ tone: "ok", text: "Grades saved." }); }
+    setBusy(false);
+  }
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
+          <span>Condition grades <span className="font-normal text-muted-foreground">· multiplier on the Premium price, and the assumed intake mix</span></span>
+          <span className="flex items-center gap-2">{message && <span className={cn("text-xs", message.tone === "ok" ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400")}>{message.text}</span>}<Button size="sm" onClick={save} disabled={!dirty || busy}>{busy ? "Saving…" : "Save"}</Button></span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <table className="w-full text-sm">
+          <thead className="text-left text-xs uppercase text-muted-foreground"><tr><th className="pb-2">Grade</th><th className="pb-2 text-right">× Premium</th><th className="pb-2 text-right">Share of intake %</th></tr></thead>
+          <tbody className="divide-y">{rows.map((r) => (
+            <tr key={r.code}><td className="py-1.5 font-medium">{r.name}</td>
+              <td className="py-1.5 text-right"><Input type="number" step="0.05" min="0" max="5" disabled={r.code === "premium" || r.code === "rejected"} value={v(r).multiplier} onChange={(e) => setDraft((d) => ({ ...d, [r.code]: { ...d[r.code], multiplier: Number(e.target.value) } }))} className={cn("h-8 w-24 text-right", draft[r.code]?.multiplier !== undefined && "border-amber-500")} /></td>
+              <td className="py-1.5 text-right"><Input type="number" step="0.5" min="0" max="100" value={Math.round(v(r).shareOfIntake * 1000) / 10} onChange={(e) => setDraft((d) => ({ ...d, [r.code]: { ...d[r.code], shareOfIntake: Number(e.target.value) / 100 } }))} className={cn("h-8 w-24 text-right", draft[r.code]?.shareOfIntake !== undefined && "border-amber-500")} /></td>
+            </tr>))}
+            <tr><td className="pt-2 text-xs text-muted-foreground">Premium is fixed at 1.00; Rejected at 0.</td><td /><td className={cn("pt-2 text-right text-xs tabular-nums", Math.abs(shareSum - 1) > 0.0005 ? "font-semibold text-red-700 dark:text-red-400" : "text-muted-foreground")}>sum {(shareSum * 100).toFixed(1)}%</td></tr>
+          </tbody>
+        </table>
       </CardContent>
     </Card>
   );
