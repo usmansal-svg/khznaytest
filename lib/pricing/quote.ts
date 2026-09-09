@@ -20,6 +20,8 @@ export type QuoteInput = {
   brand: BrandResolution;
   grade: GradeCode;
   adjustment: Adjustment;
+  /** 5% steps; overrides adjustment when given */
+  adjustPct?: number;
   isRare: boolean;
   /** Null for a planning quote */
   lot?: DbLot | null;
@@ -34,6 +36,9 @@ export type Quote = {
   weight_kg: number | null;
   landed_cost: number;
   price: number | null;
+  /** The pricing-sheet price at this grade with no adjustment */
+  standard_price: number | null;
+  adjust_pct: number;
   premium_price: number | null;
   grade_prices: Record<GradeCode, number> | null;
   markdowns: { stage: string; discount: number; price: number }[];
@@ -74,21 +79,19 @@ export function quote(input: QuoteInput, ctx: PricingContext): Quote {
     warnings.push("Planning quote at the blended rate and default weight — pick a lot and weigh the garment for the real price.");
   }
 
-  const result = computePrice(
-    {
-      weightKg: weightKg ?? 0,
-      basis,
-      effectiveRate: effRate,
-      imported: lot ? lot.imported : true,
-      profileCode: subCategory.profileCode,
-      valueIndex: subCategory.valueIndex,
-      gradeCode: grade,
-      tier: brand.tier,
-      adjustment,
-    },
-    ctx.settings,
-    ctx.refs,
-  );
+  const baseInputs = {
+    weightKg: weightKg ?? 0,
+    basis,
+    effectiveRate: effRate,
+    imported: lot ? lot.imported : true,
+    profileCode: subCategory.profileCode,
+    valueIndex: subCategory.valueIndex,
+    gradeCode: grade,
+    tier: brand.tier,
+  };
+  const adjustPct = input.adjustPct ?? { below: -15, standard: 0, above: 20 }[adjustment];
+  const result = computePrice({ ...baseInputs, adjustPct }, ctx.settings, ctx.refs);
+  const standard = computePrice({ ...baseInputs, adjustPct: 0 }, ctx.settings, ctx.refs);
 
   const rejected = grade === REJECTED;
   // A rare piece is priced by hand even when the brand is priceable — two or
@@ -111,6 +114,8 @@ export function quote(input: QuoteInput, ctx: PricingContext): Quote {
     weight_kg: weightKg,
     landed_cost: round2(result.landedCost),
     price: priced ? result.price : null,
+    standard_price: priced ? standard.price : null,
+    adjust_pct: adjustPct,
     premium_price: priced ? result.premiumPrice : null,
     grade_prices: priced ? result.gradePrices : null,
     markdowns: priced ? result.markdowns : [],
@@ -142,6 +147,8 @@ function empty(subCategory: DbSubCategory, brand: BrandResolution, grade: GradeC
     weight_kg: null,
     landed_cost: 0,
     price: null,
+    standard_price: null,
+    adjust_pct: 0,
     premium_price: null,
     grade_prices: null,
     markdowns: [],

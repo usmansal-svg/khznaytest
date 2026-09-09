@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import type { Adjustment, ColourTag, GradeCode } from "@/lib/pricing/constants";
+import type { ColourTag, GradeCode } from "@/lib/pricing/constants";
 import { ADULT_SIZES, KIDS_SIZES } from "@/lib/pricing/kids-sizes";
 import { GENDER_LABELS, type Gender, type Season, type Wearer } from "@/lib/pricing/sku";
 import { SLEEVE_TYPES } from "@/lib/pricing/sub-categories";
@@ -49,6 +49,8 @@ type PriceResponse = {
   expected_revenue?: number | null;
   landed_cost: number | null;
   price: number | null;
+  standard_price?: number | null;
+  adjust_pct?: number;
   grade_prices: Record<GradeCode, number> | null;
   markdowns: { stage: string; discount: number; price: number }[];
   gp_pct: number | null;
@@ -68,11 +70,6 @@ type Saved = {
 
 const GRADE_LABELS: Record<GradeCode, string> = { bnwt: "BNWT", premium: "Premium", excellent: "Excellent", very_good: "Very Good", rejected: "Rejected" };
 const SELLABLE: GradeCode[] = ["bnwt", "premium", "excellent", "very_good"];
-const ADJUSTMENTS: { code: Adjustment; label: string }[] = [
-  { code: "below", label: "Below" },
-  { code: "standard", label: "Standard" },
-  { code: "above", label: "Above" },
-];
 const SEASON_OPTIONS: { code: Season; label: string }[] = [{ code: "summer", label: "Summer" }, { code: "winter", label: "Winter" }];
 const WEARER_OPTIONS: { code: Wearer; label: string }[] = [{ code: "men", label: "Men" }, { code: "women", label: "Women" }, { code: "boy", label: "Boy" }, { code: "girl", label: "Girl" }, { code: "infant", label: "Infant" }, { code: "unisex", label: "Unisex" }];
 const GENDER_ORDER: Gender[] = ["men", "women", "teenage", "kid", "toddler", "infant"];
@@ -112,8 +109,10 @@ export function TagForm() {
   const [flaw, setFlaw] = useState("");
   const [measure, setMeasure] = useState<Record<string, string>>({});
   const [sleeve, setSleeve] = useState<string>("");
-  const [adjustment, setAdjustment] = useState<Adjustment>("standard");
+  const [adjustPct, setAdjustPct] = useState(0);
+  const [manualOn, setManualOn] = useState(false);
   const [manualPrice, setManualPrice] = useState("");
+  const [belowReason, setBelowReason] = useState("");
 
   const [price, setPrice] = useState<PriceResponse | null>(null);
   const [pricing, setPricing] = useState(false);
@@ -218,7 +217,7 @@ export function TagForm() {
           method: "POST",
           headers: { "content-type": "application/json" },
           signal: ctrl.signal,
-          body: JSON.stringify({ sub_category_id: sub, brand_text: brand, grade, adjustment, lot_id: lotId ? Number(lotId) : null, weight_kg: needsWeight && weightKg > 0 ? weightKg : null }),
+          body: JSON.stringify({ sub_category_id: sub, brand_text: brand, grade, adjust_pct: adjustPct, lot_id: lotId ? Number(lotId) : null, weight_kg: needsWeight && weightKg > 0 ? weightKg : null }),
         });
         setPrice(await res.json());
       } catch (e) {
@@ -231,16 +230,20 @@ export function TagForm() {
       clearTimeout(t);
       ctrl.abort();
     };
-  }, [sub, brand, grade, adjustment, lotId, weightKg, needsWeight]);
+  }, [sub, brand, grade, adjustPct, lotId, weightKg, needsWeight]);
 
   const blocked = !rejected && Boolean(price?.block_reason);
-  const needsManual = !rejected && blocked;
+  const needsManual = !rejected && (blocked || manualOn);
   const showFlaw = grade === "excellent" || grade === "very_good";
   const listPrice = rejected ? 0 : needsManual ? Number(manualPrice) || 0 : price?.price ?? 0;
+  const standardPrice = price?.standard_price ?? null;
+  const below = !rejected && !blocked && standardPrice != null && listPrice > 0 && listPrice < standardPrice;
+  const belowPct = below ? Math.round(((standardPrice! - listPrice) / standardPrice!) * 100) : 0;
   const weightOk = !needsWeight || weightKg > 0;
   const sleeveOk = !asksSleeve || Boolean(sleeve);
+  const reasonOk = !below || belowReason.trim().length >= 3;
   const canSave =
-    Boolean(ref?.tagger) && Boolean(sub) && Boolean(selectedLot) && weightOk && sleeveOk && !saving && !price?.error &&
+    Boolean(ref?.tagger) && Boolean(sub) && Boolean(selectedLot) && weightOk && sleeveOk && reasonOk && !saving && !price?.error &&
     (rejected ? price?.price === 0 : needsManual ? listPrice > 0 : Boolean(price?.price));
 
   const resetForNext = useCallback(() => {
@@ -253,8 +256,10 @@ export function TagForm() {
     setFlaw("");
     setMeasure({});
     setSleeve("");
-    setAdjustment("standard");
+    setAdjustPct(0);
+    setManualOn(false);
     setManualPrice("");
+    setBelowReason("");
     setSaved(null);
     setSaveError(null);
     requestAnimationFrame(() => brandRef.current?.focus());
@@ -272,7 +277,8 @@ export function TagForm() {
           sub_category_id: sub,
           brand_text: brand,
           grade,
-          adjustment,
+          adjust_pct: adjustPct,
+          below_reason: below ? belowReason : null,
           flaw_note: showFlaw ? flaw : null,
           season,
           wearer,
@@ -503,20 +509,35 @@ export function TagForm() {
               </div>
             )}
 
-            {!rejected && (
-            <ButtonGroup
-              label="Price adjustment"
-              hint="Above: sells easily. Below: dated, extreme size, wrong season. Keep each under 15%."
-              options={ADJUSTMENTS}
-              value={adjustment}
-              onChange={setAdjustment}
-            />
+            {!rejected && !blocked && (
+              <div className="grid gap-2">
+                <Label>Price adjustment <span className="font-normal text-muted-foreground">· 5% steps</span></Label>
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" className="h-12 w-14 text-xl" disabled={manualOn || adjustPct <= -50} onClick={() => setAdjustPct((p) => p - 5)}>−</Button>
+                  <div className={cn("min-w-[5.5rem] text-center text-lg font-semibold tabular-nums", adjustPct > 0 && "text-green-700 dark:text-green-400", adjustPct < 0 && "text-red-700 dark:text-red-400")}>{adjustPct > 0 ? "+" : ""}{adjustPct}%</div>
+                  <Button type="button" variant="outline" className="h-12 w-14 text-xl" disabled={manualOn || adjustPct >= 100} onClick={() => setAdjustPct((p) => p + 5)}>+</Button>
+                  {adjustPct !== 0 && <Button type="button" variant="ghost" size="sm" disabled={manualOn} onClick={() => setAdjustPct(0)}>Reset</Button>}
+                </div>
+                <p className="text-xs text-muted-foreground">Plus for pieces that will sell easily; minus for dated styles or extreme sizes. Anything below the pricing sheet is logged with your name.</p>
+              </div>
             )}
 
-            {needsManual && (
-              <Field label="Manual price (Rs)" hint={price?.block_reason} hintTone="warn">
-                <Input type="number" inputMode="numeric" min="1" step="1" value={manualPrice} onChange={(e) => setManualPrice(e.target.value)} className="max-w-xs" />
-              </Field>
+            {!rejected && (
+              <div className="grid gap-2">
+                {!blocked && (
+                  <label className="flex items-center gap-2 text-sm"><Checkbox checked={manualOn} onCheckedChange={(v) => { setManualOn(v === true); if (v !== true) setManualPrice(""); }} /> Set the price by hand (exceptional piece)</label>
+                )}
+                {needsManual && (
+                  <Field label="Manual price (Rs)" hint={blocked ? price?.block_reason : standardPrice ? `Pricing sheet says Rs ${standardPrice.toLocaleString()} at this grade` : undefined} hintTone={blocked ? "warn" : undefined}>
+                    <Input type="number" inputMode="numeric" min="1" step="1" value={manualPrice} onChange={(e) => setManualPrice(e.target.value)} className="max-w-xs" autoFocus />
+                  </Field>
+                )}
+                {below && (
+                  <Field label={`Why ${belowPct}% below the pricing sheet? · required, logged`} hintTone="warn" hint={`Sheet price Rs ${standardPrice!.toLocaleString()} → yours Rs ${listPrice.toLocaleString()}. Managers see this on the dashboard.`}>
+                    <Input value={belowReason} onChange={(e) => setBelowReason(e.target.value)} placeholder="e.g. faded print not covered by grade" className="border-amber-500" />
+                  </Field>
+                )}
+              </div>
             )}
           </CardContent>
         </Card>

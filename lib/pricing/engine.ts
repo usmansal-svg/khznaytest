@@ -209,6 +209,8 @@ export type PriceInputs = CostInputs & {
   gradeCode?: GradeCode;
   tier?: BrandTier;
   adjustment?: Adjustment;
+  /** Per-item adjustment in 5% steps (+5, -10, …). Overrides `adjustment` when given. */
+  adjustPct?: number;
 };
 
 export type PriceResult = {
@@ -252,7 +254,8 @@ export function computePrice(inputs: PriceInputs, settings: Settings = DEFAULT_S
     tierInfo.multiplier === null ? "Ultra luxury — set aside, authenticate, and price manually against resale listings." : undefined;
 
   const brandMultiplier = tierInfo.multiplier ?? 1;
-  const premiumPrice = charm(cost * multiple * inputs.valueIndex * brandMultiplier * ADJUSTMENT_MULTIPLIERS[adjustment], settings);
+  const adjustmentMultiplier = inputs.adjustPct != null ? 1 + inputs.adjustPct / 100 : ADJUSTMENT_MULTIPLIERS[adjustment];
+  const premiumPrice = charm(cost * multiple * inputs.valueIndex * brandMultiplier * adjustmentMultiplier, settings);
 
   const baseMultiplier = findGrade(refs, BASE_GRADE).multiplier;
   const gradePrices = Object.fromEntries(

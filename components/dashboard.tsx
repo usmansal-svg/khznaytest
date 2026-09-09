@@ -11,7 +11,8 @@ type Data = {
   offline: {
     totals: { tagged: number; today: number; value: number; cost: number; rejects: number; reject_pct: number; awaiting_floor: number; on_floor: number; in_transit: number };
     by_day: { day: string; n: number }[];
-    taggers: { name: string; tagged: number; today: number; per_day: number; rejects: number; above_pct: number; below_pct: number; balance_flag: boolean; value: number }[];
+    taggers: { name: string; tagged: number; today: number; per_day: number; rejects: number; above_pct: number; below_pct: number; balance_flag: boolean; under_priced: number; value: number }[];
+    alerts: { id: number; sku: string; tagger: string; standard_price: number; final_price: number; pct_below: number; kind: string; reason: string | null; created_at: string }[];
     grade_mix: Record<string, number>;
     outlets: { id: number | null; name: string; tagged: number; awaiting_floor: number; on_floor: number; on_floor_value: number; sold: number; pulled: number; colours: Record<string, number> }[];
     transfers: { id: number; code: string; to_outlet: string; status: string; created_by: string; created_at: string; sent_at: string | null; received_at: string | null; pieces: number; skus: string[]; transit_hours: number | null; note: string | null }[];
@@ -70,6 +71,21 @@ export function Dashboard() {
             <Stat label="On floor" value={String(o.totals.on_floor)} sub={`${o.lots.open} open lots`} />
           </div>
 
+          <Card className={cn(o.alerts.length > 0 && "border-amber-500")}>
+            <CardHeader className="pb-2"><CardTitle className="text-base">Priced below the sheet · {o.alerts.length} in {days} days</CardTitle></CardHeader>
+            <CardContent>
+              {o.alerts.length === 0 ? <p className="text-sm text-muted-foreground">No garment has been priced below the pricing sheet in this period.</p> : (
+                <div className="overflow-x-auto"><table className="w-full text-sm">
+                  <thead className="text-left text-xs uppercase text-muted-foreground"><tr><th className="pb-2">When</th><th className="pb-2">Tagger</th><th className="pb-2">SKU</th><th className="pb-2 text-right">Sheet</th><th className="pb-2 text-right">Priced</th><th className="pb-2 text-right">Below</th><th className="pb-2">How</th><th className="pb-2">Reason given</th></tr></thead>
+                  <tbody className="divide-y">{o.alerts.map((a) => (
+                    <tr key={a.id}><td className="py-1.5 text-xs">{when(a.created_at)}</td><td className="py-1.5 font-medium">{a.tagger}</td><td className="py-1.5 font-mono text-xs"><a href={`/items/${a.sku}`} className="hover:underline">{a.sku}</a></td><td className="py-1.5 text-right tabular-nums">{rs(a.standard_price)}</td><td className="py-1.5 text-right tabular-nums">{rs(a.final_price)}</td><td className="py-1.5 text-right font-semibold tabular-nums text-red-700 dark:text-red-400">{a.pct_below.toFixed(0)}%</td><td className="py-1.5 text-xs">{a.kind === "manual" ? "by hand" : "− steps"}</td><td className="py-1.5 text-xs">{a.reason ?? "—"}</td></tr>
+                  ))}</tbody>
+                </table></div>
+              )}
+              <p className="mt-2 text-xs text-muted-foreground">Every save below the pricing-sheet price at that grade lands here with the tagger&apos;s name and their reason. A tagger who keeps appearing is worth a conversation.</p>
+            </CardContent>
+          </Card>
+
           <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-base">Tagged per day</CardTitle></CardHeader>
@@ -95,12 +111,12 @@ export function Dashboard() {
             <CardContent>
               {o.taggers.length === 0 ? <p className="text-sm text-muted-foreground">Nothing tagged in this period.</p> : (
                 <div className="overflow-x-auto"><table className="w-full text-sm">
-                  <thead className="text-left text-xs uppercase text-muted-foreground"><tr><th className="pb-2">Tagger</th><th className="pb-2 text-right">Tagged</th><th className="pb-2 text-right">Today</th><th className="pb-2 text-right">Per day</th><th className="pb-2 text-right">Rejects</th><th className="pb-2 text-right">Above</th><th className="pb-2 text-right">Below</th><th className="pb-2 text-right">List value</th></tr></thead>
+                  <thead className="text-left text-xs uppercase text-muted-foreground"><tr><th className="pb-2">Tagger</th><th className="pb-2 text-right">Tagged</th><th className="pb-2 text-right">Today</th><th className="pb-2 text-right">Per day</th><th className="pb-2 text-right">Rejects</th><th className="pb-2 text-right">Above</th><th className="pb-2 text-right">Below</th><th className="pb-2 text-right">Under-priced</th><th className="pb-2 text-right">List value</th></tr></thead>
                   <tbody className="divide-y">{o.taggers.map((t) => (
                     <tr key={t.name} className={cn(t.balance_flag && "bg-amber-50 dark:bg-amber-950/40")}>
                       <td className="py-1.5">{t.name}{t.balance_flag && <span className="ml-2 text-xs text-amber-700 dark:text-amber-300">adjustment drift</span>}</td>
                       <td className="py-1.5 text-right tabular-nums">{t.tagged}</td><td className="py-1.5 text-right tabular-nums">{t.today}</td><td className="py-1.5 text-right tabular-nums">{t.per_day}</td><td className="py-1.5 text-right tabular-nums">{t.rejects}</td>
-                      <td className="py-1.5 text-right tabular-nums">{pct(t.above_pct)}</td><td className="py-1.5 text-right tabular-nums">{pct(t.below_pct)}</td><td className="py-1.5 text-right tabular-nums">{rs(t.value)}</td>
+                      <td className="py-1.5 text-right tabular-nums">{pct(t.above_pct)}</td><td className="py-1.5 text-right tabular-nums">{pct(t.below_pct)}</td><td className={cn("py-1.5 text-right tabular-nums", t.under_priced > 0 && "font-semibold text-red-700 dark:text-red-400")}>{t.under_priced}</td><td className="py-1.5 text-right tabular-nums">{rs(t.value)}</td>
                     </tr>))}</tbody>
                 </table></div>
               )}

@@ -18,14 +18,15 @@ export async function GET(request: Request) {
   const days = Math.min(365, Math.max(1, Number(new URL(request.url).searchParams.get("days")) || 30));
   const since = new Date(Date.now() - days * 86400_000).toISOString();
 
-  const [itemsRes, transfersRes, staffRes, outletsRes, lotsRes] = await Promise.all([
+  const [itemsRes, transfersRes, staffRes, outletsRes, lotsRes, alertsRes] = await Promise.all([
     db.from("items").select("id, sku, tagged_at, tagged_by, outlet_id, grade_code, adjustment, status, channel, online_status, price, price_manual, landed_cost, colour_tag, floored_on, photos, shopify_product_id, shopify_error, shopify_synced_at, received_at, lot_id, sub_categories(name)").gte("tagged_at", since).order("tagged_at", { ascending: false }),
     db.from("transfers").select("id, code, to_outlet_id, status, created_at, sent_at, received_at, note, created_by, transfer_items(item_id, items(sku))").order("created_at", { ascending: false }).limit(50),
     db.from("staff").select("id, name, role, active"),
     db.from("outlets").select("id, name, is_online"),
     db.from("lots").select("id, code, supplier, basis, status, kg, kg_tagged"),
+    db.from("price_alerts").select("id, sku, tagged_by, standard_price, final_price, pct_below, kind, reason, created_at, reviewed_at").gte("created_at", since).order("created_at", { ascending: false }).limit(200),
   ]);
-  const err = itemsRes.error ?? transfersRes.error ?? staffRes.error ?? outletsRes.error ?? lotsRes.error;
+  const err = itemsRes.error ?? transfersRes.error ?? staffRes.error ?? outletsRes.error ?? lotsRes.error ?? alertsRes.error;
   if (err) return NextResponse.json({ error: err.message }, { status: 500 });
 
   type Item = NonNullable<typeof itemsRes.data>[number];
@@ -56,10 +57,15 @@ export async function GET(request: Request) {
     t.value += listPrice(i);
     t.days.add(dayOf(i.tagged_at));
   }
+  const alerts = (alertsRes.data ?? []).map((a) => ({ ...a, tagger: staffName.get(a.tagged_by ?? 0) ?? "Unknown", pct_below: Number(a.pct_below) }));
+  const belowByTagger = new Map<string, number>();
+  for (const a of alerts) belowByTagger.set(a.tagger, (belowByTagger.get(a.tagger) ?? 0) + 1);
+
   const taggers = [...byTagger.values()].map((t) => ({
     name: t.name, tagged: t.tagged, today: t.today, per_day: Math.round(t.tagged / Math.max(1, t.days.size)), rejects: t.rejects,
     above_pct: t.tagged ? t.above / t.tagged : 0, below_pct: t.tagged ? t.below / t.tagged : 0,
     balance_flag: t.tagged >= 20 && (t.above / t.tagged > ADJUSTMENT_CAP || t.below / t.tagged > ADJUSTMENT_CAP || Math.abs(t.above - t.below) / t.tagged > 0.1),
+    under_priced: belowByTagger.get(t.name) ?? 0,
     value: Math.round(t.value),
   })).sort((a, b) => b.tagged - a.tagged);
 
@@ -119,6 +125,7 @@ export async function GET(request: Request) {
       outlets: [...byOutlet.entries()].map(([id, o]) => ({ id, ...o, on_floor_value: Math.round(o.on_floor_value) })),
       transfers,
       lots: { open: lots.filter((l) => l.status === "open").length, closed: lots.filter((l) => l.status === "closed").length },
+      alerts,
       recent: items.slice(0, 25).map((i) => ({ sku: i.sku, tagged_at: i.tagged_at, tagger: staffName.get(i.tagged_by ?? 0) ?? "", sub_category: one<{ name: string }>(i.sub_categories)?.name ?? "", grade: i.grade_code, price: listPrice(i), outlet: i.outlet_id ? outletName.get(i.outlet_id) ?? "" : "", status: i.status })),
     },
     online: {

@@ -21,6 +21,8 @@ type Body = {
   brand_text?: string;
   grade?: string;
   adjustment?: string;
+  adjust_pct?: number;
+  below_reason?: string | null;
   is_rare?: boolean;
   is_unsure?: boolean;
   flaw_note?: string | null;
@@ -54,6 +56,8 @@ export async function POST(request: Request) {
   const season = body.season as Season;
   if (!GRADE_CODES.includes(grade)) return bad(`Unknown grade: ${body.grade}`);
   if (!ADJUSTMENTS.includes(adjustment)) return bad(`Unknown adjustment: ${body.adjustment}`);
+  const adjustPct = body.adjust_pct == null ? 0 : Number(body.adjust_pct);
+  if (!(Number.isInteger(adjustPct) && adjustPct % 5 === 0 && adjustPct >= -50 && adjustPct <= 100)) return bad("Price steps must be multiples of 5% between -50% and +100%.");
   if (!SEASONS.includes(season)) return bad(`Season must be one of ${SEASONS.join(", ")}.`);
   if (body.lot_id == null) return bad("Pick the lot the garment came from.");
   if (body.weight_kg != null && !(typeof body.weight_kg === "number" && body.weight_kg > 0 && body.weight_kg < 50)) {
@@ -74,7 +78,7 @@ export async function POST(request: Request) {
   // The category's gender is the garment's wearer; it drives the SKU letter.
   const wearer = (WEARERS.includes(subCategory.gender as Wearer) ? subCategory.gender : "unisex") as Wearer;
 
-  const q = quote({ subCategory, brand, grade, adjustment, isRare: Boolean(body.is_rare), lot, weightKg: body.weight_kg ?? null }, ctx);
+  const q = quote({ subCategory, brand, grade, adjustment, adjustPct, isRare: Boolean(body.is_rare), lot, weightKg: body.weight_kg ?? null }, ctx);
   if (q.error) return bad(q.error);
 
   const rejected = grade === REJECTED;
@@ -82,6 +86,15 @@ export async function POST(request: Request) {
   if (blocked && body.price_manual == null) {
     return bad(body.is_rare ? "Rare pieces need a manual price." : "Ultra luxury needs a manual price.");
   }
+
+  // Under-pricing: any final price below the pricing sheet's standard price
+  // at this grade needs a reason and is logged with the tagger's name.
+  const manual = body.price_manual != null;
+  const finalPrice = rejected ? 0 : manual ? Number(body.price_manual) : q.price ?? 0;
+  const standardPrice = rejected ? 0 : q.standard_price ?? 0;
+  const below = !rejected && !blocked && standardPrice > 0 && finalPrice < standardPrice;
+  const belowReason = body.below_reason?.trim() || null;
+  if (below && !belowReason) return bad(`This is ${Math.round(((standardPrice - finalPrice) / standardPrice) * 100)}% below the pricing sheet (Rs ${standardPrice.toLocaleString()}). Give a reason — it is logged.`);
 
   const { data: seq, error: seqError } = await supabase.rpc("next_sku_seq");
   if (seqError || typeof seq !== "number") {
@@ -111,10 +124,13 @@ export async function POST(request: Request) {
       fabric: body.fabric?.trim() || null,
       measurements: body.measurements ?? {},
       weight_kg: q.weight_kg,
-      adjustment,
+      adjustment: adjustPct > 0 ? "above" : adjustPct < 0 ? "below" : "standard",
+      adjust_pct: adjustPct,
+      standard_price: rejected ? 0 : q.standard_price,
+      below_reason: below ? belowReason : null,
       landed_cost: q.landed_cost,
       price: blocked ? null : rejected ? 0 : q.price,
-      price_manual: blocked ? body.price_manual : null,
+      price_manual: blocked || manual ? body.price_manual : null,
       settings_version: ctx.settingsVersion,
       status: rejected ? "rejected" : blocked ? "set_aside" : "tagged",
       channel: body.channel === "online" ? "online" : "outlet",
@@ -125,7 +141,15 @@ export async function POST(request: Request) {
 
   if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
 
+  if (below) {
+    await supabase.from("price_alerts").insert({
+      item_id: item.id, sku: item.sku, tagged_by: staff.id, standard_price: standardPrice, final_price: finalPrice,
+      pct_below: Math.round(((standardPrice - finalPrice) / standardPrice) * 1000) / 10, kind: manual ? "manual" : "adjustment", reason: belowReason,
+    });
+  }
+
   return NextResponse.json({
+    below_standard: below,
     item: { ...item, list_price: item.price_manual ?? item.price, brand: brand.name, sub_category: subCategory.name, lot: lot.code, tagged_by: staff.name },
     markdowns: q.markdowns,
     pricing_source: ctx.source,
