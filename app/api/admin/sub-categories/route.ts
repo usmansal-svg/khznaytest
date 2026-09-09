@@ -66,6 +66,65 @@ export async function POST(request: Request) {
   return NextResponse.json({ estimates });
 }
 
+const MEASURE_TYPES = ["top", "bottom", "dress", "outer", "kids_top", "kids_bottom"];
+const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+/** A three-letter SKU code from the name, avoiding ones already in use. */
+function suggestCode(name: string, used: Set<string>): string {
+  const words = name.toUpperCase().replace(/[^A-Z ]/g, " ").split(/\s+/).filter(Boolean);
+  const letters = name.toUpperCase().replace(/[^A-Z]/g, "");
+  const candidates = [
+    words.map((w) => w[0]).join("").slice(0, 3),
+    letters.slice(0, 3),
+    (words[0] ?? "").slice(0, 2) + (words[1]?.[0] ?? ""),
+  ].filter((c) => c.length === 3);
+  for (const c of candidates) if (!used.has(c)) return c;
+  for (const base of [letters.slice(0, 2), "XX"]) for (const ch of "ABCDEFGHIJKLMNOPQRSTUVWXYZ") if (!used.has(base + ch)) return base + ch;
+  return "ZZZ";
+}
+
+/**
+ * PUT /api/admin/sub-categories { name, category_slug, weight_kg, profile_code, value_index, measure_type, code? }
+ * Adds a sub-category. The code is suggested from the name unless given;
+ * it must be three unique letters because every SKU embeds it.
+ */
+export async function PUT(request: Request) {
+  const gate = await requireManager();
+  if ("response" in gate) return gate.response;
+  let body: { name?: string; category_slug?: string; weight_kg?: number; profile_code?: string; value_index?: number; measure_type?: string; code?: string; market_ceiling?: number | null; market_price?: number | null };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Body must be JSON." }, { status: 400 });
+  }
+  const name = body.name?.trim();
+  if (!name) return NextResponse.json({ error: "Name is required." }, { status: 400 });
+  const { data: cat } = await gate.db.from("categories").select("slug").eq("slug", body.category_slug ?? "").maybeSingle();
+  if (!cat) return NextResponse.json({ error: "Pick a category." }, { status: 400 });
+  const err = check({ weight_kg: body.weight_kg, profile_code: body.profile_code, value_index: body.value_index, market_ceiling: body.market_ceiling ?? null, market_price: body.market_price ?? null });
+  if (err) return NextResponse.json({ error: err }, { status: 400 });
+  if (!MEASURE_TYPES.includes(String(body.measure_type))) return NextResponse.json({ error: "Measurement type must be top, bottom, dress, outer, kids_top or kids_bottom." }, { status: 400 });
+
+  const { data: existing } = await gate.db.from("sub_categories").select("code, slug");
+  const usedCodes = new Set((existing ?? []).map((s) => s.code));
+  const usedSlugs = new Set((existing ?? []).map((s) => s.slug));
+  let code = body.code?.trim().toUpperCase();
+  if (code) {
+    if (!/^[A-Z]{3}$/.test(code)) return NextResponse.json({ error: "Code must be exactly three letters." }, { status: 400 });
+    if (usedCodes.has(code)) return NextResponse.json({ error: `Code ${code} is already used — pick another.` }, { status: 409 });
+  } else {
+    code = suggestCode(name, usedCodes);
+  }
+  let slug = `${slugify(cat.slug).split("-").map((w) => w[0]).join("")}-${slugify(name)}`;
+  for (let i = 2; usedSlugs.has(slug); i++) slug = `${slug}-${i}`;
+
+  const row = { slug, code, category_slug: cat.slug, name, weight_kg: body.weight_kg, profile_code: body.profile_code, value_index: body.value_index, measure_type: body.measure_type, market_ceiling: body.market_ceiling ?? null, market_price: body.market_price ?? null, per_piece_share: 0, active: true };
+  const { data, error } = await gate.db.from("sub_categories").insert(row).select("slug, code, name").single();
+  if (error) return NextResponse.json({ error: error.message }, { status: error.code === "23505" ? 409 : 500 });
+  await audit(gate.db, gate.staff.id, "sub_categories", slug, null, row, "created");
+  return NextResponse.json({ sub_category: data });
+}
+
 export async function PATCH(request: Request) {
   let body: { rows?: Record<string, unknown>[] };
   try {

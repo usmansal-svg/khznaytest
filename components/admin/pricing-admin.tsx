@@ -336,6 +336,8 @@ function SubCategoryEditor() {
   const dirty = Object.keys(edits).length;
 
   return (
+    <div className="space-y-6">
+    <AddForms onAdded={async (text) => { setMessage({ tone: "ok", text }); setRows((await (await fetch("/api/admin/sub-categories")).json()).rows); }} onError={(text) => setMessage({ tone: "error", text })} />
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
@@ -388,6 +390,79 @@ function SubCategoryEditor() {
           </table>
         </div>
       </CardContent>
+    </Card>
+    </div>
+  );
+}
+
+/* ---------------------------------------------- add category / sub-category */
+
+const MEASURE_LABELS: Record<string, string> = { top: "Top · chest, length", bottom: "Bottom · waist, inseam", dress: "Dress · bust, waist, length", outer: "Outerwear · chest, length, sleeve", kids_top: "Kids top · height, chest", kids_bottom: "Kids bottom · height, waist" };
+
+function AddForms({ onAdded, onError }: { onAdded: (text: string) => void; onError: (text: string) => void }) {
+  const [cats, setCats] = useState<{ slug: string; name: string }[]>([]);
+  const [open, setOpen] = useState<"sub" | "cat" | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [sc, setSc] = useState({ name: "", category_slug: "", weight_kg: "", profile_code: "fast", value_index: "1.00", measure_type: "top", code: "" });
+  const [cat, setCat] = useState({ name: "", rate: "" });
+
+  const loadCats = () => fetch("/api/admin/categories").then((r) => r.json()).then((j) => { setCats(j.categories ?? []); if (!sc.category_slug && j.categories?.[0]) setSc((x) => ({ ...x, category_slug: j.categories[0].slug })); });
+  useEffect(() => { void loadCats(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function addSub() {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/sub-categories", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: sc.name, category_slug: sc.category_slug, weight_kg: Number(sc.weight_kg), profile_code: sc.profile_code, value_index: Number(sc.value_index), measure_type: sc.measure_type, code: sc.code || undefined }) });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error);
+      onAdded(`Added ${j.sub_category.name} (code ${j.sub_category.code}). It's on the tag form now.`);
+      setSc((x) => ({ ...x, name: "", weight_kg: "", code: "" }));
+      setOpen(null);
+    } catch (e) { onError(e instanceof Error ? e.message : "Failed."); } finally { setBusy(false); }
+  }
+  async function addCat() {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/categories", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: cat.name, planning_rate_usd_per_kg: cat.rate ? Number(cat.rate) : null }) });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error);
+      onAdded(`Added category ${j.category.name}.`);
+      setCat({ name: "", rate: "" });
+      await loadCats();
+      setOpen(null);
+    } catch (e) { onError(e instanceof Error ? e.message : "Failed."); } finally { setBusy(false); }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
+          <span>Add to the catalogue</span>
+          <span className="flex gap-2">
+            <Button size="sm" variant={open === "sub" ? "default" : "outline"} onClick={() => setOpen(open === "sub" ? null : "sub")}>+ Sub-category</Button>
+            <Button size="sm" variant={open === "cat" ? "default" : "outline"} onClick={() => setOpen(open === "cat" ? null : "cat")}>+ Category</Button>
+          </span>
+        </CardTitle>
+      </CardHeader>
+      {open === "sub" && (
+        <CardContent className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-1.5 sm:col-span-2"><Label>Name</Label><Input value={sc.name} onChange={(e) => setSc({ ...sc, name: e.target.value })} placeholder="e.g. Men Cargo pants" /></div>
+          <div className="grid gap-1.5"><Label>Category</Label><select value={sc.category_slug} onChange={(e) => setSc({ ...sc, category_slug: e.target.value })} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">{cats.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}</select></div>
+          <div className="grid gap-1.5"><Label>Default weight kg</Label><Input type="number" step="0.01" min="0.01" value={sc.weight_kg} onChange={(e) => setSc({ ...sc, weight_kg: e.target.value })} placeholder="0.45" /></div>
+          <div className="grid gap-1.5"><Label>Profile</Label><select value={sc.profile_code} onChange={(e) => setSc({ ...sc, profile_code: e.target.value })} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"><option value="fast">Fast</option><option value="standard">Standard</option><option value="slow">Slow</option></select></div>
+          <div className="grid gap-1.5"><Label>Value index</Label><Input type="number" step="0.05" min="0.05" value={sc.value_index} onChange={(e) => setSc({ ...sc, value_index: e.target.value })} /></div>
+          <div className="grid gap-1.5 sm:col-span-2"><Label>Measurements on the tag</Label><select value={sc.measure_type} onChange={(e) => setSc({ ...sc, measure_type: e.target.value })} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">{Object.entries(MEASURE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+          <div className="grid gap-1.5"><Label>SKU code <span className="font-normal text-muted-foreground">· 3 letters, optional</span></Label><Input value={sc.code} maxLength={3} onChange={(e) => setSc({ ...sc, code: e.target.value.toUpperCase().replace(/[^A-Z]/g, "") })} placeholder="auto" className="font-mono uppercase" /></div>
+          <div className="sm:col-span-3"><Button disabled={busy || !sc.name.trim() || !sc.category_slug || !(Number(sc.weight_kg) > 0) || !(Number(sc.value_index) > 0)} onClick={addSub}>Add sub-category</Button><span className="ml-3 text-xs text-muted-foreground">Weigh a few pieces for the default weight — it drives the planning estimate.</span></div>
+        </CardContent>
+      )}
+      {open === "cat" && (
+        <CardContent className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-1.5 sm:col-span-2"><Label>Category name</Label><Input value={cat.name} onChange={(e) => setCat({ ...cat, name: e.target.value })} placeholder="e.g. Summer Men Ethnic" /></div>
+          <div className="grid gap-1.5"><Label>Planning rate <span className="font-normal text-muted-foreground">· USD/kg, optional</span></Label><Input type="number" step="0.1" min="0" value={cat.rate} onChange={(e) => setCat({ ...cat, rate: e.target.value })} placeholder="6.00" /></div>
+          <div className="sm:col-span-3"><Button disabled={busy || !cat.name.trim()} onClick={addCat}>Add category</Button></div>
+        </CardContent>
+      )}
     </Card>
   );
 }
