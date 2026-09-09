@@ -12,19 +12,24 @@
 
 import type { ProfileCode } from "./constants";
 
-/** tops -> Chest, Length | bottoms -> Waist, Inseam | dresses -> Bust, Waist,
- *  Length | outerwear -> Chest, Length, Sleeve | kids -> Height cm, plus
- *  Chest or Waist. */
+/**
+ * Measured flat, in inches. Tops and outerwear also ask the sleeve type
+ * (half / full) before a garment can be saved.
+ */
 export type MeasureType = "top" | "bottom" | "dress" | "outer" | "kids_top" | "kids_bottom";
 
 export const MEASUREMENT_FIELDS: Readonly<Record<MeasureType, readonly string[]>> = {
   top: ["Chest", "Length"],
-  bottom: ["Waist", "Inseam"],
+  bottom: ["Waist", "Length"],
   dress: ["Bust", "Waist", "Length"],
-  outer: ["Chest", "Length", "Sleeve"],
-  kids_top: ["Height cm", "Chest"],
-  kids_bottom: ["Height cm", "Waist"],
+  outer: ["Chest", "Length", "Sleeve length"],
+  kids_top: ["Chest", "Length"],
+  kids_bottom: ["Waist", "Length"],
 };
+
+/** Garment types that need the sleeve question answered. */
+export const ASKS_SLEEVE: ReadonlySet<MeasureType> = new Set(["top", "outer", "kids_top"]);
+export const SLEEVE_TYPES = ["Half sleeve", "Full sleeve", "Sleeveless"] as const;
 
 export type Category = {
   slug: string;

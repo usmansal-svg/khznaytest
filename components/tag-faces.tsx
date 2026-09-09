@@ -47,7 +47,7 @@ export function TagFaces({ item }: { item: TagItem }) {
           <div className="text-[22pt] font-black leading-none">{item.size_label ?? "—"}</div>
           {measured.length > 0 && (
             <>
-              <div className="mt-[2.5mm] text-[6pt] uppercase tracking-wide text-neutral-500">Measured flat (cm)</div>
+              <div className="mt-[2.5mm] text-[6pt] uppercase tracking-wide text-neutral-500">Measured flat (in)</div>
               <div className="text-[7pt] leading-tight">{measured.slice(0, 3).map(({ f, v }) => <div key={f} className="flex justify-between"><span>{f}</span><span className="tabular-nums">{v}</span></div>)}</div>
             </>
           )}

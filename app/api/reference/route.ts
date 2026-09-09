@@ -10,7 +10,7 @@ import { NextResponse } from "next/server";
 import { currentStaff, dbFor } from "@/lib/auth/staff";
 import { colourForMonth } from "@/lib/pricing/engine";
 import { loadOpenLots, loadPricingContext } from "@/lib/pricing/repo";
-import { MEASUREMENT_FIELDS } from "@/lib/pricing/sub-categories";
+import { ASKS_SLEEVE, MEASUREMENT_FIELDS } from "@/lib/pricing/sub-categories";
 import { GENDERS, GENDER_LABELS } from "@/lib/pricing/sku";
 
 export async function GET() {
@@ -43,6 +43,7 @@ export async function GET() {
         name: s.name,
         measure_type: s.measureType,
         measure_fields: MEASUREMENT_FIELDS[s.measureType],
+        asks_sleeve: ASKS_SLEEVE.has(s.measureType),
         weight_kg: s.weightKg,
         profile_code: s.profileCode,
         value_index: s.valueIndex,

@@ -12,7 +12,8 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import type { Adjustment, ColourTag, GradeCode } from "@/lib/pricing/constants";
 import { ADULT_SIZES, KIDS_SIZES } from "@/lib/pricing/kids-sizes";
-import { GENDERS, GENDER_LABELS, SEASONS, type Gender, type Season } from "@/lib/pricing/sku";
+import { GENDER_LABELS, type Gender, type Season, type Wearer } from "@/lib/pricing/sku";
+import { SLEEVE_TYPES } from "@/lib/pricing/sub-categories";
 
 /* ---------------------------------------------------------------- types */
 
@@ -27,6 +28,7 @@ type Reference = {
     name: string;
     measure_type: string;
     measure_fields: string[];
+    asks_sleeve: boolean;
     weight_kg: number;
     profile_code: string;
     value_index: number;
@@ -34,7 +36,7 @@ type Reference = {
   outlets: { id: number; name: string; is_online: boolean }[];
   lots: { id: number; code: string; supplier: string; basis: "kg" | "pc"; rate: number | null; effective_rate: number | null; yield: number; status: string }[];
   grades: { code: GradeCode; name: string }[];
-  tagger: { name: string; role: string } | null;
+  tagger: { name: string; role: string; outlet_id: number | null } | null;
   colour_tag: ColourTag;
   pricing_source: "database" | "defaults";
   warning?: string;
@@ -70,16 +72,12 @@ const ADJUSTMENTS: { code: Adjustment; label: string }[] = [
   { code: "standard", label: "Standard" },
   { code: "above", label: "Above" },
 ];
-const SEASON_LABELS: Record<Season, string> = { summer: "Summer", winter: "Winter", all_season: "All season" };
+const SEASON_OPTIONS: { code: Season; label: string }[] = [{ code: "summer", label: "Summer" }, { code: "winter", label: "Winter" }];
+const WEARER_OPTIONS: { code: Wearer; label: string }[] = [{ code: "men", label: "Men" }, { code: "women", label: "Women" }, { code: "boy", label: "Boy" }, { code: "girl", label: "Girl" }, { code: "infant", label: "Infant" }, { code: "unisex", label: "Unisex" }];
+const GENDER_ORDER: Gender[] = ["men", "women", "teenage", "kid", "toddler", "infant"];
 
-const COLOUR_CLASS: Record<ColourTag, string> = {
-  red: "bg-red-500",
-  blue: "bg-blue-500",
-  green: "bg-green-500",
-  yellow: "bg-yellow-400",
-};
 const MARKDOWN_LABELS: Record<string, string> = { md1: "25% OFF", md2: "HALF PRICE", md3: "LAST CHANCE 75%" };
-const KIDS = new Set<Gender>(["kid", "toddler", "infant"]);
+const KIDS = new Set<Wearer>(["boy", "girl", "infant"]);
 
 const pkr = (n: number) => `Rs ${Math.round(n).toLocaleString("en-PK")}`;
 
@@ -91,10 +89,11 @@ export function TagForm() {
 
   // Retained between garments
   const [lotId, setLotId] = useState<string>("");
+  const [lotLocked, setLotLocked] = useState(false);
   const [channel, setChannel] = useState<"outlet" | "online">("outlet");
-  const [outletId, setOutletId] = useState<string>("");
+  const [channelLocked, setChannelLocked] = useState(false);
   const [season, setSeason] = useState<Season>("summer");
-  const [gender, setGender] = useState<Gender>("men");
+  const [wearer, setWearer] = useState<Wearer>("men");
   const [sub, setSub] = useState("");
 
   // Cleared after save
@@ -105,10 +104,9 @@ export function TagForm() {
   const [colour, setColour] = useState("");
   const [fabric, setFabric] = useState("");
   const [grade, setGrade] = useState<GradeCode>("premium");
-  const [rare, setRare] = useState(false);
-  const [unsure, setUnsure] = useState(false);
   const [flaw, setFlaw] = useState("");
   const [measure, setMeasure] = useState<Record<string, string>>({});
+  const [sleeve, setSleeve] = useState<string>("");
   const [adjustment, setAdjustment] = useState<Adjustment>("standard");
   const [manualPrice, setManualPrice] = useState("");
 
@@ -132,19 +130,21 @@ export function TagForm() {
       })
       .then((data) => {
         setRef(data);
-        if (!outletId && data.outlets[0]) setOutletId(String(data.outlets[0].id));
         if (!lotId && data.lots[0]) setLotId(String(data.lots[0].id));
       })
       .catch((e) => setLoadError(e.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const subs = useMemo(() => (ref?.sub_categories ?? []).filter((s) => s.gender === gender).sort((a, b) => a.name.localeCompare(b.name)), [ref, gender]);
+  // The flat category list, grouped by gender for reading.
+  const subs = useMemo(() => (ref?.sub_categories ?? []).slice().sort((a, b) => GENDER_ORDER.indexOf(a.gender) - GENDER_ORDER.indexOf(b.gender) || a.name.localeCompare(b.name)), [ref]);
   useEffect(() => {
     if (subs.length && !subs.some((s) => s.slug === sub)) setSub(subs[0].slug);
   }, [subs, sub]);
   const selectedSub = subs.find((s) => s.slug === sub);
-  const isKids = KIDS.has(gender);
+  const isKids = KIDS.has(wearer);
+  const asksSleeve = Boolean(selectedSub?.asks_sleeve);
+  const isManager = ref?.tagger?.role === "manager" || ref?.tagger?.role === "founder";
   const selectedLot = ref?.lots.find((l) => String(l.id) === lotId) ?? null;
   const needsWeight = selectedLot?.basis === "kg";
   const weightKg = Number(weight) || 0;
@@ -181,7 +181,7 @@ export function TagForm() {
           method: "POST",
           headers: { "content-type": "application/json" },
           signal: ctrl.signal,
-          body: JSON.stringify({ sub_category_id: sub, brand_text: brand, grade, adjustment, is_rare: rare, lot_id: lotId ? Number(lotId) : null, weight_kg: needsWeight && weightKg > 0 ? weightKg : null }),
+          body: JSON.stringify({ sub_category_id: sub, brand_text: brand, grade, adjustment, lot_id: lotId ? Number(lotId) : null, weight_kg: needsWeight && weightKg > 0 ? weightKg : null }),
         });
         setPrice(await res.json());
       } catch (e) {
@@ -194,15 +194,16 @@ export function TagForm() {
       clearTimeout(t);
       ctrl.abort();
     };
-  }, [sub, brand, grade, adjustment, rare, lotId, weightKg, needsWeight]);
+  }, [sub, brand, grade, adjustment, lotId, weightKg, needsWeight]);
 
   const blocked = !rejected && Boolean(price?.block_reason);
-  const needsManual = !rejected && (blocked || rare);
+  const needsManual = !rejected && blocked;
   const showFlaw = grade === "excellent" || grade === "very_good";
   const listPrice = rejected ? 0 : needsManual ? Number(manualPrice) || 0 : price?.price ?? 0;
   const weightOk = !needsWeight || weightKg > 0;
+  const sleeveOk = !asksSleeve || Boolean(sleeve);
   const canSave =
-    Boolean(ref?.tagger) && Boolean(sub) && Boolean(selectedLot) && weightOk && !saving && !price?.error &&
+    Boolean(ref?.tagger) && Boolean(sub) && Boolean(selectedLot) && weightOk && sleeveOk && !saving && !price?.error &&
     (rejected ? price?.price === 0 : needsManual ? listPrice > 0 : Boolean(price?.price));
 
   const resetForNext = useCallback(() => {
@@ -212,10 +213,9 @@ export function TagForm() {
     setColour("");
     setFabric("");
     setGrade("premium");
-    setRare(false);
-    setUnsure(false);
     setFlaw("");
     setMeasure({});
+    setSleeve("");
     setAdjustment("standard");
     setManualPrice("");
     setSaved(null);
@@ -236,15 +236,14 @@ export function TagForm() {
           brand_text: brand,
           grade,
           adjustment,
-          is_rare: rare,
-          is_unsure: unsure,
           flaw_note: showFlaw ? flaw : null,
           season,
+          wearer,
           size_label: size,
           colour,
           fabric,
-          measurements: Object.fromEntries(Object.entries(measure).filter(([, v]) => v !== "")),
-          outlet_id: outletId ? Number(outletId) : null,
+          measurements: { ...Object.fromEntries(Object.entries(measure).filter(([, v]) => v !== "")), ...(asksSleeve && sleeve ? { Sleeve: sleeve } : {}) },
+          outlet_id: null,
           lot_id: Number(lotId),
           weight_kg: needsWeight ? weightKg : null,
           channel,
@@ -293,11 +292,7 @@ export function TagForm() {
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center justify-between text-base">
               <span>Session</span>
-              <span className="flex items-center gap-2 text-xs font-normal text-muted-foreground">
-                This month&apos;s colour
-                <span className={cn("inline-block size-4 rounded-full", COLOUR_CLASS[ref.colour_tag])} title={ref.colour_tag} />
-                <span className="capitalize">{ref.colour_tag}</span>
-              </span>
+              <span className="text-xs font-normal text-muted-foreground">Lock what stays the same, then tag garment after garment</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -310,6 +305,15 @@ export function TagForm() {
                 </p>
               )}
             </Field>
+
+            <Field label="Tagging for" hint={channelLocked ? "Locked — untick to change" : channel === "online" ? "Photos and Shopify on the garment page after saving" : "Quick tag and print; the supervisor sends it to an outlet"}>
+              <div className="flex items-center gap-2">
+                <Button type="button" size="sm" variant={channel === "outlet" ? "default" : "outline"} disabled={channelLocked} onClick={() => setChannel("outlet")} className="h-11 md:h-8">Outlet</Button>
+                <Button type="button" size="sm" variant={channel === "online" ? "default" : "outline"} disabled={channelLocked} onClick={() => setChannel("online")} className="h-11 md:h-8">Online store</Button>
+                <label className="ml-auto flex items-center gap-1.5 text-xs"><Checkbox checked={channelLocked} onCheckedChange={(v) => setChannelLocked(v === true)} /> Lock</label>
+              </div>
+            </Field>
+
             <Field
               label="Lot"
               hint={
@@ -319,11 +323,11 @@ export function TagForm() {
                     : `By weight · $${selectedLot.rate}/kg → $${selectedLot.effective_rate?.toFixed(2)}/kg effective at ${(selectedLot.yield * 100).toFixed(1)}% yield`
                   : ref.lots.length
                     ? undefined
-                    : "No open lots — create one first"
+                    : "No open lots — ask a manager to create one"
               }
             >
-              <div className="flex gap-2">
-                <select className={selectClass} value={lotId} onChange={(e) => setLotId(e.target.value)}>
+              <div className="flex items-center gap-2">
+                <select className={selectClass} value={lotId} disabled={lotLocked} onChange={(e) => setLotId(e.target.value)}>
                   {ref.lots.length === 0 && <option value="">No open lots</option>}
                   {ref.lots.map((l) => (
                     <option key={l.id} value={l.id}>
@@ -331,35 +335,32 @@ export function TagForm() {
                     </option>
                   ))}
                 </select>
-                <Button asChild type="button" variant="outline" size="sm" className="h-9 shrink-0">
-                  <Link href="/lots">Lots</Link>
-                </Button>
+                <label className="flex shrink-0 items-center gap-1.5 text-xs"><Checkbox checked={lotLocked} onCheckedChange={(v) => setLotLocked(v === true)} /> Lock</label>
+                {isManager && (
+                  <Button asChild type="button" variant="outline" size="sm" className="h-9 shrink-0">
+                    <Link href="/lots">Lots</Link>
+                  </Button>
+                )}
               </div>
             </Field>
-            <Field label="Tagging for" hint={channel === "online" ? "Photos and Shopify on the garment page after saving" : "Quick tag, print, then choose the outlet"}>
-              <div className="flex gap-2">
-                <Button type="button" size="sm" variant={channel === "outlet" ? "default" : "outline"} onClick={() => setChannel("outlet")}>Outlet</Button>
-                <Button type="button" size="sm" variant={channel === "online" ? "default" : "outline"} onClick={() => setChannel("online")}>Online store</Button>
-              </div>
-            </Field>
-            <Field label="Outlet">
-              <select className={selectClass} value={outletId} onChange={(e) => setOutletId(e.target.value)}>
-                {ref.outlets.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-              </select>
-            </Field>
+
             <Field label="Season">
               <select className={selectClass} value={season} onChange={(e) => setSeason(e.target.value as Season)}>
-                {SEASONS.map((s) => <option key={s} value={s}>{SEASON_LABELS[s]}</option>)}
+                {SEASON_OPTIONS.map((s) => <option key={s.code} value={s.code}>{s.label}</option>)}
               </select>
             </Field>
-            <Field label="Gender">
-              <select className={selectClass} value={gender} onChange={(e) => setGender(e.target.value as Gender)}>
-                {GENDERS.map((g) => <option key={g} value={g}>{GENDER_LABELS[g]}</option>)}
+            <Field label="Wearer">
+              <select className={selectClass} value={wearer} onChange={(e) => setWearer(e.target.value as Wearer)}>
+                {WEARER_OPTIONS.map((w) => <option key={w.code} value={w.code}>{w.label}</option>)}
               </select>
             </Field>
-            <Field label="Category" hint={selectedSub ? `${selectedSub.code} · ${selectedSub.weight_kg} kg · ${selectedSub.profile_code}` : subs.length ? undefined : "No categories for this gender yet — add them under Pricing"}>
+            <Field label="Category" hint={selectedSub ? `${selectedSub.code} · ${selectedSub.weight_kg} kg · ${selectedSub.profile_code}` : subs.length ? undefined : "No categories yet — add them under Pricing"}>
               <select className={selectClass} value={sub} onChange={(e) => setSub(e.target.value)}>
-                {subs.map((s) => <option key={s.slug} value={s.slug}>{s.name}</option>)}
+                {GENDER_ORDER.filter((g) => subs.some((s) => s.gender === g)).map((g) => (
+                  <optgroup key={g} label={GENDER_LABELS[g]}>
+                    {subs.filter((s) => s.gender === g).map((s) => <option key={s.slug} value={s.slug}>{s.name}</option>)}
+                  </optgroup>
+                ))}
               </select>
             </Field>
           </CardContent>
@@ -427,19 +428,23 @@ export function TagForm() {
             )}
 
             {selectedSub && (
-              <div>
-                <Label className="mb-2 block">Measured flat (cm)</Label>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  {selectedSub.measure_fields.map((f) => (
-                    <Field key={f} label={f} small>
-                      <Input type="number" inputMode="decimal" step="0.5" min="0" value={measure[f] ?? ""} onChange={(e) => setMeasure((m) => ({ ...m, [f]: e.target.value }))} />
-                    </Field>
-                  ))}
+              <div className="space-y-3">
+                {asksSleeve && (
+                  <ButtonGroup label="Sleeves" hint={!sleeve ? "Required before saving" : undefined} options={SLEEVE_TYPES.map((t) => ({ code: t, label: t }))} value={sleeve as (typeof SLEEVE_TYPES)[number]} onChange={(v) => setSleeve(v)} />
+                )}
+                <div>
+                  <Label className="mb-2 block">Measured flat (inches)</Label>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    {selectedSub.measure_fields.map((f) => (
+                      <Field key={f} label={f} small>
+                        <Input type="number" inputMode="decimal" step="0.5" min="0" value={measure[f] ?? ""} onChange={(e) => setMeasure((m) => ({ ...m, [f]: e.target.value }))} />
+                      </Field>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
 
-            {!rejected && (
             <ButtonGroup
               label="Price adjustment"
               hint="Above: sells easily. Below: dated, extreme size, wrong season. Keep each under 15%."
@@ -449,17 +454,8 @@ export function TagForm() {
             />
             )}
 
-            <div className="flex flex-wrap gap-6">
-              <label className="flex items-center gap-2 text-sm">
-                <Checkbox checked={rare} onCheckedChange={(v) => setRare(v === true)} /> Rare piece — two or more special triggers
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <Checkbox checked={unsure} onCheckedChange={(v) => setUnsure(v === true)} /> Unsure — send to QC
-              </label>
-            </div>
-
             {needsManual && (
-              <Field label="Manual price (Rs)" hint={blocked ? price?.block_reason : "Rare pieces are priced by hand — 1.5× one trigger, 2× two or three, 3×+ genuinely rare."} hintTone="warn">
+              <Field label="Manual price (Rs)" hint={price?.block_reason} hintTone="warn">
                 <Input type="number" inputMode="numeric" min="1" step="1" value={manualPrice} onChange={(e) => setManualPrice(e.target.value)} className="max-w-xs" />
               </Field>
             )}
@@ -478,7 +474,7 @@ export function TagForm() {
           </CardHeader>
           <CardContent className="space-y-4">
             {price?.error && <Note tone="error">{price.error}</Note>}
-            {blocked && !rare && <Note tone="error">{price?.block_reason}</Note>}
+            {blocked && <Note tone="error">{price?.block_reason}</Note>}
 
             <div>
               <div className="text-xs uppercase tracking-wide text-muted-foreground">Our price</div>

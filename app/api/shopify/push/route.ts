@@ -112,7 +112,7 @@ function describe(text: string | null, measurements: Record<string, unknown>, gr
   const m = Object.entries(measurements ?? {}).filter(([, v]) => v !== "" && v != null);
   if (size || m.length) {
     parts.push(`<p><strong>Size on label:</strong> ${escape(size ?? "—")}</p>`);
-    if (m.length) parts.push(`<p><strong>Measured flat (cm):</strong> ${m.map(([k, v]) => `${escape(k)} ${escape(String(v))}`).join(" · ")}</p>`);
+    if (m.length) parts.push(`<p><strong>Measured flat (in):</strong> ${m.map(([k, v]) => `${escape(k)} ${escape(String(v))}`).join(" · ")}</p>`);
   }
   parts.push(`<p><strong>Condition:</strong> ${GRADE_COPY[grade] ?? grade}</p>`);
   parts.push(`<p>Pre-loved and hand-graded by Khazanay. One of a kind — when it's gone, it's gone.</p>`);
