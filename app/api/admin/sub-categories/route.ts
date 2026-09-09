@@ -13,14 +13,14 @@ import { computePrice } from "@/lib/pricing/engine";
 import { loadPricingContext } from "@/lib/pricing/repo";
 
 const PROFILES = ["fast", "standard", "slow"];
-const EDITABLE = ["category_slug", "gender", "name", "weight_kg", "profile_code", "value_index", "market_ceiling", "market_price", "per_piece_cost", "per_piece_share", "active"] as const;
+const EDITABLE = ["category_slug", "gender", "name", "weight_kg", "profile_code", "value_index", "market_ceiling", "market_price", "per_piece_cost", "per_piece_share", "planning_rate_usd_per_kg", "active"] as const;
 const GENDERS = ["men", "women", "teenage", "kid", "toddler", "infant"];
 
 export async function GET() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("sub_categories")
-    .select("slug, code, category_slug, gender, name, weight_kg, profile_code, value_index, measure_type, market_ceiling, market_price, per_piece_cost, per_piece_share, active, categories(name, sort_order)")
+    .select("slug, code, category_slug, gender, name, weight_kg, profile_code, value_index, measure_type, market_ceiling, market_price, per_piece_cost, per_piece_share, planning_rate_usd_per_kg, active, categories(name, sort_order)")
     .order("name");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   const genderOrder = ["men", "women", "teenage", "kid", "toddler", "infant"];
@@ -29,18 +29,34 @@ export async function GET() {
   const ctx = await loadPricingContext(supabase);
   const rows = (data ?? [])
     .map((r) => {
-      const est = computePrice({ weightKg: Number(r.weight_kg), profileCode: r.profile_code, valueIndex: Number(r.value_index) }, ctx.settings, ctx.refs);
       const cat = (Array.isArray(r.categories) ? r.categories[0] : r.categories) as { name: string; sort_order: number } | null;
       return {
         ...r,
         category: cat?.name ?? "",
         category_order: cat?.sort_order ?? 0,
         categories: undefined,
-        estimate: { landed_cost: Math.round(est.landedCost), bnwt: est.gradePrices.bnwt, premium: est.gradePrices.premium, excellent: est.gradePrices.excellent, very_good: est.gradePrices.very_good, gp_pct: est.gpPct },
+        ...estimates({ weight_kg: Number(r.weight_kg), profile_code: r.profile_code, value_index: Number(r.value_index), planning_rate_usd_per_kg: r.planning_rate_usd_per_kg == null ? null : Number(r.planning_rate_usd_per_kg), per_piece_cost: r.per_piece_cost == null ? null : Number(r.per_piece_cost) }, ctx),
       };
     })
     .sort((a, b) => genderOrder.indexOf(a.gender) - genderOrder.indexOf(b.gender) || a.category_order - b.category_order || a.name.localeCompare(b.name));
   return NextResponse.json({ rows, basis: { planning_rate: ctx.settings.blendedRate, fx: ctx.settings.fx } });
+}
+
+type EstimateInput = { weight_kg: number; profile_code: string; value_index: number; planning_rate_usd_per_kg: number | null; per_piece_cost: number | null };
+type Estimate = { landed_cost: number; bnwt: number; premium: number; excellent: number; very_good: number; gp_pct: number };
+
+/**
+ * Planning estimates for both buying bases. Per kg uses the sub-category's
+ * own rate, else the settings planning rate; per piece uses its piece
+ * price and is null until one is set. Imported (duty + tax credit), like
+ * the Excel sheet.
+ */
+function estimates(r: EstimateInput, ctx: Awaited<ReturnType<typeof loadPricingContext>>): { estimate: Estimate; estimate_pc: Estimate | null; rate_used: number } {
+  const rate = r.planning_rate_usd_per_kg ?? ctx.settings.blendedRate;
+  const pack = (e: ReturnType<typeof computePrice>): Estimate => ({ landed_cost: Math.round(e.landedCost), bnwt: e.gradePrices.bnwt, premium: e.gradePrices.premium, excellent: e.gradePrices.excellent, very_good: e.gradePrices.very_good, gp_pct: e.gpPct });
+  const kg = computePrice({ weightKg: r.weight_kg, basis: "kg", effectiveRate: rate, profileCode: r.profile_code as "fast", valueIndex: r.value_index }, ctx.settings, ctx.refs);
+  const pc = r.per_piece_cost ? computePrice({ weightKg: 0, basis: "pc", effectiveRate: r.per_piece_cost, profileCode: r.profile_code as "fast", valueIndex: r.value_index }, ctx.settings, ctx.refs) : null;
+  return { estimate: pack(kg), estimate_pc: pc ? pack(pc) : null, rate_used: rate };
 }
 
 /**
@@ -51,24 +67,29 @@ export async function GET() {
 export async function POST(request: Request) {
   const gate = await requireManager();
   if ("response" in gate) return gate.response;
-  let body: { rows?: { slug?: string; weight_kg?: number; profile_code?: string; value_index?: number }[] };
+  let body: { rows?: { slug?: string; weight_kg?: number; profile_code?: string; value_index?: number; planning_rate_usd_per_kg?: number | null; per_piece_cost?: number | null }[] };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Body must be JSON." }, { status: 400 });
   }
   const ctx = await loadPricingContext(gate.db);
-  const estimates: Record<string, { landed_cost: number; bnwt: number; premium: number; excellent: number; very_good: number; gp_pct: number }> = {};
+  const { data: current } = await gate.db.from("sub_categories").select("slug, weight_kg, profile_code, value_index, planning_rate_usd_per_kg, per_piece_cost").in("slug", (body.rows ?? []).map((r) => r.slug ?? ""));
+  const out: Record<string, ReturnType<typeof estimates>> = {};
   for (const r of body.rows ?? []) {
-    const base = ctx.subCategories.find((s) => s.slug === r.slug);
+    const base = (current ?? []).find((s) => s.slug === r.slug);
     if (!base) continue;
-    const weightKg = typeof r.weight_kg === "number" && r.weight_kg > 0 ? r.weight_kg : base.weightKg;
-    const valueIndex = typeof r.value_index === "number" && r.value_index > 0 ? r.value_index : base.valueIndex;
-    const profileCode = (["fast", "standard", "slow"].includes(String(r.profile_code)) ? r.profile_code : base.profileCode) as typeof base.profileCode;
-    const est = computePrice({ weightKg, profileCode, valueIndex }, ctx.settings, ctx.refs);
-    estimates[base.slug] = { landed_cost: Math.round(est.landedCost), bnwt: est.gradePrices.bnwt, premium: est.gradePrices.premium, excellent: est.gradePrices.excellent, very_good: est.gradePrices.very_good, gp_pct: est.gpPct };
+    const num = (v: unknown, fallback: number) => (typeof v === "number" && v > 0 ? v : fallback);
+    const opt = (v: unknown, fallback: number | null) => (v === null ? null : typeof v === "number" && v > 0 ? v : fallback);
+    out[base.slug] = estimates({
+      weight_kg: num(r.weight_kg, Number(base.weight_kg)),
+      profile_code: ["fast", "standard", "slow"].includes(String(r.profile_code)) ? String(r.profile_code) : base.profile_code,
+      value_index: num(r.value_index, Number(base.value_index)),
+      planning_rate_usd_per_kg: opt(r.planning_rate_usd_per_kg, base.planning_rate_usd_per_kg == null ? null : Number(base.planning_rate_usd_per_kg)),
+      per_piece_cost: opt(r.per_piece_cost, base.per_piece_cost == null ? null : Number(base.per_piece_cost)),
+    }, ctx);
   }
-  return NextResponse.json({ estimates });
+  return NextResponse.json({ estimates: out });
 }
 
 const MEASURE_TYPES = ["top", "bottom", "dress", "outer", "kids_top", "kids_bottom"];
@@ -159,7 +180,7 @@ export async function PATCH(request: Request) {
 
     const { data: before } = await supabase
       .from("sub_categories")
-      .select("category_slug, gender, name, weight_kg, profile_code, value_index, market_ceiling, market_price, per_piece_cost, per_piece_share, active")
+      .select("category_slug, gender, name, weight_kg, profile_code, value_index, market_ceiling, market_price, per_piece_cost, per_piece_share, planning_rate_usd_per_kg, active")
       .eq("slug", slug)
       .maybeSingle();
     if (!before) {
@@ -189,7 +210,7 @@ function check(p: Record<string, unknown>): string | null {
   if ("profile_code" in p && !PROFILES.includes(String(p.profile_code))) return "profile_code must be fast, standard or slow.";
   if ("gender" in p && !GENDERS.includes(String(p.gender))) return "gender must be men, women, teenage, kid, toddler or infant.";
   if ("name" in p && !String(p.name ?? "").trim()) return "name cannot be empty.";
-  for (const k of ["market_ceiling", "market_price", "per_piece_cost"] as const) {
+  for (const k of ["market_ceiling", "market_price", "per_piece_cost", "planning_rate_usd_per_kg"] as const) {
     if (k in p && p[k] !== null && !(typeof p[k] === "number" && (p[k] as number) >= 0)) return `${k} must be a non-negative number or empty.`;
   }
   if ("per_piece_share" in p && !(typeof p.per_piece_share === "number" && p.per_piece_share >= 0 && p.per_piece_share <= 1)) return "per_piece_share must be between 0 and 1.";

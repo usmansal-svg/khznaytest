@@ -13,7 +13,8 @@ import type { Settings } from "@/lib/pricing/constants";
 
 type SettingsResponse = { settings: Settings; version: number; source: string; history: { version: number; note: string | null; created_at: string; by: string | null }[]; audits: { id: number; table: string; key: string; at: string; by: string; note: string | null; changes: { field: string; from: string; to: string }[] }[]; warning?: string };
 type Preview = { rows: { slug: string; name: string; profile: string; weight_kg: number; current: number; proposed: number; change_pct: number }[]; multiples: { profile: string; current: number; proposed: number }[] };
-type SubRow = { slug: string; code: string; name: string; gender: string; category_slug: string; category: string; weight_kg: number; profile_code: string; value_index: number; market_ceiling: number | null; market_price: number | null; active: boolean; estimate?: { landed_cost: number; bnwt: number; premium: number; excellent: number; very_good: number; gp_pct: number } };
+type Est = { landed_cost: number; bnwt: number; premium: number; excellent: number; very_good: number; gp_pct: number };
+type SubRow = { slug: string; code: string; name: string; gender: string; category_slug: string; category: string; weight_kg: number; profile_code: string; value_index: number; market_ceiling: number | null; market_price: number | null; per_piece_cost: number | null; planning_rate_usd_per_kg: number | null; active: boolean; estimate?: Est; estimate_pc?: Est | null; rate_used?: number };
 
 const rs = (n: number) => `Rs ${Math.round(n).toLocaleString("en-PK")}`;
 const pct = (n: number) => `${n >= 0 ? "+" : ""}${(n * 100).toFixed(1)}%`;
@@ -286,7 +287,8 @@ function SubCategoryEditor() {
   const [rows, setRows] = useState<SubRow[] | null>(null);
   const [cats, setCats] = useState<{ slug: string; name: string; gender: string }[]>([]);
   const [edits, setEdits] = useState<Record<string, Partial<SubRow>>>({});
-  const [live, setLive] = useState<Record<string, NonNullable<SubRow["estimate"]>>>({});
+  const [live, setLive] = useState<Record<string, { estimate: Est; estimate_pc: Est | null; rate_used: number }>>({});
+  const [basis, setBasis] = useState<"kg" | "pc">("kg");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
 
@@ -351,19 +353,26 @@ function SubCategoryEditor() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="mb-3 text-xs text-muted-foreground">Prices shown are planning estimates at the default weight and planning rate (imported), exactly like the Excel sheet; a real garment prices from its lot and scale weight. Edit a weight, profile or index and the row&apos;s prices update as you type — in amber until you press Save. Weights are the spec&apos;s open item #1 — weigh 20 pieces per category and replace the estimates. Market ceiling warns the tagger when cost-led pricing runs above the market; market price is the &quot;new in store&quot; anchor printed on the tag.</p>
+        <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-muted-foreground">Estimate by</span>
+          <Button size="sm" variant={basis === "kg" ? "default" : "outline"} onClick={() => setBasis("kg")}>Per kg · $/kg</Button>
+          <Button size="sm" variant={basis === "pc" ? "default" : "outline"} onClick={() => setBasis("pc")}>Per piece · Rs each</Button>
+        </div>
+        <p className="mb-3 text-xs text-muted-foreground">Prices shown are planning estimates at the default weight and planning rate (imported), exactly like the Excel sheet; a real garment prices from its lot and scale weight. Edit a weight, profile, index or rate and the row&apos;s prices update as you type — in amber until you press Save. Per kg uses the row&apos;s own $/kg, or the planning rate from Constants when blank; per piece needs a Rs price on the row. Weights are the spec&apos;s open item #1 — weigh 20 pieces per category and replace the estimates. Market ceiling warns the tagger when cost-led pricing runs above the market; market price is the &quot;new in store&quot; anchor printed on the tag.</p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-left text-xs uppercase text-muted-foreground">
-              <tr><th className="pb-2">Gender</th><th className="pb-2">Category</th><th className="pb-2">Sub-category</th><th className="pb-2">Code</th><th className="pb-2">Weight kg</th><th className="pb-2">Profile</th><th className="pb-2">Value index</th><th className="pb-2 text-right">Landed</th><th className="pb-2 text-right">BNWT</th><th className="pb-2 text-right">Premium</th><th className="pb-2 text-right">Excellent</th><th className="pb-2 text-right">Very Good</th><th className="pb-2 text-right">GP %</th><th className="pb-2">Market ceiling</th><th className="pb-2">Market price</th><th className="pb-2">Active</th></tr>
+              <tr><th className="pb-2">Gender</th><th className="pb-2">Category</th><th className="pb-2">Sub-category</th><th className="pb-2">Code</th><th className="pb-2">Weight kg</th><th className="pb-2">Profile</th><th className="pb-2">Value index</th><th className="pb-2">{basis === "kg" ? "$ per kg" : "Rs per piece"}</th><th className="pb-2 text-right">Landed</th><th className="pb-2 text-right">BNWT</th><th className="pb-2 text-right">Premium</th><th className="pb-2 text-right">Excellent</th><th className="pb-2 text-right">Very Good</th><th className="pb-2 text-right">GP %</th><th className="pb-2">Market ceiling</th><th className="pb-2">Market price</th><th className="pb-2">Active</th></tr>
             </thead>
             <tbody className="divide-y">
               {rows.map((r) => {
                 const e = edits[r.slug] ?? {};
                 const v = { ...r, ...e };
                 const changed = (k: keyof SubRow) => k in e;
-                const est = live[r.slug] ?? r.estimate;
-                const previewing = Boolean(live[r.slug]);
+                const lv = live[r.slug];
+                const est = basis === "kg" ? (lv?.estimate ?? r.estimate) : (lv ? lv.estimate_pc : r.estimate_pc);
+                const previewing = Boolean(lv);
+                const rateUsed = lv?.rate_used ?? r.rate_used;
                 const num = cn("py-1.5 pr-2 text-right tabular-nums", previewing && "text-amber-700 dark:text-amber-400");
                 return (
                   <tr key={r.slug} className={cn(!v.active && "opacity-50")}>
@@ -384,6 +393,13 @@ function SubCategoryEditor() {
                       </select>
                     </td>
                     <td className="py-1.5 pr-2"><Input type="number" step="0.05" min="0.05" value={v.value_index} onChange={(ev) => edit(r.slug, { value_index: Number(ev.target.value) })} className={cn("h-8 w-24", changed("value_index") && "border-amber-500")} /></td>
+                    <td className="py-1.5 pr-2">
+                      {basis === "kg" ? (
+                        <Input type="number" step="0.1" min="0" value={v.planning_rate_usd_per_kg ?? ""} placeholder={rateUsed != null ? String(rateUsed) : ""} onChange={(ev) => edit(r.slug, { planning_rate_usd_per_kg: ev.target.value === "" ? null : Number(ev.target.value) })} className={cn("h-8 w-20", changed("planning_rate_usd_per_kg") && "border-amber-500")} />
+                      ) : (
+                        <Input type="number" step="10" min="0" value={v.per_piece_cost ?? ""} placeholder="—" onChange={(ev) => edit(r.slug, { per_piece_cost: ev.target.value === "" ? null : Number(ev.target.value) })} className={cn("h-8 w-24", changed("per_piece_cost") && "border-amber-500")} />
+                      )}
+                    </td>
                     <td className={cn(num, !previewing && "text-muted-foreground")}>{est ? rs(est.landed_cost) : "—"}</td>
                     <td className={num}>{est ? rs(est.bnwt) : "—"}</td>
                     <td className={cn(num, "font-semibold")}>{est ? rs(est.premium) : "—"}</td>
