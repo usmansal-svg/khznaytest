@@ -34,6 +34,7 @@ type Body = {
   lot_id?: number | null;
   weight_kg?: number | null;
   price_manual?: number | null;
+  channel?: string;
 };
 
 export async function POST(request: Request) {
@@ -117,6 +118,8 @@ export async function POST(request: Request) {
       price_manual: blocked ? body.price_manual : null,
       settings_version: ctx.settingsVersion,
       status: rejected ? "rejected" : blocked ? "set_aside" : "tagged",
+      channel: body.channel === "online" ? "online" : "outlet",
+      online_status: body.channel === "online" ? "draft" : null,
     })
     .select("id, sku, price, price_manual, status, tagged_at, weight_kg")
     .single();

@@ -89,6 +89,7 @@ export function TagForm() {
 
   // Retained between garments
   const [lotId, setLotId] = useState<string>("");
+  const [channel, setChannel] = useState<"outlet" | "online">("outlet");
   const [outletId, setOutletId] = useState<string>("");
   const [season, setSeason] = useState<Season>("summer");
   const [wearer, setWearer] = useState<Wearer>("men");
@@ -247,6 +248,7 @@ export function TagForm() {
           outlet_id: outletId ? Number(outletId) : null,
           lot_id: Number(lotId),
           weight_kg: needsWeight ? weightKg : null,
+          channel,
           price_manual: needsManual ? Number(manualPrice) : null,
         }),
       });
@@ -333,6 +335,12 @@ export function TagForm() {
                 <Button asChild type="button" variant="outline" size="sm" className="h-9 shrink-0">
                   <Link href="/lots">Lots</Link>
                 </Button>
+              </div>
+            </Field>
+            <Field label="Tagging for" hint={channel === "online" ? "Photos and Shopify on the garment page after saving" : "Quick tag, print, then choose the outlet"}>
+              <div className="flex gap-2">
+                <Button type="button" size="sm" variant={channel === "outlet" ? "default" : "outline"} onClick={() => setChannel("outlet")}>Outlet</Button>
+                <Button type="button" size="sm" variant={channel === "online" ? "default" : "outline"} onClick={() => setChannel("online")}>Online store</Button>
               </div>
             </Field>
             <Field label="Outlet">
@@ -556,7 +564,10 @@ export function TagForm() {
                       <Printer className="size-4" /> Print tag
                     </a>
                   </Button>
-                  <Button type="button" onClick={resetForNext}>
+                  <Button asChild type="button" variant="outline">
+                    <Link href={`/items/${saved.sku}`}>{channel === "online" ? "Photos & Shopify →" : "Choose outlet →"}</Link>
+                  </Button>
+                  <Button type="button" className="col-span-2" onClick={resetForNext}>
                     <RotateCcw className="size-4" /> Next garment
                   </Button>
                 </div>

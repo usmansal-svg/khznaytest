@@ -28,6 +28,11 @@ export async function GET() {
     if (data) tagger = { name: (data as { name: string }).name, role: (data as { role: string }).role };
   }
 
+  // A failed lookup must not masquerade as an empty list: say so, visibly.
+  const warnings = [ctx.warning];
+  if (categoriesRes.error) warnings.push(`Categories could not be loaded (${categoriesRes.error.message}); reload the page.`);
+  if (outletsRes.error) warnings.push(`Outlets could not be loaded (${outletsRes.error.message}); reload the page.`);
+
   return NextResponse.json({
     categories: categoriesRes.data ?? [],
     sub_categories: ctx.subCategories
@@ -50,6 +55,6 @@ export async function GET() {
     colour_tag: colourForMonth(new Date()),
     settings_version: ctx.settingsVersion,
     pricing_source: ctx.source,
-    ...(ctx.warning ? { warning: ctx.warning } : {}),
+    ...(warnings.some(Boolean) ? { warning: warnings.filter(Boolean).join(" ") } : {}),
   });
 }

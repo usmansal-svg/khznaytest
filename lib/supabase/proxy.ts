@@ -74,6 +74,7 @@ export async function updateSession(request: NextRequest) {
     !request.nextUrl.pathname.startsWith("/api/items") &&
     !request.nextUrl.pathname.startsWith("/api/brands") &&
     !request.nextUrl.pathname.startsWith("/api/tags") &&
+    !request.nextUrl.pathname.startsWith("/api/shopify") &&
     !request.nextUrl.pathname.startsWith("/api/admin")
   ) {
     // API callers get a 401 they can act on. Redirecting a fetch() to the

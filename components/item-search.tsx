@@ -90,7 +90,7 @@ export function ItemSearch() {
                 <tbody className="divide-y">
                   {rows.map((r) => (
                     <tr key={r.id}>
-                      <td className="py-2 font-mono text-xs">{r.sku}</td>
+                      <td className="py-2 font-mono text-xs"><a href={`/items/${r.sku}`} className="underline-offset-2 hover:underline">{r.sku}</a></td>
                       <td className="py-2">{r.brand || <span className="text-muted-foreground">—</span>}</td>
                       <td className="py-2">{r.sub_category}</td>
                       <td className="py-2">{GRADE[r.grade] ?? r.grade}</td>
