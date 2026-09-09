@@ -10,6 +10,7 @@
 import { NextResponse } from "next/server";
 
 import { currentStaff, dbFor } from "@/lib/auth/staff";
+import { MANAGER_ROLES } from "@/lib/auth/session";
 import { type Adjustment, type GradeCode } from "@/lib/pricing/constants";
 import { ADJUSTMENTS, GRADE_CODES, quote } from "@/lib/pricing/quote";
 import { loadLot, loadPricingContext, resolveBrandDb } from "@/lib/pricing/repo";
@@ -40,7 +41,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "weight_kg must be a positive number of kilograms." }, { status: 400 });
   }
 
-  const supabase = await dbFor(await currentStaff());
+  const me = await currentStaff();
+  const supabase = await dbFor(me);
   const ctx = await loadPricingContext(supabase);
   const [brand, lot] = await Promise.all([
     resolveBrandDb(supabase, body.brand_text),
@@ -51,5 +53,12 @@ export async function POST(request: Request) {
   const subCategory = ctx.subCategories.find((s) => s.slug === body.sub_category_id);
   if (!subCategory) return NextResponse.json({ error: `Unknown sub_category_id: ${body.sub_category_id ?? "(missing)"}` }, { status: 400 });
 
-  return NextResponse.json(quote({ subCategory, brand, grade, adjustment, isRare: Boolean(body.is_rare), lot, weightKg: body.weight_kg ?? null }, ctx));
+  const q = quote({ subCategory, brand, grade, adjustment, isRare: Boolean(body.is_rare), lot, weightKg: body.weight_kg ?? null }, ctx);
+  // Taggers see the shelf price and the grade prices only. Cost, margin,
+  // expected revenue, the multiple and the markdown ladder are management.
+  if (!me || !MANAGER_ROLES.has(me.role)) {
+    const { landed_cost: _c, gp_pct: _g, expected_revenue: _e, multiple: _m, markdowns: _l, ...visible } = q; // eslint-disable-line @typescript-eslint/no-unused-vars
+    return NextResponse.json({ ...visible, landed_cost: null, gp_pct: null, expected_revenue: null, multiple: null, markdowns: [], restricted: true });
+  }
+  return NextResponse.json(q);
 }

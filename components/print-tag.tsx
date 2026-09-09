@@ -15,6 +15,7 @@ export function PrintTag({ sku }: { sku: string }) {
       .catch((e) => setError(e.message));
   }, [sku]);
 
+  const embed = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("embed") === "1";
   useEffect(() => {
     if (item && new URLSearchParams(window.location.search).get("auto") === "1") setTimeout(() => window.print(), 400);
   }, [item]);
@@ -24,11 +25,11 @@ export function PrintTag({ sku }: { sku: string }) {
   return (
     <div className="min-h-screen bg-neutral-200 print:bg-white">
       <style>{tagCss()}</style>
-      <div className="no-print flex items-center gap-3 p-4 text-sm">
+      {!embed && <div className="no-print flex items-center gap-3 p-4 text-sm">
         <button onClick={() => window.print()} className="rounded-md bg-black px-4 py-2 font-semibold text-white">Print tag</button>
         <span className="text-neutral-600">50 × 90 mm · front and back print as two pages</span>
         <a href={`/items/${item.sku}`} className="ml-auto text-neutral-600 underline">Garment</a>
-      </div>
+      </div>}
       <div className="flex flex-wrap gap-6 p-4 print:gap-0 print:p-0"><TagFaces item={item} /></div>
     </div>
   );

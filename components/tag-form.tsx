@@ -43,10 +43,11 @@ type Reference = {
 };
 
 type PriceResponse = {
+  restricted?: boolean;
   cost_basis?: "lot" | "planning";
   weight_kg?: number | null;
   expected_revenue?: number | null;
-  landed_cost: number;
+  landed_cost: number | null;
   price: number | null;
   grade_prices: Record<GradeCode, number> | null;
   markdowns: { stage: string; discount: number; price: number }[];
@@ -123,6 +124,16 @@ export function TagForm() {
 
   const brandRef = useRef<HTMLInputElement>(null);
   const weightRef = useRef<HTMLInputElement>(null);
+  const printRef = useRef<HTMLIFrameElement>(null);
+  const [autoPrint, setAutoPrint] = useState(true);
+  const [printing, setPrinting] = useState<string | null>(null);
+
+  // Print without leaving the form: the tag page loads in a hidden frame
+  // and prints itself (?auto=1). Works with AirPrint on the iPad.
+  function printTag(sku: string) {
+    setPrinting(sku);
+    if (printRef.current) printRef.current.src = `/items/${encodeURIComponent(sku)}/print?auto=1&embed=1&t=${Date.now()}`;
+  }
 
   /* reference data */
   useEffect(() => {
@@ -280,6 +291,7 @@ export function TagForm() {
       if (!res.ok) throw new Error(json.error ?? "Save failed.");
       setSaved(json.item);
       setSessionSkus((list) => [...list, json.item.sku]);
+      if (autoPrint && json.item.status !== "rejected") printTag(json.item.sku);
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Save failed.");
     } finally {
@@ -304,6 +316,8 @@ export function TagForm() {
   if (!ref) return <p className="text-muted-foreground">Loading…</p>;
 
   return (
+    <>
+    <iframe ref={printRef} title="print" aria-hidden className="pointer-events-none fixed -left-[9999px] top-0 h-px w-px opacity-0" onLoad={() => setTimeout(() => setPrinting(null), 1500)} />
     <form
       onSubmit={(e) => {
         e.preventDefault();
@@ -542,7 +556,7 @@ export function TagForm() {
               </dl>
             )}
 
-            {price?.markdowns?.length ? (
+            {price && !price.restricted && price.markdowns?.length ? (
               <dl className="space-y-1 border-t pt-3 text-sm">
                 {price.markdowns.map((m) => (
                   <div key={m.stage} className="flex justify-between">
@@ -553,7 +567,7 @@ export function TagForm() {
               </dl>
             ) : null}
 
-            {price && (
+            {price && !price.restricted && (
               <dl className="space-y-1 border-t pt-3 text-sm">
                 {price.weight_kg != null && (
                   <div className="flex justify-between">
@@ -563,7 +577,7 @@ export function TagForm() {
                 )}
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Landed cost</dt>
-                  <dd className="tabular-nums">{pkr(price.landed_cost)}</dd>
+                  <dd className="tabular-nums">{pkr(price.landed_cost ?? 0)}</dd>
                 </div>
                 {price.expected_revenue != null && (
                   <div className="flex justify-between">
@@ -599,26 +613,27 @@ export function TagForm() {
                   {saved.status === "set_aside" && " · set aside"}
                 </Note>
                 <div className="grid grid-cols-2 gap-2">
-                  <Button asChild type="button" variant="outline">
-                    <a href={`/items/${saved.sku}/print`} target="_blank" rel="noreferrer">
-                      <Printer className="size-4" /> Print tag
-                    </a>
+                  <Button type="button" variant="outline" className="h-12" onClick={() => printTag(saved.sku)}>
+                    <Printer className="size-4" /> {printing === saved.sku ? "Printing…" : "Print tag"}
                   </Button>
-                  <Button asChild type="button" variant="outline">
-                    <Link href={`/items/${saved.sku}`}>{channel === "online" ? "Photos & Shopify →" : "Choose outlet →"}</Link>
-                  </Button>
-                  <Button type="button" className="col-span-2" onClick={resetForNext}>
-                    <RotateCcw className="size-4" /> Next garment
-                  </Button>
+                  {channel === "online" ? (
+                    <Button asChild type="button" variant="outline" className="h-12"><Link href={`/items/${saved.sku}`}>Photos & Shopify →</Link></Button>
+                  ) : (
+                    <Button type="button" className="h-12" onClick={resetForNext}><RotateCcw className="size-4" /> Next garment</Button>
+                  )}
+                  {channel === "online" && (
+                    <Button type="button" className="col-span-2 h-12" onClick={resetForNext}><RotateCcw className="size-4" /> Next garment</Button>
+                  )}
                 </div>
                 <p className="text-center text-xs text-muted-foreground">Enter for next · channel, lot, season, wearer and category are kept</p>
               </>
             ) : (
               <>
                 {saveError && <Note tone="error">{saveError}</Note>}
-                <Button type="submit" className="w-full" disabled={!canSave}>
-                  <Save className="size-4" /> {saving ? "Saving…" : "Save & allocate SKU"}
+                <Button type="submit" className="h-12 w-full" disabled={!canSave}>
+                  <Save className="size-4" /> {saving ? "Saving…" : autoPrint ? "Save & print tag" : "Save & allocate SKU"}
                 </Button>
+                <label className="flex items-center justify-center gap-2 text-xs text-muted-foreground"><Checkbox checked={autoPrint} onCheckedChange={(v) => setAutoPrint(v === true)} /> Auto-print the tag after every save</label>
                 <p className="text-center text-xs text-muted-foreground">
                   {ref.tagger ? "Enter saves" : "Sign in to save"} · {sessionSkus.length} tagged this session
                 </p>
@@ -628,6 +643,7 @@ export function TagForm() {
         </Card>
       </div>
     </form>
+    </>
   );
 }
 
