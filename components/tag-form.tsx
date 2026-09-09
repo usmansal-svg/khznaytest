@@ -19,7 +19,7 @@ import { SLEEVE_TYPES } from "@/lib/pricing/sub-categories";
 
 type Reference = {
   genders: { code: Gender; name: string }[];
-  categories: { slug: string; name: string }[];
+  categories: { slug: string; name: string; gender: Gender; sort_order: number }[];
   sub_categories: {
     slug: string;
     code: string;
@@ -75,6 +75,8 @@ const ADJUSTMENTS: { code: Adjustment; label: string }[] = [
 const SEASON_OPTIONS: { code: Season; label: string }[] = [{ code: "summer", label: "Summer" }, { code: "winter", label: "Winter" }];
 const WEARER_OPTIONS: { code: Wearer; label: string }[] = [{ code: "men", label: "Men" }, { code: "women", label: "Women" }, { code: "boy", label: "Boy" }, { code: "girl", label: "Girl" }, { code: "infant", label: "Infant" }, { code: "unisex", label: "Unisex" }];
 const GENDER_ORDER: Gender[] = ["men", "women", "teenage", "kid", "toddler", "infant"];
+/** Which genders' categories a wearer can be tagged under. */
+const WEARER_GENDERS: Partial<Record<Wearer, Gender[]>> = { men: ["men"], women: ["women"], boy: ["kid", "toddler", "teenage"], girl: ["kid", "toddler", "teenage"], infant: ["infant", "toddler", "kid"], unisex: GENDER_ORDER };
 
 const MARKDOWN_LABELS: Record<string, string> = { md1: "25% OFF", md2: "HALF PRICE", md3: "LAST CHANCE 75%" };
 const KIDS = new Set<Wearer>(["boy", "girl", "infant"]);
@@ -94,7 +96,9 @@ export function TagForm() {
   const [channelLocked, setChannelLocked] = useState(false);
   const [season, setSeason] = useState<Season>("summer");
   const [wearer, setWearer] = useState<Wearer>("men");
+  const [category, setCategory] = useState("");
   const [sub, setSub] = useState("");
+  const [find, setFind] = useState("");
 
   // Cleared after save
   const [brand, setBrand] = useState("");
@@ -136,12 +140,34 @@ export function TagForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // The flat category list, grouped by gender for reading.
-  const subs = useMemo(() => (ref?.sub_categories ?? []).slice().sort((a, b) => GENDER_ORDER.indexOf(a.gender) - GENDER_ORDER.indexOf(b.gender) || a.name.localeCompare(b.name)), [ref]);
+  // Wearer → Category → Sub-category. Categories are gendered; the wearer
+  // decides which genders show. A type-to-find box jumps straight to a
+  // sub-category and fills the category in.
+  const genders = WEARER_GENDERS[wearer] ?? GENDER_ORDER;
+  const cats = useMemo(
+    () => (ref?.categories ?? []).filter((c) => genders.includes(c.gender)).sort((a, b) => GENDER_ORDER.indexOf(a.gender) - GENDER_ORDER.indexOf(b.gender) || a.sort_order - b.sort_order),
+    [ref, genders],
+  );
+  useEffect(() => {
+    if (cats.length && !cats.some((c) => c.slug === category)) setCategory(cats[0].slug);
+  }, [cats, category]);
+  const subs = useMemo(() => (ref?.sub_categories ?? []).filter((s) => s.category_slug === category).sort((a, b) => a.name.localeCompare(b.name)), [ref, category]);
   useEffect(() => {
     if (subs.length && !subs.some((s) => s.slug === sub)) setSub(subs[0].slug);
   }, [subs, sub]);
-  const selectedSub = subs.find((s) => s.slug === sub);
+  const selectedSub = (ref?.sub_categories ?? []).find((s) => s.slug === sub);
+  const catSlugs = useMemo(() => new Set(cats.map((c) => c.slug)), [cats]);
+  const hits = useMemo(() => {
+    const q = find.trim().toLowerCase();
+    if (!q) return [];
+    return (ref?.sub_categories ?? []).filter((s) => catSlugs.has(s.category_slug) && s.name.toLowerCase().includes(q)).slice(0, 8);
+  }, [find, ref, catSlugs]);
+  function pick(s: NonNullable<Reference["sub_categories"]>[number]) {
+    setCategory(s.category_slug);
+    setSub(s.slug);
+    setFind("");
+    requestAnimationFrame(() => brandRef.current?.focus());
+  }
   const isKids = KIDS.has(wearer);
   const asksSleeve = Boolean(selectedSub?.asks_sleeve);
   const isManager = ref?.tagger?.role === "manager" || ref?.tagger?.role === "founder";
@@ -354,13 +380,31 @@ export function TagForm() {
                 {WEARER_OPTIONS.map((w) => <option key={w.code} value={w.code}>{w.label}</option>)}
               </select>
             </Field>
-            <Field label="Category" hint={selectedSub ? `${selectedSub.code} · ${selectedSub.weight_kg} kg · ${selectedSub.profile_code}` : subs.length ? undefined : "No categories yet — add them under Pricing"}>
+            <Field label="Find a garment type" hint="Type a few letters — e.g. crop, jeans, hoodie">
+              <div className="relative">
+                <Input value={find} onChange={(e) => setFind(e.target.value)} placeholder="Search sub-categories…" autoComplete="off" onKeyDown={(e) => { if (e.key === "Enter" && hits[0]) { e.preventDefault(); e.stopPropagation(); pick(hits[0]); } }} />
+                {hits.length > 0 && (
+                  <ul className="absolute z-20 mt-1 w-full overflow-hidden rounded-md border bg-background shadow-md">
+                    {hits.map((h) => (
+                      <li key={h.slug}><button type="button" onClick={() => pick(h)} className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-muted"><span>{h.name}</span><span className="text-xs text-muted-foreground">{ref.categories.find((c) => c.slug === h.category_slug)?.name}</span></button></li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </Field>
+            <Field label="Category">
+              <select className={selectClass} value={category} onChange={(e) => setCategory(e.target.value)}>
+                {genders.length > 1
+                  ? GENDER_ORDER.filter((g) => cats.some((c) => c.gender === g)).map((g) => (
+                      <optgroup key={g} label={GENDER_LABELS[g]}>{cats.filter((c) => c.gender === g).map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}</optgroup>
+                    ))
+                  : cats.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}
+                {cats.length === 0 && <option value="">No categories for this wearer yet</option>}
+              </select>
+            </Field>
+            <Field label="Sub-category" hint={selectedSub ? `${selectedSub.code} · ${selectedSub.weight_kg} kg · ${selectedSub.profile_code}` : subs.length ? undefined : "Nothing under this category yet — add it under Pricing"}>
               <select className={selectClass} value={sub} onChange={(e) => setSub(e.target.value)}>
-                {GENDER_ORDER.filter((g) => subs.some((s) => s.gender === g)).map((g) => (
-                  <optgroup key={g} label={GENDER_LABELS[g]}>
-                    {subs.filter((s) => s.gender === g).map((s) => <option key={s.slug} value={s.slug}>{s.name}</option>)}
-                  </optgroup>
-                ))}
+                {subs.map((s) => <option key={s.slug} value={s.slug}>{s.name}</option>)}
               </select>
             </Field>
           </CardContent>
@@ -567,7 +611,7 @@ export function TagForm() {
                     <RotateCcw className="size-4" /> Next garment
                   </Button>
                 </div>
-                <p className="text-center text-xs text-muted-foreground">Enter for next · lot, outlet, season, gender and category are kept</p>
+                <p className="text-center text-xs text-muted-foreground">Enter for next · channel, lot, season, wearer and category are kept</p>
               </>
             ) : (
               <>

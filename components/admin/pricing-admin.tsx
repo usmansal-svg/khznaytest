@@ -13,7 +13,7 @@ import type { Settings } from "@/lib/pricing/constants";
 
 type SettingsResponse = { settings: Settings; version: number; source: string; history: { version: number; note: string | null; created_at: string; by: string | null }[]; audits: { id: number; table: string; key: string; at: string; by: string; note: string | null; changes: { field: string; from: string; to: string }[] }[]; warning?: string };
 type Preview = { rows: { slug: string; name: string; profile: string; weight_kg: number; current: number; proposed: number; change_pct: number }[]; multiples: { profile: string; current: number; proposed: number }[] };
-type SubRow = { slug: string; code: string; name: string; gender: string; weight_kg: number; profile_code: string; value_index: number; market_ceiling: number | null; market_price: number | null; active: boolean; estimate?: { landed_cost: number; bnwt: number; premium: number; excellent: number; very_good: number; gp_pct: number } };
+type SubRow = { slug: string; code: string; name: string; gender: string; category_slug: string; category: string; weight_kg: number; profile_code: string; value_index: number; market_ceiling: number | null; market_price: number | null; active: boolean; estimate?: { landed_cost: number; bnwt: number; premium: number; excellent: number; very_good: number; gp_pct: number } };
 
 const rs = (n: number) => `Rs ${Math.round(n).toLocaleString("en-PK")}`;
 const pct = (n: number) => `${n >= 0 ? "+" : ""}${(n * 100).toFixed(1)}%`;
@@ -284,6 +284,7 @@ export function PricingAdmin() {
 
 function SubCategoryEditor() {
   const [rows, setRows] = useState<SubRow[] | null>(null);
+  const [cats, setCats] = useState<{ slug: string; name: string; gender: string }[]>([]);
   const [edits, setEdits] = useState<Record<string, Partial<SubRow>>>({});
   const [live, setLive] = useState<Record<string, NonNullable<SubRow["estimate"]>>>({});
   const [busy, setBusy] = useState(false);
@@ -291,6 +292,7 @@ function SubCategoryEditor() {
 
   useEffect(() => {
     fetch("/api/admin/sub-categories").then((r) => r.json()).then((j) => setRows(j.rows));
+    fetch("/api/admin/categories").then((r) => r.json()).then((j) => setCats((j.categories ?? []).filter((c: { active: boolean }) => c.active)));
   }, []);
 
   // Live preview: every keystroke reprices the edited rows on the server
@@ -337,11 +339,11 @@ function SubCategoryEditor() {
 
   return (
     <div className="space-y-6">
-    <AddForms onAdded={async (text) => { setMessage({ tone: "ok", text }); setRows((await (await fetch("/api/admin/sub-categories")).json()).rows); }} onError={(text) => setMessage({ tone: "error", text })} />
+    <AddForms cats={cats} onAdded={async (text) => { setMessage({ tone: "ok", text }); setRows((await (await fetch("/api/admin/sub-categories")).json()).rows); setCats(((await (await fetch("/api/admin/categories")).json()).categories ?? []).filter((c: { active: boolean }) => c.active)); }} onError={(text) => setMessage({ tone: "error", text })} />
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
-          <span>Categories <span className="font-normal text-muted-foreground">· weight drives cost, profile drives the multiple, value index corrects the rest</span></span>
+          <span>Sub-categories <span className="font-normal text-muted-foreground">· weight drives cost, profile drives the multiple, value index corrects the rest</span></span>
           <span className="flex items-center gap-2">
             {message && <span className={cn("text-xs", message.tone === "ok" ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400")}>{message.text}</span>}
             <Button size="sm" onClick={save} disabled={!dirty || busy}>{busy ? "Saving…" : `Save ${dirty || ""} change${dirty === 1 ? "" : "s"}`}</Button>
@@ -353,7 +355,7 @@ function SubCategoryEditor() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-left text-xs uppercase text-muted-foreground">
-              <tr><th className="pb-2">Gender</th><th className="pb-2">Category</th><th className="pb-2">Code</th><th className="pb-2">Weight kg</th><th className="pb-2">Profile</th><th className="pb-2">Value index</th><th className="pb-2 text-right">Landed</th><th className="pb-2 text-right">BNWT</th><th className="pb-2 text-right">Premium</th><th className="pb-2 text-right">Excellent</th><th className="pb-2 text-right">Very Good</th><th className="pb-2 text-right">GP %</th><th className="pb-2">Market ceiling</th><th className="pb-2">Market price</th><th className="pb-2">Active</th></tr>
+              <tr><th className="pb-2">Gender</th><th className="pb-2">Category</th><th className="pb-2">Sub-category</th><th className="pb-2">Code</th><th className="pb-2">Weight kg</th><th className="pb-2">Profile</th><th className="pb-2">Value index</th><th className="pb-2 text-right">Landed</th><th className="pb-2 text-right">BNWT</th><th className="pb-2 text-right">Premium</th><th className="pb-2 text-right">Excellent</th><th className="pb-2 text-right">Very Good</th><th className="pb-2 text-right">GP %</th><th className="pb-2">Market ceiling</th><th className="pb-2">Market price</th><th className="pb-2">Active</th></tr>
             </thead>
             <tbody className="divide-y">
               {rows.map((r) => {
@@ -365,9 +367,12 @@ function SubCategoryEditor() {
                 const num = cn("py-1.5 pr-2 text-right tabular-nums", previewing && "text-amber-700 dark:text-amber-400");
                 return (
                   <tr key={r.slug} className={cn(!v.active && "opacity-50")}>
+                    <td className="py-1.5 pr-2 text-xs capitalize text-muted-foreground">{r.gender}</td>
                     <td className="py-1.5 pr-2">
-                      <select value={v.gender} onChange={(ev) => edit(r.slug, { gender: ev.target.value })} className={cn("h-8 rounded-md border border-input bg-transparent px-2 text-sm", changed("gender") && "border-amber-500")}>
-                        {GENDER_OPTIONS.map((g) => <option key={g.code} value={g.code}>{g.name}</option>)}
+                      <select value={v.category_slug} onChange={(ev) => edit(r.slug, { category_slug: ev.target.value })} className={cn("h-8 max-w-[11rem] rounded-md border border-input bg-transparent px-2 text-sm", changed("category_slug") && "border-amber-500")}>
+                        {GENDER_OPTIONS.filter((g) => cats.some((c) => c.gender === g.code)).map((g) => (
+                          <optgroup key={g.code} label={g.name}>{cats.filter((c) => c.gender === g.code).map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}</optgroup>
+                        ))}
                       </select>
                     </td>
                     <td className="py-1.5 pr-2"><Input value={v.name} onChange={(ev) => edit(r.slug, { name: ev.target.value })} className={cn("h-8 w-44", changed("name") && "border-amber-500")} /></td>
@@ -409,18 +414,33 @@ const GENDER_OPTIONS = [
 
 const MEASURE_LABELS: Record<string, string> = { top: "Top · chest, length", bottom: "Bottom · waist, inseam", dress: "Dress · bust, waist, length", outer: "Outerwear · chest, length, sleeve", kids_top: "Kids top · height, chest", kids_bottom: "Kids bottom · height, waist" };
 
-function AddForms({ onAdded, onError }: { onAdded: (text: string) => void; onError: (text: string) => void }) {
-  const [open, setOpen] = useState<"sub" | null>(null);
+function AddForms({ cats, onAdded, onError }: { cats: { slug: string; name: string; gender: string }[]; onAdded: (text: string) => void; onError: (text: string) => void }) {
+  const [open, setOpen] = useState<"sub" | "cat" | null>(null);
   const [busy, setBusy] = useState(false);
-  const [sc, setSc] = useState({ name: "", gender: "men", weight_kg: "", profile_code: "fast", value_index: "1.00", measure_type: "top", code: "" });
+  const [sc, setSc] = useState({ name: "", gender: "men", category_slug: "", weight_kg: "", profile_code: "fast", value_index: "1.00", measure_type: "top", code: "" });
+  const [cat, setCat] = useState({ gender: "men", name: "" });
+  const catsFor = cats.filter((c) => c.gender === sc.gender);
+  useEffect(() => { if (catsFor.length && !catsFor.some((c) => c.slug === sc.category_slug)) setSc((x) => ({ ...x, category_slug: catsFor[0].slug })); }, [catsFor, sc.category_slug]);
+
+  async function addCat() {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/categories", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(cat) });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error);
+      onAdded(`Added category ${j.category.name} under ${cat.gender}.`);
+      setCat({ ...cat, name: "" });
+      setOpen(null);
+    } catch (e) { onError(e instanceof Error ? e.message : "Failed."); } finally { setBusy(false); }
+  }
 
   async function addSub() {
     setBusy(true);
     try {
-      const res = await fetch("/api/admin/sub-categories", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: sc.name, gender: sc.gender, weight_kg: Number(sc.weight_kg), profile_code: sc.profile_code, value_index: Number(sc.value_index), measure_type: sc.measure_type, code: sc.code || undefined }) });
+      const res = await fetch("/api/admin/sub-categories", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: sc.name, category_slug: sc.category_slug, weight_kg: Number(sc.weight_kg), profile_code: sc.profile_code, value_index: Number(sc.value_index), measure_type: sc.measure_type, code: sc.code || undefined }) });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error);
-      onAdded(`Added ${j.sub_category.name} (code ${j.sub_category.code}). It's on the tag form now.`);
+      onAdded(`Added ${j.sub_category.name} (code ${j.sub_category.code}) under ${cats.find((c) => c.slug === sc.category_slug)?.name}. It's on the tag form now.`);
       setSc((x) => ({ ...x, name: "", weight_kg: "", code: "" }));
       setOpen(null);
     } catch (e) { onError(e instanceof Error ? e.message : "Failed."); } finally { setBusy(false); }
@@ -430,20 +450,31 @@ function AddForms({ onAdded, onError }: { onAdded: (text: string) => void; onErr
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
-          <span>Add a category</span>
-          <Button size="sm" variant={open === "sub" ? "default" : "outline"} onClick={() => setOpen(open === "sub" ? null : "sub")}>+ Category</Button>
+          <span>Add to the catalogue</span>
+          <span className="flex gap-2">
+            <Button size="sm" variant={open === "sub" ? "default" : "outline"} onClick={() => setOpen(open === "sub" ? null : "sub")}>+ Sub-category</Button>
+            <Button size="sm" variant={open === "cat" ? "default" : "outline"} onClick={() => setOpen(open === "cat" ? null : "cat")}>+ Category</Button>
+          </span>
         </CardTitle>
       </CardHeader>
       {open === "sub" && (
         <CardContent className="grid gap-3 sm:grid-cols-3">
           <div className="grid gap-1.5"><Label>Gender</Label><select value={sc.gender} onChange={(e) => setSc({ ...sc, gender: e.target.value })} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">{GENDER_OPTIONS.map((g) => <option key={g.code} value={g.code}>{g.name}</option>)}</select></div>
-          <div className="grid gap-1.5 sm:col-span-2"><Label>Category name</Label><Input value={sc.name} onChange={(e) => setSc({ ...sc, name: e.target.value })} placeholder="e.g. Cargo pants" /></div>
+          <div className="grid gap-1.5"><Label>Category</Label><select value={sc.category_slug} onChange={(e) => setSc({ ...sc, category_slug: e.target.value })} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">{catsFor.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}{catsFor.length === 0 && <option value="">Add a category first</option>}</select></div>
+          <div className="grid gap-1.5"><Label>Sub-category name</Label><Input value={sc.name} onChange={(e) => setSc({ ...sc, name: e.target.value })} placeholder="e.g. Crop top" /></div>
           <div className="grid gap-1.5"><Label>Default weight kg</Label><Input type="number" step="0.01" min="0.01" value={sc.weight_kg} onChange={(e) => setSc({ ...sc, weight_kg: e.target.value })} placeholder="0.45" /></div>
           <div className="grid gap-1.5"><Label>Profile</Label><select value={sc.profile_code} onChange={(e) => setSc({ ...sc, profile_code: e.target.value })} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"><option value="fast">Fast</option><option value="standard">Standard</option><option value="slow">Slow</option></select></div>
           <div className="grid gap-1.5"><Label>Value index</Label><Input type="number" step="0.05" min="0.05" value={sc.value_index} onChange={(e) => setSc({ ...sc, value_index: e.target.value })} /></div>
           <div className="grid gap-1.5 sm:col-span-2"><Label>Measurements on the tag</Label><select value={sc.measure_type} onChange={(e) => setSc({ ...sc, measure_type: e.target.value })} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">{Object.entries(MEASURE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
           <div className="grid gap-1.5"><Label>SKU code <span className="font-normal text-muted-foreground">· 3 letters, optional</span></Label><Input value={sc.code} maxLength={3} onChange={(e) => setSc({ ...sc, code: e.target.value.toUpperCase().replace(/[^A-Z]/g, "") })} placeholder="auto" className="font-mono uppercase" /></div>
-          <div className="sm:col-span-3"><Button disabled={busy || !sc.name.trim() || !(Number(sc.weight_kg) > 0) || !(Number(sc.value_index) > 0)} onClick={addSub}>Add category</Button><span className="ml-3 text-xs text-muted-foreground">Weigh a few pieces for the default weight — it drives the planning estimate.</span></div>
+          <div className="sm:col-span-3"><Button disabled={busy || !sc.name.trim() || !sc.category_slug || !(Number(sc.weight_kg) > 0) || !(Number(sc.value_index) > 0)} onClick={addSub}>Add sub-category</Button><span className="ml-3 text-xs text-muted-foreground">Weigh a few pieces for the default weight — it drives the planning estimate.</span></div>
+        </CardContent>
+      )}
+      {open === "cat" && (
+        <CardContent className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-1.5"><Label>Gender</Label><select value={cat.gender} onChange={(e) => setCat({ ...cat, gender: e.target.value })} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">{GENDER_OPTIONS.map((g) => <option key={g.code} value={g.code}>{g.name}</option>)}</select></div>
+          <div className="grid gap-1.5 sm:col-span-2"><Label>Category name</Label><Input value={cat.name} onChange={(e) => setCat({ ...cat, name: e.target.value })} placeholder="e.g. Tops & Blouses" /></div>
+          <div className="sm:col-span-3"><Button disabled={busy || !cat.name.trim()} onClick={addCat}>Add category</Button><span className="ml-3 text-xs text-muted-foreground">Then add sub-categories under it — that&apos;s what taggers pick.</span></div>
         </CardContent>
       )}
     </Card>

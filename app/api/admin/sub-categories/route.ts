@@ -13,14 +13,14 @@ import { computePrice } from "@/lib/pricing/engine";
 import { loadPricingContext } from "@/lib/pricing/repo";
 
 const PROFILES = ["fast", "standard", "slow"];
-const EDITABLE = ["gender", "name", "weight_kg", "profile_code", "value_index", "market_ceiling", "market_price", "per_piece_cost", "per_piece_share", "active"] as const;
+const EDITABLE = ["category_slug", "gender", "name", "weight_kg", "profile_code", "value_index", "market_ceiling", "market_price", "per_piece_cost", "per_piece_share", "active"] as const;
 const GENDERS = ["men", "women", "teenage", "kid", "toddler", "infant"];
 
 export async function GET() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("sub_categories")
-    .select("slug, code, category_slug, gender, name, weight_kg, profile_code, value_index, measure_type, market_ceiling, market_price, per_piece_cost, per_piece_share, active")
+    .select("slug, code, category_slug, gender, name, weight_kg, profile_code, value_index, measure_type, market_ceiling, market_price, per_piece_cost, per_piece_share, active, categories(name, sort_order)")
     .order("name");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   const genderOrder = ["men", "women", "teenage", "kid", "toddler", "infant"];
@@ -30,12 +30,16 @@ export async function GET() {
   const rows = (data ?? [])
     .map((r) => {
       const est = computePrice({ weightKg: Number(r.weight_kg), profileCode: r.profile_code, valueIndex: Number(r.value_index) }, ctx.settings, ctx.refs);
+      const cat = (Array.isArray(r.categories) ? r.categories[0] : r.categories) as { name: string; sort_order: number } | null;
       return {
         ...r,
+        category: cat?.name ?? "",
+        category_order: cat?.sort_order ?? 0,
+        categories: undefined,
         estimate: { landed_cost: Math.round(est.landedCost), bnwt: est.gradePrices.bnwt, premium: est.gradePrices.premium, excellent: est.gradePrices.excellent, very_good: est.gradePrices.very_good, gp_pct: est.gpPct },
       };
     })
-    .sort((a, b) => genderOrder.indexOf(a.gender) - genderOrder.indexOf(b.gender) || a.name.localeCompare(b.name));
+    .sort((a, b) => genderOrder.indexOf(a.gender) - genderOrder.indexOf(b.gender) || a.category_order - b.category_order || a.name.localeCompare(b.name));
   return NextResponse.json({ rows, basis: { planning_rate: ctx.settings.blendedRate, fx: ctx.settings.fx } });
 }
 
@@ -92,7 +96,7 @@ function suggestCode(name: string, used: Set<string>): string {
 export async function PUT(request: Request) {
   const gate = await requireManager();
   if ("response" in gate) return gate.response;
-  let body: { name?: string; gender?: string; weight_kg?: number; profile_code?: string; value_index?: number; measure_type?: string; code?: string; market_ceiling?: number | null; market_price?: number | null };
+  let body: { name?: string; category_slug?: string; weight_kg?: number; profile_code?: string; value_index?: number; measure_type?: string; code?: string; market_ceiling?: number | null; market_price?: number | null };
   try {
     body = await request.json();
   } catch {
@@ -100,8 +104,10 @@ export async function PUT(request: Request) {
   }
   const name = body.name?.trim();
   if (!name) return NextResponse.json({ error: "Name is required." }, { status: 400 });
-  if (!GENDERS.includes(String(body.gender))) return NextResponse.json({ error: "Pick a gender: Men, Women, Teenage, Kid, Toddler or Infant." }, { status: 400 });
-  const cat = { slug: `gender-${body.gender}` };
+  const { data: catRow } = await gate.db.from("categories").select("slug, gender").eq("slug", body.category_slug ?? "").not("gender", "is", null).maybeSingle();
+  if (!catRow) return NextResponse.json({ error: "Pick a category." }, { status: 400 });
+  const cat = { slug: catRow.slug };
+  const gender = catRow.gender as string;
   const err = check({ weight_kg: body.weight_kg, profile_code: body.profile_code, value_index: body.value_index, market_ceiling: body.market_ceiling ?? null, market_price: body.market_price ?? null });
   if (err) return NextResponse.json({ error: err }, { status: 400 });
   if (!MEASURE_TYPES.includes(String(body.measure_type))) return NextResponse.json({ error: "Measurement type must be top, bottom, dress, outer, kids_top or kids_bottom." }, { status: 400 });
@@ -116,10 +122,10 @@ export async function PUT(request: Request) {
   } else {
     code = suggestCode(name, usedCodes);
   }
-  let slug = `${body.gender}-${slugify(name)}`;
+  let slug = `${gender}-${slugify(name)}`;
   for (let i = 2; usedSlugs.has(slug); i++) slug = `${slug}-${i}`;
 
-  const row = { slug, code, category_slug: cat.slug, gender: body.gender, name, weight_kg: body.weight_kg, profile_code: body.profile_code, value_index: body.value_index, measure_type: body.measure_type, market_ceiling: body.market_ceiling ?? null, market_price: body.market_price ?? null, per_piece_share: 0, active: true };
+  const row = { slug, code, category_slug: cat.slug, gender, name, weight_kg: body.weight_kg, profile_code: body.profile_code, value_index: body.value_index, measure_type: body.measure_type, market_ceiling: body.market_ceiling ?? null, market_price: body.market_price ?? null, per_piece_share: 0, active: true };
   const { data, error } = await gate.db.from("sub_categories").insert(row).select("slug, code, name").single();
   if (error) return NextResponse.json({ error: error.message }, { status: error.code === "23505" ? 409 : 500 });
   await audit(gate.db, gate.staff.id, "sub_categories", slug, null, row, "created");
@@ -153,12 +159,17 @@ export async function PATCH(request: Request) {
 
     const { data: before } = await supabase
       .from("sub_categories")
-      .select("gender, name, weight_kg, profile_code, value_index, market_ceiling, market_price, per_piece_cost, per_piece_share, active")
+      .select("category_slug, gender, name, weight_kg, profile_code, value_index, market_ceiling, market_price, per_piece_cost, per_piece_share, active")
       .eq("slug", slug)
       .maybeSingle();
     if (!before) {
       results.push({ slug, ok: false, error: "Unknown sub-category." });
       continue;
+    }
+    if (typeof patch.category_slug === "string") {
+      const { data: c } = await supabase.from("categories").select("gender").eq("slug", patch.category_slug).not("gender", "is", null).maybeSingle();
+      if (!c) { results.push({ slug, ok: false, error: "Unknown category." }); continue; }
+      patch.gender = c.gender;
     }
     const { error } = await supabase.from("sub_categories").update(patch).eq("slug", slug);
     if (error) {

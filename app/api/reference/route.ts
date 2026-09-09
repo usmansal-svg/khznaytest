@@ -18,7 +18,7 @@ export async function GET() {
   const supabase = await dbFor(me);
   const ctx = await loadPricingContext(supabase);
   const [categoriesRes, outletsRes, lots] = await Promise.all([
-    supabase.from("categories").select("slug, name, sort_order, planning_rate_usd_per_kg").order("sort_order"),
+    supabase.from("categories").select("slug, name, sort_order, gender").not("gender", "is", null).eq("active", true).order("sort_order"),
     supabase.from("outlets").select("id, name, is_online").eq("active", true).order("id"),
     loadOpenLots(supabase, ctx.settings),
   ]);
