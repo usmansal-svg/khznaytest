@@ -3,9 +3,9 @@
 /**
  * The 50 × 90 mm hang tag — single-sided, one page per garment.
  *
- * Top to bottom: wordmark and the colour-dot zone (the month's floor
- * colour sticker goes there), brand, size, price with the comparable
- * price and saving, the markdown-sticker zone, then barcode and SKU.
+ * Top to bottom: wordmark (with unmarked space top-right for the month's
+ * colour sticker), brand, size, the price large, unmarked space for the
+ * markdown sticker, then barcode and SKU.
  * Nothing about condition, cost or outlet: the customer is holding the
  * garment and the SKU carries the rest.
  */
@@ -46,9 +46,8 @@ export function TagFaces({ item }: { item: TagItem }) {
       {/* hole */}
       <div className="absolute left-1/2 top-[3mm] size-[3.5mm] -translate-x-1/2 rounded-full border border-neutral-400" />
       {/* colour-dot zone: the month's floor colour sticker */}
-      <div className="absolute right-[3mm] top-[7mm] flex size-[10mm] items-center justify-center rounded-full border border-dashed border-neutral-400" title="colour sticker zone">
-        <span className="text-[4.5pt] text-neutral-400">colour</span>
-      </div>
+      {/* reserved, unmarked: the month's colour sticker goes here */}
+      <div className="absolute right-[3mm] top-[7mm] size-[10mm]" aria-hidden />
 
       <div className="px-[4mm] pt-[8mm]">
         <div className="text-[11pt] font-black tracking-tight">Khazanay</div>
@@ -70,27 +69,10 @@ export function TagFaces({ item }: { item: TagItem }) {
           </div>
         ) : (
           <div className="mt-[4mm]">
-            {item.compare ? (
-              <div className="text-[6.5pt] text-neutral-500">
-                New in store <span className="line-through">~{rs(item.compare.new_price)}</span>
-              </div>
-            ) : null}
-            <div className="flex items-end justify-between">
-              <div>
-                <div className="text-[5.5pt] uppercase tracking-wide text-neutral-500">Our price</div>
-                <div className="text-[19pt] font-black leading-none tabular-nums">{rs(item.list_price)}</div>
-              </div>
-              {item.compare && item.compare.saving_pct >= 10 ? (
-                <div className="mb-[0.5mm] rounded-sm border border-black px-[1.4mm] py-[0.5mm] text-center leading-tight">
-                  <div className="text-[5pt] uppercase tracking-wide">You save</div>
-                  <div className="text-[11pt] font-black">{item.compare.saving_pct}%</div>
-                </div>
-              ) : null}
-            </div>
-            {/* markdown sticker zone */}
-            <div className="mt-[2mm] flex h-[10mm] w-[42mm] items-center justify-center border border-dashed border-neutral-400" title="discount sticker zone">
-              <span className="text-[4.5pt] text-neutral-400">markdown sticker</span>
-            </div>
+            <div className="text-[5.5pt] uppercase tracking-wide text-neutral-500">Price</div>
+            <div className="text-[24pt] font-black leading-none tabular-nums">{rs(item.list_price)}</div>
+            {/* reserved, unmarked: the markdown sticker goes here */}
+            <div className="mt-[2mm] h-[10mm] w-[42mm]" aria-hidden />
           </div>
         )}
       </div>
