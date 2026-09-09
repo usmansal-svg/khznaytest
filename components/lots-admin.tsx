@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 type Pnl = { pieces: number; rejects: number; reject_pct: number; kg_tagged_so_far: number; pct_done: number | null; lot_cost: number | null; cost_tagged: number; expected_revenue: number; expected_gp: number; gp_pct: number; gp_per_piece: number; sold: number; sold_revenue: number };
-type Lot = { id: number; code: string; supplier: string; basis: "kg" | "pc"; rate: number | null; kg_bought: number | null; kg_tagged: number | null; provisional_yield: number; yield: number; effective_rate: number | null; status: "open" | "closed"; parent_lot_id: number | null; arrived_on: string | null; notes: string | null; pnl: Pnl };
+type Lot = { id: number; code: string; supplier: string; basis: "kg" | "pc"; rate: number | null; kg_bought: number | null; kg_tagged: number | null; provisional_yield: number; yield: number; effective_rate: number | null; status: "open" | "closed" | "split"; parent_lot_id: number | null; arrived_on: string | null; notes: string | null; pnl: Pnl };
 
 const rs = (n: number) => `Rs ${Math.round(n).toLocaleString("en-PK")}`;
 const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
@@ -28,7 +28,6 @@ export function LotsAdmin() {
   const [kg, setKg] = useState("");
   const [yieldEst, setYieldEst] = useState("");
   const [arrived, setArrived] = useState("");
-  const [parent, setParent] = useState("");
   const [notes, setNotes] = useState("");
 
   async function load() {
@@ -61,12 +60,23 @@ export function LotsAdmin() {
   async function create() {
     const ok = await call(
       "POST",
-      { code, supplier, basis, rate: Number(rate), kg: basis === "kg" ? Number(kg) : null, provisional_yield: yieldEst ? Number(yieldEst) : null, arrived_on: arrived || null, notes, parent_lot_id: parent ? Number(parent) : null },
+      { code, supplier, basis, rate: Number(rate), kg: basis === "kg" ? Number(kg) : null, provisional_yield: yieldEst ? Number(yieldEst) : null, arrived_on: arrived || null, notes },
       `Lot ${code.toUpperCase()} created.`,
     );
     if (ok) {
-      setCode(""); setSupplier(""); setRate(""); setKg(""); setYieldEst(""); setArrived(""); setParent(""); setNotes("");
+      setCode(""); setSupplier(""); setRate(""); setKg(""); setYieldEst(""); setArrived(""); setNotes("");
     }
+  }
+
+  const [splitting, setSplitting] = useState<Lot | null>(null);
+  const [piles, setPiles] = useState<string[]>(["", ""]);
+
+  async function split() {
+    if (!splitting) return;
+    const kgs = piles.map((p) => Number(p)).filter((n) => n > 0);
+    if (!kgs.length) return setMessage({ tone: "error", text: "Enter the kg of each pile." });
+    const ok = await call("PATCH", { id: splitting.id, action: "split", piles: kgs.map((kg) => ({ kg })) }, `${splitting.code} split into ${kgs.length} piles: ${kgs.map((k, i) => `${splitting.code}-${String.fromCharCode(65 + i)} ${k} kg`).join(", ")}. Tag from the piles.`);
+    if (ok) { setSplitting(null); setPiles(["", ""]); }
   }
 
   async function close(lot: Lot) {
@@ -81,7 +91,7 @@ export function LotsAdmin() {
   if (!lots) return <p className="text-muted-foreground">Loading…</p>;
 
   const open = lots.filter((l) => l.status === "open");
-  const closed = lots.filter((l) => l.status === "closed");
+  const closed = lots.filter((l) => l.status !== "open");
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -119,21 +129,28 @@ export function LotsAdmin() {
               </>
             )}
             <div className="grid gap-1.5"><Label htmlFor="arrived">Arrived</Label><Input id="arrived" type="date" value={arrived} onChange={(e) => setArrived(e.target.value)} /></div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="parent">Split from <span className="font-normal text-muted-foreground">· optional</span></Label>
-              <select id="parent" value={parent} onChange={(e) => setParent(e.target.value)} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
-                <option value="">— not a split —</option>
-                {lots.map((l) => <option key={l.id} value={l.id}>{l.code}</option>)}
-              </select>
-              <p className="text-xs text-muted-foreground">A bundle tagged across two seasons becomes two lots under one parent. Weigh each pile when you separate them.</p>
-            </div>
             <div className="grid gap-1.5"><Label htmlFor="notes">Notes</Label><Input id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
             <Button onClick={create} disabled={busy || !code || !rate || (basis === "kg" && !kg)} className="w-full">Create lot</Button>
           </CardContent>
         </Card>
 
         <div className="space-y-6">
-          <LotTable title={`Open · ${open.length}`} lots={open} onClose={close} busy={busy} />
+          {splitting && (
+            <Card className="border-amber-500">
+              <CardHeader className="pb-3"><CardTitle className="text-base">Split {splitting.code} · {splitting.kg_bought} kg into weighed piles</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-xs text-muted-foreground">Weigh each pile as you separate it. The piles become {splitting.code}-A, -B, … with the same rate and yield; {splitting.code} keeps the cost and can no longer be tagged from. Piles so far: {piles.map((p) => Number(p) || 0).reduce((a, b) => a + b, 0)} of {splitting.kg_bought} kg.</p>
+                <div className="flex flex-wrap gap-2">
+                  {piles.map((p, i) => (
+                    <div key={i} className="grid gap-1"><Label className="text-xs">{splitting.code}-{String.fromCharCode(65 + i)} · kg</Label><Input type="number" step="0.1" min="0" value={p} onChange={(e) => setPiles((ps) => ps.map((x, j) => (j === i ? e.target.value : x)))} className="h-10 w-28" /></div>
+                  ))}
+                  <Button type="button" variant="outline" className="self-end" onClick={() => setPiles((ps) => [...ps, ""])}>+ pile</Button>
+                </div>
+                <div className="flex gap-2"><Button disabled={busy} onClick={split}>Create piles</Button><Button variant="ghost" onClick={() => setSplitting(null)}>Cancel</Button></div>
+              </CardContent>
+            </Card>
+          )}
+          <LotTable title={`Open · ${open.length}`} lots={open} onClose={close} onSplit={(l) => { setSplitting(l); setPiles(["", ""]); }} busy={busy} />
           {closed.length > 0 && <LotTable title={`Closed · ${closed.length}`} lots={closed} busy={busy} onReopen={(l) => call("PATCH", { id: l.id, action: "reopen" }, `${l.code} reopened.`)} />}
         </div>
       </div>
@@ -141,7 +158,7 @@ export function LotsAdmin() {
   );
 }
 
-function LotTable({ title, lots, onClose, onReopen, busy }: { title: string; lots: Lot[]; onClose?: (l: Lot) => void; onReopen?: (l: Lot) => void; busy: boolean }) {
+function LotTable({ title, lots, onClose, onSplit, onReopen, busy }: { title: string; lots: Lot[]; onClose?: (l: Lot) => void; onSplit?: (l: Lot) => void; onReopen?: (l: Lot) => void; busy: boolean }) {
   return (
     <Card>
       <CardHeader className="pb-2"><CardTitle className="text-base">{title}</CardTitle></CardHeader>
@@ -161,7 +178,7 @@ function LotTable({ title, lots, onClose, onReopen, busy }: { title: string; lot
               <tbody className="divide-y">
                 {lots.map((l) => (
                   <tr key={l.id}>
-                    <td className="py-2 pr-2"><div className="font-mono text-xs font-semibold">{l.code}</div><div className="text-xs text-muted-foreground">{l.supplier}{l.parent_lot_id ? " · split" : ""}</div></td>
+                    <td className="py-2 pr-2"><div className="font-mono text-xs font-semibold">{l.code}</div><div className="text-xs text-muted-foreground">{l.supplier}{l.parent_lot_id ? " · pile" : ""}</div></td>
                     <td className="py-2 pr-2 tabular-nums">{l.basis === "kg" ? `$${l.rate}/kg` : `Rs ${l.rate}/pc`}{l.basis === "kg" && l.kg_bought ? <div className="text-xs text-muted-foreground">{l.kg_bought} kg</div> : null}</td>
                     <td className="py-2 pr-2 tabular-nums">{l.basis === "kg" ? <>{pct(l.yield)}<div className="text-xs text-muted-foreground">{l.kg_tagged != null ? "actual" : "provisional"}</div></> : "—"}</td>
                     <td className="py-2 pr-2 tabular-nums">{l.effective_rate == null ? "—" : l.basis === "kg" ? `$${l.effective_rate.toFixed(2)}/kg` : `Rs ${l.effective_rate}`}</td>
@@ -173,8 +190,10 @@ function LotTable({ title, lots, onClose, onReopen, busy }: { title: string; lot
                     <td className="py-2 pr-2 text-right tabular-nums">{rs(l.pnl.expected_gp)}<div className="text-xs text-muted-foreground">{pct(l.pnl.gp_pct)}</div></td>
                     <td className="py-2 pr-2 text-right font-semibold tabular-nums">{rs(l.pnl.gp_per_piece)}</td>
                     <td className="py-2 text-right">
+                      {onSplit && l.basis === "kg" && <Button size="sm" variant="outline" disabled={busy} onClick={() => onSplit(l)}>Split</Button>}{" "}
                       {onClose && <Button size="sm" variant="outline" disabled={busy} onClick={() => onClose(l)}>Close</Button>}
-                      {onReopen && <Button size="sm" variant="outline" disabled={busy} onClick={() => onReopen(l)}>Reopen</Button>}
+                      {onReopen && l.status === "closed" && <Button size="sm" variant="outline" disabled={busy} onClick={() => onReopen(l)}>Reopen</Button>}
+                      {l.status === "split" && <span className="text-xs text-muted-foreground">split into piles</span>}
                     </td>
                   </tr>
                 ))}

@@ -68,6 +68,7 @@ export async function POST(request: Request) {
   const ctx = await loadPricingContext(supabase);
   const [brand, lot] = await Promise.all([resolveBrandDb(supabase, body.brand_text), loadLot(supabase, Number(body.lot_id), ctx.settings)]);
   if (!lot) return bad(`Unknown lot: ${body.lot_id}`);
+  if (lot.status === "split") return bad(`Lot ${lot.code} was split into piles — tag from one of its children.`);
   if (lot.status !== "open") return bad(`Lot ${lot.code} is closed — reopen it to tag from it.`);
 
   const subCategory = ctx.subCategories.find((s) => s.slug === body.sub_category_id);

@@ -79,7 +79,7 @@ export async function POST(request: Request) {
   return NextResponse.json({ lot: serialise(lotFromRow(data as Parameters<typeof lotFromRow>[0], ctx.settings)) });
 }
 
-type PatchBody = { id?: number; action?: "close" | "reopen"; kg_tagged?: number | null; rate?: number; provisional_yield?: number; supplier?: string; notes?: string | null; kg?: number | null };
+type PatchBody = { id?: number; action?: "close" | "reopen" | "split"; kg_tagged?: number | null; piles?: { kg?: number; note?: string }[]; rate?: number; provisional_yield?: number; supplier?: string; notes?: string | null; kg?: number | null };
 
 export async function PATCH(request: Request) {
   let body: PatchBody;
@@ -99,6 +99,31 @@ export async function PATCH(request: Request) {
     patch.status = "closed";
     patch.closed_at = new Date().toISOString();
     if (body.kg_tagged != null) patch.kg_tagged = body.kg_tagged;
+  } else if (body.action === "split") {
+    // Weigh each pile as it is separated; the children inherit rate and
+    // yield, the parent keeps the cost and stops being taggable.
+    const piles = (body as { piles?: { kg?: number; note?: string }[] }).piles ?? [];
+    if (!piles.length || piles.some((p) => !(typeof p.kg === "number" && p.kg > 0))) return bad("Give the kg of each pile.");
+    const { data: parent } = await supabase.from("lots").select(LOT_COLUMNS).eq("id", body.id).maybeSingle();
+    if (!parent) return bad("No such lot.");
+    if (parent.basis !== "kg") return bad("Only kg lots split — per-piece lots have no weight to divide.");
+    if (parent.status !== "open") return bad(`Lot ${parent.code} is ${parent.status}.`);
+    const total = piles.reduce((s, p) => s + p.kg!, 0);
+    if (parent.kg && total > Number(parent.kg) * 1.02) return bad(`Piles total ${total} kg but the lot is ${parent.kg} kg.`);
+    const ctx = await loadPricingContext(supabase);
+    const created = [];
+    for (let i = 0; i < piles.length; i++) {
+      const code = `${parent.code}-${String.fromCharCode(65 + i)}`;
+      const { data: child, error } = await supabase
+        .from("lots")
+        .insert({ code, supplier: parent.supplier, basis: "kg", rate: parent.rate, rate_usd_per_kg: parent.rate, kg: piles[i].kg, provisional_yield: parent.provisional_yield, arrived_on: parent.arrived_on, notes: piles[i].note?.trim() || null, parent_lot_id: parent.id })
+        .select(LOT_COLUMNS)
+        .single();
+      if (error) return NextResponse.json({ error: `${code}: ${error.message}` }, { status: error.code === "23505" ? 409 : 500 });
+      created.push(serialise(lotFromRow(child as Parameters<typeof lotFromRow>[0], ctx.settings)));
+    }
+    await supabase.from("lots").update({ status: "split" }).eq("id", parent.id);
+    return NextResponse.json({ children: created });
   } else if (body.action === "reopen") {
     patch.status = "open";
     patch.closed_at = null;

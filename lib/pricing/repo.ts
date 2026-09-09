@@ -252,7 +252,7 @@ export type DbLot = {
   kgBought: number | null;
   kgTagged: number | null;
   provisionalYield: number;
-  status: "open" | "closed";
+  status: "open" | "closed" | "split";
   parentLotId: number | null;
   arrivedOn: string | null;
   notes: string | null;
