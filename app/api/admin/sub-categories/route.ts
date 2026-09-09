@@ -38,6 +38,34 @@ export async function GET() {
   return NextResponse.json({ rows, basis: { planning_rate: ctx.settings.blendedRate, fx: ctx.settings.fx } });
 }
 
+/**
+ * POST /api/admin/sub-categories?preview=1 { rows: [{ slug, weight_kg?, profile_code?, value_index? }] }
+ * Live estimates for draft edits — nothing is saved. Same engine, same
+ * settings, so what the screen shows while typing is what Save will give.
+ */
+export async function POST(request: Request) {
+  const gate = await requireManager();
+  if ("response" in gate) return gate.response;
+  let body: { rows?: { slug?: string; weight_kg?: number; profile_code?: string; value_index?: number }[] };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Body must be JSON." }, { status: 400 });
+  }
+  const ctx = await loadPricingContext(gate.db);
+  const estimates: Record<string, { landed_cost: number; bnwt: number; premium: number; excellent: number; very_good: number; gp_pct: number }> = {};
+  for (const r of body.rows ?? []) {
+    const base = ctx.subCategories.find((s) => s.slug === r.slug);
+    if (!base) continue;
+    const weightKg = typeof r.weight_kg === "number" && r.weight_kg > 0 ? r.weight_kg : base.weightKg;
+    const valueIndex = typeof r.value_index === "number" && r.value_index > 0 ? r.value_index : base.valueIndex;
+    const profileCode = (["fast", "standard", "slow"].includes(String(r.profile_code)) ? r.profile_code : base.profileCode) as typeof base.profileCode;
+    const est = computePrice({ weightKg, profileCode, valueIndex }, ctx.settings, ctx.refs);
+    estimates[base.slug] = { landed_cost: Math.round(est.landedCost), bnwt: est.gradePrices.bnwt, premium: est.gradePrices.premium, excellent: est.gradePrices.excellent, very_good: est.gradePrices.very_good, gp_pct: est.gpPct };
+  }
+  return NextResponse.json({ estimates });
+}
+
 export async function PATCH(request: Request) {
   let body: { rows?: Record<string, unknown>[] };
   try {

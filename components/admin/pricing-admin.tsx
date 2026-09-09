@@ -285,12 +285,29 @@ export function PricingAdmin() {
 function SubCategoryEditor() {
   const [rows, setRows] = useState<SubRow[] | null>(null);
   const [edits, setEdits] = useState<Record<string, Partial<SubRow>>>({});
+  const [live, setLive] = useState<Record<string, NonNullable<SubRow["estimate"]>>>({});
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
 
   useEffect(() => {
     fetch("/api/admin/sub-categories").then((r) => r.json()).then((j) => setRows(j.rows));
   }, []);
+
+  // Live preview: every keystroke reprices the edited rows on the server
+  // (debounced), shown in amber until saved. Nothing is written.
+  useEffect(() => {
+    const slugs = Object.keys(edits);
+    if (!slugs.length) { setLive({}); return; }
+    const ctrl = new AbortController();
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/admin/sub-categories?preview=1", { method: "POST", headers: { "content-type": "application/json" }, signal: ctrl.signal, body: JSON.stringify({ rows: slugs.map((slug) => ({ slug, ...edits[slug] })) }) });
+        const j = await res.json();
+        if (res.ok) setLive(j.estimates ?? {});
+      } catch { /* aborted or offline — keep the last preview */ }
+    }, 250);
+    return () => { clearTimeout(t); ctrl.abort(); };
+  }, [edits]);
 
   function edit(slug: string, patch: Partial<SubRow>) {
     setEdits((e) => ({ ...e, [slug]: { ...e[slug], ...patch } }));
@@ -309,6 +326,7 @@ function SubCategoryEditor() {
       const failed = (j.results as { slug: string; ok: boolean; error?: string }[]).filter((r) => !r.ok);
       setMessage(failed.length ? { tone: "error", text: failed.map((f) => `${f.slug}: ${f.error}`).join(" · ") } : { tone: "ok", text: `Saved ${payload.length} sub-categor${payload.length === 1 ? "y" : "ies"}. New tags price with the new values.` });
       setEdits({});
+      setLive({});
       setRows((await (await fetch("/api/admin/sub-categories")).json()).rows);
     }
     setBusy(false);
@@ -329,7 +347,7 @@ function SubCategoryEditor() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="mb-3 text-xs text-muted-foreground">Prices shown are planning estimates at the default weight and planning rate (imported), exactly like the Excel sheet; a real garment prices from its lot and scale weight. Edited weights and indices reprice the row after Save. Weights are the spec&apos;s open item #1 — weigh 20 pieces per category and replace the estimates. Market ceiling warns the tagger when cost-led pricing runs above the market; market price is the &quot;new in store&quot; anchor printed on the tag.</p>
+        <p className="mb-3 text-xs text-muted-foreground">Prices shown are planning estimates at the default weight and planning rate (imported), exactly like the Excel sheet; a real garment prices from its lot and scale weight. Edit a weight, profile or index and the row&apos;s prices update as you type — in amber until you press Save. Weights are the spec&apos;s open item #1 — weigh 20 pieces per category and replace the estimates. Market ceiling warns the tagger when cost-led pricing runs above the market; market price is the &quot;new in store&quot; anchor printed on the tag.</p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-left text-xs uppercase text-muted-foreground">
@@ -340,6 +358,9 @@ function SubCategoryEditor() {
                 const e = edits[r.slug] ?? {};
                 const v = { ...r, ...e };
                 const changed = (k: keyof SubRow) => k in e;
+                const est = live[r.slug] ?? r.estimate;
+                const previewing = Boolean(live[r.slug]);
+                const num = cn("py-1.5 pr-2 text-right tabular-nums", previewing && "text-amber-700 dark:text-amber-400");
                 return (
                   <tr key={r.slug} className={cn(!v.active && "opacity-50")}>
                     <td className="py-1.5 pr-2"><div>{r.name}</div><div className="text-xs text-muted-foreground">{r.category}</div></td>
@@ -351,12 +372,12 @@ function SubCategoryEditor() {
                       </select>
                     </td>
                     <td className="py-1.5 pr-2"><Input type="number" step="0.05" min="0.05" value={v.value_index} onChange={(ev) => edit(r.slug, { value_index: Number(ev.target.value) })} className={cn("h-8 w-24", changed("value_index") && "border-amber-500")} /></td>
-                    <td className="py-1.5 pr-2 text-right tabular-nums text-muted-foreground">{r.estimate ? rs(r.estimate.landed_cost) : "—"}</td>
-                    <td className="py-1.5 pr-2 text-right tabular-nums">{r.estimate ? rs(r.estimate.bnwt) : "—"}</td>
-                    <td className="py-1.5 pr-2 text-right font-semibold tabular-nums">{r.estimate ? rs(r.estimate.premium) : "—"}</td>
-                    <td className="py-1.5 pr-2 text-right tabular-nums">{r.estimate ? rs(r.estimate.excellent) : "—"}</td>
-                    <td className="py-1.5 pr-2 text-right tabular-nums">{r.estimate ? rs(r.estimate.very_good) : "—"}</td>
-                    <td className="py-1.5 pr-2 text-right tabular-nums">{r.estimate ? pct(r.estimate.gp_pct) : "—"}</td>
+                    <td className={cn(num, !previewing && "text-muted-foreground")}>{est ? rs(est.landed_cost) : "—"}</td>
+                    <td className={num}>{est ? rs(est.bnwt) : "—"}</td>
+                    <td className={cn(num, "font-semibold")}>{est ? rs(est.premium) : "—"}</td>
+                    <td className={num}>{est ? rs(est.excellent) : "—"}</td>
+                    <td className={num}>{est ? rs(est.very_good) : "—"}</td>
+                    <td className={num}>{est ? pct(est.gp_pct) : "—"}</td>
                     <td className="py-1.5 pr-2"><Input type="number" step="100" min="0" value={v.market_ceiling ?? ""} onChange={(ev) => edit(r.slug, { market_ceiling: ev.target.value === "" ? null : Number(ev.target.value) })} className={cn("h-8 w-28", changed("market_ceiling") && "border-amber-500")} placeholder="—" /></td>
                     <td className="py-1.5 pr-2"><Input type="number" step="100" min="0" value={v.market_price ?? ""} onChange={(ev) => edit(r.slug, { market_price: ev.target.value === "" ? null : Number(ev.target.value) })} className={cn("h-8 w-28", changed("market_price") && "border-amber-500")} placeholder="—" /></td>
                     <td className="py-1.5"><Checkbox checked={v.active} onCheckedChange={(c) => edit(r.slug, { active: c === true })} /></td>
