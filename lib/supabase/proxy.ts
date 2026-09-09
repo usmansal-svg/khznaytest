@@ -68,6 +68,8 @@ export async function updateSession(request: NextRequest) {
     !request.nextUrl.pathname.startsWith("/tag") &&
     !request.nextUrl.pathname.startsWith("/items") &&
     !request.nextUrl.pathname.startsWith("/admin") &&
+    !request.nextUrl.pathname.startsWith("/lots") &&
+    !request.nextUrl.pathname.startsWith("/api/lots") &&
     !request.nextUrl.pathname.startsWith("/api/reference") &&
     !request.nextUrl.pathname.startsWith("/api/items") &&
     !request.nextUrl.pathname.startsWith("/api/brands") &&

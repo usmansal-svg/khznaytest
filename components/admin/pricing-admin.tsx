@@ -21,7 +21,8 @@ const pct = (n: number) => `${n >= 0 ? "+" : ""}${(n * 100).toFixed(1)}%`;
 /** Every constant from spec sections 1–2, grouped the way the spec presents them. */
 const FIELDS: { key: keyof Settings; label: string; unit?: string; step: number; group: string; help: string }[] = [
   { key: "fx", label: "Exchange rate", unit: "PKR per USD", step: 0.01, group: "Cost", help: "Update when you buy the next bale." },
-  { key: "blendedRate", label: "Blended rate", unit: "USD per kg", step: 0.01, group: "Cost", help: "Averaged across all buying, freight included. One number, not per lot." },
+  { key: "blendedRate", label: "Planning rate", unit: "USD per kg", step: 0.01, group: "Cost", help: "Used only for quotes with no lot selected. Real cost comes from each lot's own rate and yield." },
+  { key: "defaultProvisionalYield", label: "Default provisional yield", unit: "0–1", step: 0.01, group: "Cost", help: "Share of bought kg assumed to reach a tag while a lot is open. 0.90 until three or four closed lots give a real number." },
   { key: "dutyPerKg", label: "Import duty", unit: "PKR per kg", step: 1, group: "Cost", help: "Charged on weight, so heavier garments carry more." },
   { key: "sortingPerPiece", label: "Sorting per piece", unit: "PKR", step: 1, group: "Cost", help: "Deliberately zero — sorting labour sits in overheads." },
   { key: "inputTaxRate", label: "Input sales tax", unit: "0–1", step: 0.01, group: "Tax", help: "Paid at import. Open item: confirm with the accountant." },

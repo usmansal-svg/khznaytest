@@ -1,5 +1,6 @@
 /**
- * The pricing chain — Part One, sections 1, 2 and 3 of the build specification.
+ * The pricing chain — Khazanay tagging spec v2 (2026-09-09), sections 2–5,
+ * with the multiple from section 4.2.
  *
  * This module is the single source of pricing truth. It is pure: no Next.js,
  * no database, no I/O, so it can be unit tested directly and called from a
@@ -8,12 +9,10 @@
  * settings change.
  *
  * Everything that can be edited in the admin sidebar arrives as a parameter:
- * `settings` (section 1–2 constants) and `refs` (grades, profiles, brand
- * tiers). The code constants are only the defaults and the seed.
+ * `settings` and `refs` (grades, profiles, brand tiers). The code constants
+ * are only the defaults and the seed.
  *
- * The chain has many multiplicative terms and a single misplaced one is
- * invisible until margin has already leaked, so engine.test.ts pins the
- * section 8 verification table. Keep it.
+ * engine.test.ts pins the section 9 verification table. Keep it.
  */
 
 import {
@@ -25,6 +24,8 @@ import {
   GRADES,
   LADDER_DEPTHS,
   PROFILES,
+  REJECTED,
+  sellableGrades,
   type Adjustment,
   type BrandTier,
   type BrandTierInfo,
@@ -32,6 +33,8 @@ import {
   type Grade,
   type GradeCode,
   type LadderStage,
+  type LotBasis,
+  type LotCost,
   type Profile,
   type ProfileCode,
   type Settings,
@@ -69,48 +72,75 @@ function findTier(refs: PricingRefs, tier: BrandTier): BrandTierInfo {
   return t;
 }
 
+/* ------------------------------------------------------------------- lots */
+
+/**
+ * Yield = kg_tagged / kg_bought: what was paid for that never reached a tag.
+ * While the lot is open the provisional estimate stands in, so pricing
+ * starts on day one. A five-point yield error moves a price by one rounding
+ * step — less than a 20 g weighing difference — which is why tagging never
+ * waits for the true-up.
+ */
+export function lotYield(lot: LotCost, settings: Settings = DEFAULT_SETTINGS): number {
+  if (lot.kgTagged != null && lot.kgBought) return lot.kgTagged / lot.kgBought;
+  return lot.provisionalYield ?? settings.defaultProvisionalYield;
+}
+
+/**
+ * effective_rate = basis == 'pc' ? rate : rate / yield
+ *
+ * The vendor's rate is per kg bought; the garment pays per kg that reached a
+ * tag. When a lot closes the rate corrects, but garments already tagged keep
+ * their price — the difference lands in reported margin, never in repricing.
+ */
+export function effectiveRate(lot: LotCost, settings: Settings = DEFAULT_SETTINGS): number {
+  if (lot.basis === "pc") return lot.rate;
+  return lot.rate / lotYield(lot, settings);
+}
+
 /* ------------------------------------------------------------------- cost */
 
 export type CostInputs = {
+  /** Scale weight of this garment. Ignored for pc lots. */
   weightKg: number;
-  /** Share of this sub-category bought per piece rather than per kg */
-  perPieceShare?: number;
-  /** PKR per garment when bought by the piece */
-  perPieceCost?: number;
+  /** Defaults to kg */
+  basis?: LotBasis;
+  /**
+   * The lot's effective rate: USD/kg for kg lots, PKR per piece for pc
+   * lots. Defaults to settings.blendedRate — a planning quote with no lot.
+   */
+  effectiveRate?: number;
 };
 
 /**
- * landedCost = ((1 - ppShare) * (weight * blendedRate * fx + weight * dutyPerKg)
- *               + ppShare * perPieceCost)
- *              * (1 - inputTaxRate * inputTaxRecover)
- *              + sortingPerPiece
+ * gross  = basis == 'pc' ? rate : weight * effective_rate * fx + weight * duty_per_kg
+ * landed = gross * (1 - input_tax_rate * input_tax_recover) + sorting_per_piece
  *
- * Freight is already inside blendedRate. Recoverable input tax reduces cost
- * by 10.8%. Import duty is added here; output sales tax is added later, in
- * the multiple.
+ * Freight is already inside the vendor rate. Duty is added, recoverable
+ * input tax subtracted. Output sales tax is added later, in the multiple.
  */
+export function grossCost(inputs: CostInputs, settings: Settings = DEFAULT_SETTINGS): number {
+  const basis = inputs.basis ?? "kg";
+  const rate = inputs.effectiveRate ?? settings.blendedRate;
+  if (basis === "pc") return rate;
+  return inputs.weightKg * rate * settings.fx + inputs.weightKg * settings.dutyPerKg;
+}
+
 export function landedCost(inputs: CostInputs, settings: Settings = DEFAULT_SETTINGS): number {
-  const ppShare = inputs.perPieceShare ?? 0;
-  const perPieceCost = inputs.perPieceCost ?? 0;
-
-  const byWeight = inputs.weightKg * settings.blendedRate * settings.fx + inputs.weightKg * settings.dutyPerKg;
-  const blended = (1 - ppShare) * byWeight + ppShare * perPieceCost;
   const taxCredit = 1 - settings.inputTaxRate * settings.inputTaxRecover;
-
-  return blended * taxCredit + settings.sortingPerPiece;
+  return grossCost(inputs, settings) * taxCredit + settings.sortingPerPiece;
 }
 
 /* --------------------------------------------------------------- multiple */
 
 /**
- * The grade-mix term: SUM(gradeShare[g] / sellable * gradeMult[g]).
- *
- * Shares are of total intake, so they are divided by the sellable share to
- * become shares of what actually reaches the floor.
+ * The grade-mix term: SUM(grade_share[g] / sellable * grade_multiplier[g])
+ * over the grades that reach the floor. Shares are of total intake, so they
+ * are divided by the sellable share.
  */
 export function gradeSum(settings: Settings = DEFAULT_SETTINGS, refs: PricingRefs = DEFAULT_REFS): number {
   const sellable = 1 - settings.rejectedShare;
-  return refs.grades.reduce((sum, g) => sum + (g.shareOfIntake / sellable) * g.multiplier, 0);
+  return sellableGrades(refs.grades).reduce((sum, g) => sum + (g.shareOfIntake / sellable) * g.multiplier, 0);
 }
 
 /** The blended brand uplift, SUM(share * multiplier) = 1.05 at current tiers. */
@@ -118,37 +148,23 @@ export function blendedBrandUplift(refs: PricingRefs = DEFAULT_REFS): number {
   return refs.brandTiers.reduce((sum, t) => sum + t.share * (t.multiplier ?? 0), 0);
 }
 
-/** Blended discount depth, D = SUM(depth[i] * volume[i]). */
+/** Blended discount depth, D = SUM(ladder_depth[i] * profile.volume[i]). */
 export function blendedDiscount(profileCode: ProfileCode, refs: PricingRefs = DEFAULT_REFS): number {
   const p = findProfile(refs, profileCode);
-  const volumes: Record<LadderStage, number> = {
-    full: p.volFull,
-    promo: p.volPromo,
-    md1: p.volMd1,
-    md2: p.volMd2,
-    md3: p.volMd3,
-  };
-  return (Object.keys(volumes) as LadderStage[]).reduce(
-    (sum, stage) => sum + LADDER_DEPTHS[stage] * volumes[stage],
-    0,
-  );
+  const volumes: Record<LadderStage, number> = { full: p.volFull, promo: p.volPromo, md1: p.volMd1, md2: p.volMd2, md3: p.volMd3 };
+  return (Object.keys(volumes) as LadderStage[]).reduce((sum, stage) => sum + LADDER_DEPTHS[stage] * volumes[stage], 0);
 }
 
 /**
- * multiple = ( 1/(1-targetGP) - (pulled + rejected) * bulkRecovery )
- *            / ( (1 - D) * gsum * fullShare )
- *            * (1 + salesTax)
+ * multiple = ( 1/(1 - target_gp) - (profile.pulled + rejected) * bulk_recovery )
+ *            / ( (1 - D) * gsum * full_share )
+ *            * (1 + sales_tax)
  *
- * Yields 3.3947 / 3.9640 / 4.5766 for fast / standard / slow at the
- * current settings.
+ * 3.394729 / 3.964005 / 4.576611 for fast / standard / slow at the current
+ * settings. Precomputed per profile; recompute only if the settings change.
  */
-export function profileMultiple(
-  profileCode: ProfileCode,
-  settings: Settings = DEFAULT_SETTINGS,
-  refs: PricingRefs = DEFAULT_REFS,
-): number {
+export function profileMultiple(profileCode: ProfileCode, settings: Settings = DEFAULT_SETTINGS, refs: PricingRefs = DEFAULT_REFS): number {
   const p = findProfile(refs, profileCode);
-
   const gsum = gradeSum(settings, refs);
   const fullShare = 1 - settings.rejectedShare - p.pulledShare;
   const d = blendedDiscount(profileCode, refs);
@@ -158,12 +174,10 @@ export function profileMultiple(
 
   let multiple = ((revenueTarget - bulkCredit) / ((1 - d) * gsum * fullShare)) * (1 + settings.salesTax);
 
-  // With the feedback toggle on, regular prices divide by the blended brand
-  // uplift so the whole book hits target together and everyday prices fall
-  // about 5%. Off by default, which leaves luxury as pure upside.
-  if (settings.brandFeedbackEnabled) {
-    multiple /= blendedBrandUplift(refs);
-  }
+  // Optional: divide regular prices by the blended brand uplift so the whole
+  // book hits target together. Not in spec v2; off by default and retained
+  // only because the settings row carries it.
+  if (settings.brandFeedbackEnabled) multiple /= blendedBrandUplift(refs);
 
   return multiple;
 }
@@ -171,63 +185,31 @@ export function profileMultiple(
 /* --------------------------------------------------------------- rounding */
 
 /**
- * charm(x) = MAX(minPrice, ROUND((x - charmEnd) / step) * step + charmEnd)
+ * charm(x) = MAX( min_price, ROUND((x - charm_end) / step) * step + charm_end )
  *
- * Every price at every grade and every markdown ends in 90. Nearest, not up
- * or down: 1230 -> 1190, 1260 -> 1290.
+ * Nearest, not up or down: 1230 -> 1190, 1260 -> 1290. Every price at every
+ * grade and every markdown ends in 90.
  */
 export function charm(value: number, settings: Settings = DEFAULT_SETTINGS): number {
   const rounded = Math.round((value - settings.charmEnd) / settings.charmStep) * settings.charmStep + settings.charmEnd;
   return Math.max(settings.minPrice, rounded);
 }
 
-/**
- * Charm rounding that never rounds a discount upward.
- *
- * SPEC DISCREPANCY (section 2.6 vs the section 8 worked example) — flagged,
- * not silently resolved:
- *
- *   Section 2.6 defines a single charm() using ROUND, and section 3 says
- *   markdowns are "computed from the rounded full price and re-rounded".
- *   Applying ROUND to the worked example's markdowns gives 1390 / 890 / 490,
- *   but the spec states 1290 / 890 / 390. Those three figures are all and
- *   only reproducible with FLOOR.
- *
- *   The grade prices need the opposite: Very Good is 1090 in both the worked
- *   example and the section 8 table, which ROUND produces and FLOOR does not
- *   (it gives 990). So grades round and markdowns floor.
- *
- *   Flooring markdowns is also the commercially safe reading: it guarantees
- *   the customer never gets less than the advertised discount. Rounding 25%
- *   off up to 1390 would be a 22.3% discount on a "25% OFF" sticker.
- *
- * Confirm with the founder before this ships. If the intent really is ROUND
- * everywhere, swap this for charm() and update the ladder expectations in
- * engine.test.ts.
- */
-export function charmDown(value: number, settings: Settings = DEFAULT_SETTINGS): number {
-  const floored = Math.floor((value - settings.charmEnd) / settings.charmStep) * settings.charmStep + settings.charmEnd;
-  return Math.max(settings.minPrice, floored);
-}
-
 /* ------------------------------------------------------------------ price */
 
-export type PriceInputs = {
-  weightKg: number;
+export type PriceInputs = CostInputs & {
   profileCode: ProfileCode;
   valueIndex: number;
   gradeCode?: GradeCode;
   tier?: BrandTier;
   adjustment?: Adjustment;
-  perPieceShare?: number;
-  perPieceCost?: number;
 };
 
 export type PriceResult = {
   landedCost: number;
   /** The rounded Premium price. Every other grade derives from this. */
   premiumPrice: number;
-  /** Price at the requested grade */
+  /** Price at the requested grade; 0 for Rejected */
   price: number;
   gradeCode: GradeCode;
   tier: BrandTier;
@@ -236,54 +218,43 @@ export type PriceResult = {
   /** Price at each grade, all derived from the rounded premium price */
   gradePrices: Record<GradeCode, number>;
   markdowns: { stage: LadderStage; discount: number; price: number }[];
-  /** Gross profit on this piece, against ex-tax revenue */
+  /** Gross profit on this piece, against ex-tax revenue; 0 for Rejected */
   gpPct: number;
   /** Set when the piece cannot be priced automatically */
   blockReason?: string;
 };
 
 /**
- * premiumPrice = charm(landedCost * profileMultiple * valueIndex
- *                      * brandMultiplier * adjustmentMultiplier)
- *
- * gradePrice = charm(premiumPrice * gradeMult[grade] / gradeMult["Premium"])
+ * premium = charm( landed * profile.multiple * value_index * brand * adjustment )
+ * price   = grade == 'Premium' ? premium : charm( premium * grade_multiplier[grade] )
+ * price   = 0 when grade == 'Rejected'
  *
  * Other grades derive from the *rounded* Premium price, not the raw figure.
  */
-export function computePrice(
-  inputs: PriceInputs,
-  settings: Settings = DEFAULT_SETTINGS,
-  refs: PricingRefs = DEFAULT_REFS,
-): PriceResult {
+export function computePrice(inputs: PriceInputs, settings: Settings = DEFAULT_SETTINGS, refs: PricingRefs = DEFAULT_REFS): PriceResult {
   const gradeCode = inputs.gradeCode ?? BASE_GRADE;
   const tier = inputs.tier ?? "regular";
   const adjustment = inputs.adjustment ?? "standard";
 
-  const cost = landedCost(
-    { weightKg: inputs.weightKg, perPieceShare: inputs.perPieceShare, perPieceCost: inputs.perPieceCost },
-    settings,
-  );
+  const cost = landedCost(inputs, settings);
   const multiple = profileMultiple(inputs.profileCode, settings, refs);
   const tierInfo = findTier(refs, tier);
-  const adjustmentMultiplier = ADJUSTMENT_MULTIPLIERS[adjustment];
 
   // Ultra luxury blocks automatic pricing: set aside, authenticate, and price
   // against actual resale listings.
   const blockReason =
-    tierInfo.multiplier === null
-      ? "Ultra luxury — set aside, authenticate, and price manually against resale listings."
-      : undefined;
+    tierInfo.multiplier === null ? "Ultra luxury — set aside, authenticate, and price manually against resale listings." : undefined;
 
   const brandMultiplier = tierInfo.multiplier ?? 1;
-
-  const premiumPrice = charm(cost * multiple * inputs.valueIndex * brandMultiplier * adjustmentMultiplier, settings);
+  const premiumPrice = charm(cost * multiple * inputs.valueIndex * brandMultiplier * ADJUSTMENT_MULTIPLIERS[adjustment], settings);
 
   const baseMultiplier = findGrade(refs, BASE_GRADE).multiplier;
   const gradePrices = Object.fromEntries(
-    refs.grades.map((g) => [g.code, charm((premiumPrice * g.multiplier) / baseMultiplier, settings)]),
+    refs.grades.map((g) => [g.code, g.multiplier > 0 ? charm((premiumPrice * g.multiplier) / baseMultiplier, settings) : 0]),
   ) as Record<GradeCode, number>;
 
-  const price = gradePrices[gradeCode];
+  const rejected = gradeCode === REJECTED;
+  const price = rejected ? 0 : gradePrices[gradeCode];
 
   return {
     landedCost: cost,
@@ -294,25 +265,21 @@ export function computePrice(
     adjustment,
     multiple,
     gradePrices,
-    markdowns: markdownLadder(price, settings),
-    gpPct: grossProfitPct(price, cost, settings),
+    markdowns: rejected ? [] : markdownLadder(price, settings),
+    gpPct: rejected ? 0 : grossProfitPct(price, cost, settings),
     ...(blockReason ? { blockReason } : {}),
   };
 }
 
 /**
- * Markdown prices are computed from the rounded full price and re-rounded
- * downward — see charmDown for why the ladder floors where grades round.
+ * Markdown prices are computed from the rounded full price and re-rounded.
  * The ladder is the only discounting — there are no seasonal promotions.
  */
-export function markdownLadder(
-  fullPrice: number,
-  settings: Settings = DEFAULT_SETTINGS,
-): { stage: LadderStage; discount: number; price: number }[] {
+export function markdownLadder(fullPrice: number, settings: Settings = DEFAULT_SETTINGS): { stage: LadderStage; discount: number; price: number }[] {
   return (["md1", "md2", "md3"] as LadderStage[]).map((stage) => ({
     stage,
     discount: LADDER_DEPTHS[stage],
-    price: charmDown(fullPrice * (1 - LADDER_DEPTHS[stage]), settings),
+    price: charm(fullPrice * (1 - LADDER_DEPTHS[stage]), settings),
   }));
 }
 
@@ -324,6 +291,29 @@ export function grossProfitPct(price: number, cost: number, settings: Settings =
   const exTax = price / (1 + settings.salesTax);
   if (exTax === 0) return 0;
   return (exTax - cost) / exTax;
+}
+
+/* ------------------------------------------------------- expected revenue */
+
+/**
+ * Expected revenue per item until real sales exist (spec v2, section 7):
+ *
+ *   rejected: landed * bulk_recovery
+ *   else:     price * sells_share * (1 - blended_discount) / (1 + sales_tax)
+ *             + landed * profile.pulled * bulk_recovery
+ *
+ * Ex-tax, so it compares directly with landed cost for lot P&L.
+ */
+export function expectedRevenue(
+  item: { price: number; landedCost: number; gradeCode: GradeCode; profileCode: ProfileCode },
+  settings: Settings = DEFAULT_SETTINGS,
+  refs: PricingRefs = DEFAULT_REFS,
+): number {
+  if (item.gradeCode === REJECTED) return item.landedCost * settings.bulkRecovery;
+  const p = findProfile(refs, item.profileCode);
+  const sellsShare = 1 - p.pulledShare;
+  const d = blendedDiscount(item.profileCode, refs);
+  return (item.price * sellsShare * (1 - d)) / (1 + settings.salesTax) + item.landedCost * p.pulledShare * settings.bulkRecovery;
 }
 
 /* ---------------------------------------------------------- colour rotation */

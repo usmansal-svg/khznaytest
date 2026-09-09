@@ -21,11 +21,13 @@ import {
   type BrandTier,
   type Grade,
   type GradeCode,
+  type LotBasis,
+  type LotCost,
   type Profile,
   type ProfileCode,
   type Settings,
 } from "./constants";
-import type { PricingRefs } from "./engine";
+import { effectiveRate, lotYield, type PricingRefs } from "./engine";
 import { SUB_CATEGORIES, type MeasureType } from "./sub-categories";
 
 export type DbSubCategory = {
@@ -70,6 +72,7 @@ type SettingsRow = {
   min_price: number;
   brand_feedback_enabled: boolean;
   high_value_threshold: number;
+  default_provisional_yield?: number | string | null;
 };
 
 const num = (v: number | string | null | undefined, fallback = 0) => (v == null ? fallback : Number(v));
@@ -91,6 +94,7 @@ export function settingsFromRow(row: SettingsRow): Settings {
     minPrice: num(row.min_price),
     brandFeedbackEnabled: Boolean(row.brand_feedback_enabled),
     highValueThreshold: num(row.high_value_threshold),
+    defaultProvisionalYield: num(row.default_provisional_yield, DEFAULT_SETTINGS.defaultProvisionalYield),
   };
 }
 
@@ -111,7 +115,16 @@ export function settingsToRow(s: Settings) {
     min_price: s.minPrice,
     brand_feedback_enabled: s.brandFeedbackEnabled,
     high_value_threshold: s.highValueThreshold,
+    default_provisional_yield: s.defaultProvisionalYield,
   };
+}
+
+/** A gateway timeout arrives as a whole HTML page; keep the warning readable. */
+function brief(message: string): string {
+  const text = message.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  const hit = /connection timed out|timed out|timeout|unavailable|bad gateway/i.exec(text);
+  const core = hit ? hit[0].toLowerCase() : text;
+  return core.length > 80 ? core.slice(0, 77) + "…" : core;
 }
 
 function defaultsContext(warning: string): PricingContext {
@@ -156,7 +169,7 @@ export async function loadPricingContext(supabase: SupabaseClient): Promise<Pric
   const firstError = settingsRes.error ?? gradesRes.error ?? profilesRes.error ?? subsRes.error;
   if (firstError || !settingsRes.data || !gradesRes.data?.length || !profilesRes.data?.length || !subsRes.data?.length) {
     return defaultsContext(
-      `Pricing data could not be read from the database (${firstError?.message ?? "empty tables"}); using built-in defaults.`,
+      `Pricing data could not be read from the database (${brief(firstError?.message ?? "empty tables")}); using built-in defaults — prices shown may not reflect the pricing sidebar.`,
     );
   }
 
@@ -226,4 +239,77 @@ export async function resolveBrandDb(supabase: SupabaseClient, input: string | n
     matched: false,
     warning: `Unknown brand "${text}" — priced as Regular high street. Check the brand list.`,
   };
+}
+
+/* ------------------------------------------------------------------- lots */
+
+export type DbLot = {
+  id: number;
+  code: string;
+  supplier: string;
+  basis: LotBasis;
+  rate: number | null;
+  kgBought: number | null;
+  kgTagged: number | null;
+  provisionalYield: number;
+  status: "open" | "closed";
+  parentLotId: number | null;
+  arrivedOn: string | null;
+  notes: string | null;
+  /** Null when the lot has no rate yet — it cannot price garments */
+  effectiveRate: number | null;
+  yield: number;
+};
+
+type LotRow = {
+  id: number;
+  code: string;
+  supplier: string;
+  basis: string;
+  rate: number | string | null;
+  kg: number | string | null;
+  kg_tagged: number | string | null;
+  provisional_yield: number | string;
+  status: string;
+  parent_lot_id: number | null;
+  arrived_on: string | null;
+  notes: string | null;
+};
+
+export const LOT_COLUMNS = "id, code, supplier, basis, rate, kg, kg_tagged, provisional_yield, status, parent_lot_id, arrived_on, notes";
+
+export function lotFromRow(row: LotRow, settings: Settings): DbLot {
+  const cost: LotCost = {
+    basis: row.basis as LotBasis,
+    rate: row.rate == null ? 0 : num(row.rate),
+    kgBought: row.kg == null ? null : num(row.kg),
+    kgTagged: row.kg_tagged == null ? null : num(row.kg_tagged),
+    provisionalYield: num(row.provisional_yield, settings.defaultProvisionalYield),
+  };
+  return {
+    id: row.id,
+    code: row.code,
+    supplier: row.supplier,
+    basis: cost.basis,
+    rate: row.rate == null ? null : cost.rate,
+    kgBought: cost.kgBought ?? null,
+    kgTagged: cost.kgTagged ?? null,
+    provisionalYield: cost.provisionalYield ?? settings.defaultProvisionalYield,
+    status: row.status as DbLot["status"],
+    parentLotId: row.parent_lot_id,
+    arrivedOn: row.arrived_on,
+    notes: row.notes,
+    effectiveRate: row.rate == null ? null : effectiveRate(cost, settings),
+    yield: lotYield(cost, settings),
+  };
+}
+
+export async function loadLot(supabase: SupabaseClient, id: number, settings: Settings): Promise<DbLot | null> {
+  const { data } = await supabase.from("lots").select(LOT_COLUMNS).eq("id", id).maybeSingle();
+  return data ? lotFromRow(data as LotRow, settings) : null;
+}
+
+export async function loadOpenLots(supabase: SupabaseClient, settings: Settings): Promise<DbLot[]> {
+  const { data } = await supabase.from("lots").select(LOT_COLUMNS).eq("status", "open").order("created_at", { ascending: false }).limit(100);
+  return (data ?? []).map((r) => lotFromRow(r as LotRow, settings));
 }

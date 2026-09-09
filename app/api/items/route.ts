@@ -1,22 +1,20 @@
 /**
  * POST /api/items — save a tagged garment and allocate its SKU atomically.
- * GET  /api/items?q=… — search by SKU, brand or sub-category (spec 12.5).
+ * GET  /api/items?q=… — search by SKU, brand or sub-category.
  *
- * The price is recomputed here from the database context; whatever the
- * form displayed is never trusted. Ultra-luxury and rare pieces must carry
- * a manual price.
+ * Every garment is a record, rejects included — that is how the reject rate
+ * becomes measured rather than assumed. The price is recomputed here from
+ * the lot, the scale weight and the database context; whatever the form
+ * displayed is never trusted.
  */
 
 import { NextResponse } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
-import { type Adjustment, type GradeCode } from "@/lib/pricing/constants";
-import { computePrice } from "@/lib/pricing/engine";
-import { loadPricingContext, resolveBrandDb } from "@/lib/pricing/repo";
+import { REJECTED, type Adjustment, type GradeCode } from "@/lib/pricing/constants";
+import { ADJUSTMENTS, GRADE_CODES, quote } from "@/lib/pricing/quote";
+import { loadLot, loadPricingContext, resolveBrandDb } from "@/lib/pricing/repo";
 import { SEASONS, WEARERS, buildSku, type Season, type Wearer } from "@/lib/pricing/sku";
-
-const GRADE_CODES: GradeCode[] = ["bnwt", "premium", "excellent", "very_good"];
-const ADJUSTMENTS: Adjustment[] = ["below", "standard", "above"];
 
 type Body = {
   sub_category_id?: string;
@@ -33,8 +31,8 @@ type Body = {
   fabric?: string | null;
   measurements?: Record<string, number | string> | null;
   outlet_id?: number | null;
-  lot_code?: string | null;
-  supplier?: string | null;
+  lot_id?: number | null;
+  weight_kg?: number | null;
   price_manual?: number | null;
 };
 
@@ -58,52 +56,31 @@ export async function POST(request: Request) {
   if (!ADJUSTMENTS.includes(adjustment)) return bad(`Unknown adjustment: ${body.adjustment}`);
   if (!SEASONS.includes(season)) return bad(`Season must be one of ${SEASONS.join(", ")}.`);
   if (!WEARERS.includes(wearer)) return bad(`Wearer must be one of ${WEARERS.join(", ")}.`);
+  if (body.lot_id == null) return bad("Pick the lot the garment came from.");
+  if (body.weight_kg != null && !(typeof body.weight_kg === "number" && body.weight_kg > 0 && body.weight_kg < 50)) {
+    return bad("weight_kg must be a positive number of kilograms.");
+  }
   if (body.price_manual != null && (!Number.isInteger(body.price_manual) || body.price_manual <= 0)) {
     return bad("Manual price must be a whole, positive rupee amount.");
   }
 
-  const [ctx, brand, staffRes] = await Promise.all([
-    loadPricingContext(supabase),
-    resolveBrandDb(supabase, body.brand_text),
-    supabase.rpc("ensure_staff"),
-  ]);
+  const ctx = await loadPricingContext(supabase);
+  const [brand, lot, staffRes] = await Promise.all([resolveBrandDb(supabase, body.brand_text), loadLot(supabase, Number(body.lot_id), ctx.settings), supabase.rpc("ensure_staff")]);
   if (staffRes.error) return NextResponse.json({ error: staffRes.error.message }, { status: 500 });
   const staff = staffRes.data as { id: number; name: string; role: string };
+  if (!lot) return bad(`Unknown lot: ${body.lot_id}`);
+  if (lot.status !== "open") return bad(`Lot ${lot.code} is closed — reopen it to tag from it.`);
 
   const subCategory = ctx.subCategories.find((s) => s.slug === body.sub_category_id);
   if (!subCategory) return bad(`Unknown sub_category_id: ${body.sub_category_id ?? "(missing)"}`);
 
-  const result = computePrice(
-    {
-      weightKg: subCategory.weightKg,
-      profileCode: subCategory.profileCode,
-      valueIndex: subCategory.valueIndex,
-      perPieceShare: subCategory.perPieceShare,
-      perPieceCost: subCategory.perPieceCost ?? undefined,
-      gradeCode: grade,
-      tier: brand.tier,
-      adjustment,
-    },
-    ctx.settings,
-    ctx.refs,
-  );
+  const q = quote({ subCategory, brand, grade, adjustment, isRare: Boolean(body.is_rare), lot, weightKg: body.weight_kg ?? null }, ctx);
+  if (q.error) return bad(q.error);
 
-  const blocked = Boolean(body.is_rare) || Boolean(result.blockReason);
+  const rejected = grade === REJECTED;
+  const blocked = !rejected && Boolean(q.block_reason);
   if (blocked && body.price_manual == null) {
     return bad(body.is_rare ? "Rare pieces need a manual price." : "Ultra luxury needs a manual price.");
-  }
-
-  // Optional lot: create on first use so the datalist grows as bales arrive.
-  let lotId: number | null = null;
-  const lotCode = body.lot_code?.trim();
-  if (lotCode) {
-    const { data: lot, error } = await supabase
-      .from("lots")
-      .upsert({ code: lotCode, supplier: body.supplier?.trim() || lotCode }, { onConflict: "code", ignoreDuplicates: false })
-      .select("id")
-      .single();
-    if (error) return NextResponse.json({ error: `Lot: ${error.message}` }, { status: 500 });
-    lotId = lot.id;
   }
 
   const { data: seq, error: seqError } = await supabase.rpc("next_sku_seq");
@@ -116,7 +93,7 @@ export async function POST(request: Request) {
     .from("items")
     .insert({
       sku,
-      lot_id: lotId,
+      lot_id: lot.id,
       outlet_id: body.outlet_id ?? null,
       tagged_by: staff.id,
       sub_category_slug: subCategory.slug,
@@ -133,27 +110,22 @@ export async function POST(request: Request) {
       colour: body.colour?.trim() || null,
       fabric: body.fabric?.trim() || null,
       measurements: body.measurements ?? {},
+      weight_kg: q.weight_kg,
       adjustment,
-      landed_cost: Math.round(result.landedCost * 100) / 100,
-      price: blocked ? null : result.price,
+      landed_cost: q.landed_cost,
+      price: blocked ? null : rejected ? 0 : q.price,
       price_manual: blocked ? body.price_manual : null,
       settings_version: ctx.settingsVersion,
-      status: blocked ? "set_aside" : "tagged",
+      status: rejected ? "rejected" : blocked ? "set_aside" : "tagged",
     })
-    .select("id, sku, price, price_manual, status, tagged_at")
+    .select("id, sku, price, price_manual, status, tagged_at, weight_kg")
     .single();
 
   if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
 
   return NextResponse.json({
-    item: {
-      ...item,
-      list_price: item.price_manual ?? item.price,
-      brand: brand.name,
-      sub_category: subCategory.name,
-      tagged_by: staff.name,
-    },
-    markdowns: blocked ? [] : result.markdowns,
+    item: { ...item, list_price: item.price_manual ?? item.price, brand: brand.name, sub_category: subCategory.name, lot: lot.code, tagged_by: staff.name },
+    markdowns: q.markdowns,
     pricing_source: ctx.source,
   });
 }
@@ -164,12 +136,11 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from("items")
-    .select("id, sku, brand_text, grade_code, size_label, colour_tag, status, price, price_manual, tagged_at, sub_categories(name)")
+    .select("id, sku, brand_text, grade_code, size_label, colour_tag, status, price, price_manual, weight_kg, tagged_at, sub_categories(name), lots(code)")
     .order("tagged_at", { ascending: false })
     .limit(50);
 
   if (q) {
-    // SKU prefix, brand substring, or sub-category name via a two-step lookup.
     const { data: subs } = await supabase.from("sub_categories").select("slug").ilike("name", `%${q}%`);
     const slugs = (subs ?? []).map((s) => s.slug);
     const ors = [`sku.ilike.${q.toUpperCase()}%`, `brand_text.ilike.%${q}%`];
@@ -180,15 +151,17 @@ export async function GET(request: Request) {
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const one = (v: unknown) => (Array.isArray(v) ? v[0] : v) as { name: string } | null | undefined;
+  const one = <T,>(v: unknown) => (Array.isArray(v) ? v[0] : v) as T | null | undefined;
   return NextResponse.json({
     items: (data ?? []).map((r) => ({
       id: r.id,
       sku: r.sku,
       brand: r.brand_text ?? "",
-      sub_category: one(r.sub_categories)?.name ?? "",
+      sub_category: one<{ name: string }>(r.sub_categories)?.name ?? "",
+      lot: one<{ code: string }>(r.lots)?.code ?? null,
       grade: r.grade_code,
       size_label: r.size_label,
+      weight_kg: r.weight_kg,
       colour_tag: r.colour_tag,
       status: r.status,
       list_price: r.price_manual ?? r.price,

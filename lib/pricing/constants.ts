@@ -12,8 +12,13 @@ export const SETTINGS_VERSION = 1;
 export type Settings = {
   /** PKR per USD */
   fx: number;
-  /** USD/kg, averaged across all buying — a single input, not per lot */
+  /**
+   * USD/kg used only for planning quotes with no lot selected. Real cost
+   * comes from the lot's effective rate (spec v2, section 2).
+   */
   blendedRate: number;
+  /** Yield assumed while a lot is open, until its true-up. 0.90 placeholder. */
+  defaultProvisionalYield: number;
   /** PKR per kg, charged on weight, so heavier garments carry more */
   dutyPerKg: number;
   /** Deliberately zero — sorting labour sits in overheads */
@@ -55,11 +60,12 @@ export const DEFAULT_SETTINGS: Settings = {
   minPrice: 190,
   brandFeedbackEnabled: false,
   highValueThreshold: 4000,
+  defaultProvisionalYield: 0.9,
 };
 
 /* ------------------------------------------------------------------ grades */
 
-export type GradeCode = "bnwt" | "premium" | "excellent" | "very_good";
+export type GradeCode = "bnwt" | "premium" | "excellent" | "very_good" | "rejected";
 
 export type Grade = {
   code: GradeCode;
@@ -75,7 +81,17 @@ export const GRADES: readonly Grade[] = [
   { code: "premium", name: "Premium", multiplier: 1.0, shareOfIntake: 0.65, sortOrder: 2 },
   { code: "excellent", name: "Excellent", multiplier: 0.85, shareOfIntake: 0.2, sortOrder: 3 },
   { code: "very_good", name: "Very Good", multiplier: 0.6, shareOfIntake: 0.1, sortOrder: 4 },
+  // Unsellable. Price 0, still recorded as an item so the reject rate is
+  // measured rather than assumed. Its share is what `rejectedShare` carries.
+  { code: "rejected", name: "Rejected", multiplier: 0, shareOfIntake: 0.03, sortOrder: 5 },
 ];
+
+export const REJECTED: GradeCode = "rejected";
+
+/** Grades that reach the floor — everything with a non-zero multiplier. */
+export function sellableGrades(grades: readonly Grade[]): Grade[] {
+  return grades.filter((g) => g.multiplier > 0);
+}
 
 export const BASE_GRADE: GradeCode = "premium";
 
@@ -182,6 +198,22 @@ export const ADJUSTMENT_MULTIPLIERS: Readonly<Record<Adjustment, number>> = {
 };
 
 export const ADJUSTMENT_CAP = 0.15;
+
+/* ------------------------------------------------------------------- lots */
+
+/** kg: vendor sells a bundle by weight. pc: vendor sells a category by the piece. */
+export type LotBasis = "kg" | "pc";
+
+export type LotCost = {
+  basis: LotBasis;
+  /** USD per kg for kg lots; PKR per piece for pc lots */
+  rate: number;
+  kgBought?: number | null;
+  /** Null while the lot is open; set at true-up */
+  kgTagged?: number | null;
+  /** Estimate used while open. Falls back to settings.defaultProvisionalYield */
+  provisionalYield?: number | null;
+};
 
 /* --------------------------------------------------------- colour rotation */
 

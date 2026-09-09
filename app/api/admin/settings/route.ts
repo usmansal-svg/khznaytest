@@ -82,6 +82,7 @@ const RANGES: Record<keyof Omit<Settings, "brandFeedbackEnabled">, [number, numb
   charmEnd: [0, 9999],
   minPrice: [0, 1000000],
   highValueThreshold: [0, 100000000],
+  defaultProvisionalYield: [0.3, 1],
 };
 
 function validate(input: Partial<Settings> | undefined): { settings: Settings } | { error: string } {

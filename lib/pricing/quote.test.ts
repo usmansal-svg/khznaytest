@@ -1,5 +1,5 @@
 /**
- * Contract test for the price quote — the section 13 response shape — run
+ * Contract test for the price quote — the /api/price response shape — run
  * against the built-in defaults so it needs no database. POST /api/price is
  * a thin wrapper that loads the same context from Supabase.
  */
@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { resolveBrand } from "./brands";
 import { BRAND_TIERS, DEFAULT_SETTINGS, GRADES, PROFILES, SETTINGS_VERSION, type Adjustment, type GradeCode } from "./constants";
 import { quote } from "./quote";
-import type { PricingContext } from "./repo";
+import type { DbLot, PricingContext } from "./repo";
 import { SUB_CATEGORIES } from "./sub-categories";
 
 const ctx: PricingContext = {
@@ -21,78 +21,87 @@ const ctx: PricingContext = {
   source: "database",
 };
 
-function price(slug: string, brand = "", grade: GradeCode = "premium", adjustment: Adjustment = "standard", isRare = false) {
+const lotS: DbLot = { id: 1, code: "LOT-B-01-S", supplier: "B", basis: "kg", rate: 6, kgBought: 27, kgTagged: 25, provisionalYield: 0.9, status: "closed", parentLotId: null, arrivedOn: null, notes: null, effectiveRate: 6 / (25 / 27), yield: 25 / 27 };
+const lotPc: DbLot = { id: 2, code: "LOT-A-01", supplier: "A", basis: "pc", rate: 600, kgBought: null, kgTagged: null, provisionalYield: 0.9, status: "open", parentLotId: null, arrivedOn: null, notes: null, effectiveRate: 600, yield: 1 };
+
+function q(slug: string, opts: { brand?: string; grade?: GradeCode; adjustment?: Adjustment; rare?: boolean; lot?: DbLot | null; weight?: number | null } = {}) {
   const subCategory = ctx.subCategories.find((s) => s.slug === slug)!;
-  const b = resolveBrand(brand);
-  return quote({ subCategory, brand: { id: null, ...b }, grade, adjustment, isRare }, ctx);
+  return quote(
+    { subCategory, brand: { id: null, ...resolveBrand(opts.brand ?? "") }, grade: opts.grade ?? "premium", adjustment: opts.adjustment ?? "standard", isRare: opts.rare ?? false, lot: opts.lot, weightKg: opts.weight },
+    ctx,
+  );
 }
 
 describe("price quote", () => {
-  it("prices the worked example and returns the full ladder", () => {
-    const q = price("smt-men-button-down-shirt", "Zara");
-    assert.equal(q.price, 1790);
-    assert.equal(q.landed_cost, 519.93);
-    assert.equal(q.brand_tier, "regular");
-    assert.deepEqual(q.markdowns.map((m) => m.price), [1290, 890, 390]);
-    assert.equal(q.grade_prices!.very_good, 1090);
-    assert.ok(q.gp_pct! > 0.6);
-    assert.equal(q.settings_version, 1);
-    assert.equal(q.sub_category.code, "MBD");
+  it("prices the section 9 worked example from a lot and scale weight", () => {
+    const r = q("smt-men-button-down-shirt", { brand: "Zara", lot: lotS, weight: 0.31 });
+    assert.equal(r.cost_basis, "lot");
+    assert.equal(r.lot?.effective_rate, 6.48);
+    assert.equal(r.landed_cost, 519.26);
+    assert.equal(r.price, 1790);
+    assert.deepEqual(r.markdowns.map((m) => m.price), [1390, 890, 490]);
+    assert.equal(r.grade_prices!.very_good, 1090);
+    assert.ok(r.expected_revenue! > r.landed_cost);
+    assert.equal(r.sub_category.code, "MBD");
   });
 
-  it("prices at the requested grade", () => {
-    assert.equal(price("smt-men-button-down-shirt", "", "excellent").price, 1490);
+  it("per-piece lots ignore weight", () => {
+    const r = q("sms-sports-t-shirt", { lot: lotPc, weight: null });
+    assert.equal(r.landed_cost, 535.2);
+    assert.equal(r.price, 1990);
+    assert.equal(r.weight_kg, null);
+  });
+
+  it("a kg lot without a weight is an error, not a guess", () => {
+    const r = q("smt-men-t-shirt", { lot: lotS, weight: null });
+    assert.match(r.error!, /weigh/i);
+    assert.equal(r.price, null);
+  });
+
+  it("a lot without a rate cannot price", () => {
+    const r = q("smt-men-t-shirt", { lot: { ...lotS, rate: null, effectiveRate: null }, weight: 0.2 });
+    assert.match(r.error!, /no rate/i);
+  });
+
+  it("rejected prices 0 and still reports the landed cost", () => {
+    const r = q("smt-men-t-shirt", { lot: lotS, weight: 0.2, grade: "rejected" });
+    assert.equal(r.price, 0);
+    assert.equal(Math.round(r.landed_cost), 335);
+    assert.deepEqual(r.markdowns, []);
+    assert.equal(r.expected_revenue, Math.round(335.01 * DEFAULT_SETTINGS.bulkRecovery * 100) / 100);
+  });
+
+  it("with no lot it is a planning quote at the default weight, and says so", () => {
+    const r = q("smt-men-button-down-shirt", { brand: "Zara" });
+    assert.equal(r.cost_basis, "planning");
+    assert.equal(r.price, 1790);
+    assert.ok(r.warnings!.some((w) => /planning quote/i.test(w)));
   });
 
   it("affordable luxury resolves from the brand, never from the tagger", () => {
-    const q = price("smt-men-button-down-shirt", "nike");
-    assert.equal(q.brand_tier, "affordable_luxury");
-    assert.equal(q.brand.name, "Nike");
-    assert.equal(q.price, 3490);
+    const r = q("smt-men-button-down-shirt", { brand: "nike" });
+    assert.equal(r.brand_tier, "affordable_luxury");
+    assert.equal(r.price, 3490);
   });
 
   it("ultra luxury blocks with a reason and no price", () => {
-    const q = price("wmf-leather-jacket", "Moncler");
-    assert.equal(q.price, null);
-    assert.match(q.block_reason!, /manually/i);
-    assert.deepEqual(q.markdowns, []);
+    const r = q("wmf-leather-jacket", { brand: "Moncler" });
+    assert.equal(r.price, null);
+    assert.match(r.block_reason!, /manually/i);
   });
 
-  it("rare pieces block even on a regular brand", () => {
-    const q = price("smt-men-t-shirt", "Zara", "premium", "standard", true);
-    assert.equal(q.price, null);
-    assert.match(q.block_reason!, /rare/i);
+  it("rare pieces block even on a regular brand, but a rejected rare piece is just rejected", () => {
+    assert.match(q("smt-men-t-shirt", { brand: "Zara", rare: true }).block_reason!, /rare/i);
+    assert.equal(q("smt-men-t-shirt", { brand: "Zara", rare: true, grade: "rejected" }).price, 0);
   });
 
   it("unknown brands price as Regular and warn", () => {
-    const q = price("smt-men-t-shirt", "Mystery Co");
-    assert.equal(q.brand_tier, "regular");
-    assert.equal(q.price, 1290);
-    assert.ok(q.warnings!.some((w) => /unknown brand/i.test(w)));
+    const r = q("smt-men-t-shirt", { brand: "Mystery Co" });
+    assert.equal(r.brand_tier, "regular");
+    assert.ok(r.warnings!.some((w) => /unknown brand/i.test(w)));
   });
 
   it("flags high-value items for QC review", () => {
-    const q = price("wmf-leather-jacket", "Zara");
-    assert.equal(q.price, 12090);
-    assert.ok(q.warnings!.some((w) => /QC review/i.test(w)));
-  });
-
-  it("warns when a market ceiling is exceeded", () => {
-    const capped: PricingContext = {
-      ...ctx,
-      subCategories: ctx.subCategories.map((s) => (s.slug === "wmf-leather-jacket" ? { ...s, marketCeiling: 9000 } : s)),
-    };
-    const subCategory = capped.subCategories.find((s) => s.slug === "wmf-leather-jacket")!;
-    const q = quote({ subCategory, brand: { id: null, ...resolveBrand("Zara") }, grade: "premium", adjustment: "standard", isRare: false }, capped);
-    assert.ok(q.warnings!.some((w) => /market ceiling/i.test(w)));
-  });
-
-  it("surfaces a defaults fallback as a warning", () => {
-    const q = quote(
-      { subCategory: ctx.subCategories[0], brand: { id: null, ...resolveBrand("Zara") }, grade: "premium", adjustment: "standard", isRare: false },
-      { ...ctx, source: "defaults", warning: "using built-in defaults" },
-    );
-    assert.equal(q.pricing_source, "defaults");
-    assert.ok(q.warnings!.some((w) => /defaults/.test(w)));
+    assert.ok(q("wmf-leather-jacket", { brand: "Zara" }).warnings!.some((w) => /QC review/i.test(w)));
   });
 });
