@@ -24,6 +24,7 @@ const WORK: NavItem[] = [
 const ADMIN: NavItem[] = [
   { href: "/admin/pricing", label: "Pricing", icon: SlidersHorizontal, hint: "Constants & weights", min: "manager" },
   { href: "/admin/brands", label: "Brands", icon: Tags, hint: "Tiers & import", min: "manager" },
+  { href: "/admin/compare", label: "Compare prices", icon: Tags, hint: "New in store", min: "manager" },
   { href: "/admin/staff", label: "Staff", icon: Users, hint: "Names & PINs", min: "manager" },
   { href: "/health", label: "Health", icon: Activity, min: "manager" },
 ];

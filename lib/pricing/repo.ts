@@ -46,6 +46,8 @@ export type DbSubCategory = {
   perPieceShare: number;
   /** Landed cost per garment used for pricing — the same for every vendor */
   standardCost: number | null;
+  /** The sheet's "new in store" price for the sub-category, if set */
+  marketPrice: number | null;
   active: boolean;
 };
 
@@ -80,6 +82,9 @@ type SettingsRow = {
   ladder_depths?: (number | string)[] | null;
   default_daily_target?: number | null;
   qc_sample_rate?: number | string | null;
+  compare_factor_regular?: number | string | null;
+  compare_factor_affordable?: number | string | null;
+  compare_formula_enabled?: boolean | null;
 };
 
 const num = (v: number | string | null | undefined, fallback = 0) => (v == null ? fallback : Number(v));
@@ -105,6 +110,9 @@ export function settingsFromRow(row: SettingsRow): Settings {
     ladderDepths: depthsFromRow(row.ladder_depths),
     defaultDailyTarget: num(row.default_daily_target, DEFAULT_SETTINGS.defaultDailyTarget),
     qcSampleRate: num(row.qc_sample_rate, DEFAULT_SETTINGS.qcSampleRate),
+    compareFactorRegular: num(row.compare_factor_regular, DEFAULT_SETTINGS.compareFactorRegular),
+    compareFactorAffordable: num(row.compare_factor_affordable, DEFAULT_SETTINGS.compareFactorAffordable),
+    compareFormulaEnabled: row.compare_formula_enabled ?? DEFAULT_SETTINGS.compareFormulaEnabled,
   };
 }
 
@@ -138,6 +146,9 @@ export function settingsToRow(s: Settings) {
     ladder_months: [1, 1, 1, 1],
     default_daily_target: s.defaultDailyTarget,
     qc_sample_rate: s.qcSampleRate,
+    compare_factor_regular: s.compareFactorRegular,
+    compare_factor_affordable: s.compareFactorAffordable,
+    compare_formula_enabled: s.compareFormulaEnabled,
   };
 }
 
@@ -168,6 +179,7 @@ function defaultsContext(warning: string): PricingContext {
       perPieceCost: s.perPieceCost,
       perPieceShare: s.perPieceShare,
       standardCost: null,
+      marketPrice: null,
       active: s.active,
     })),
     source: "defaults",
@@ -187,7 +199,7 @@ export async function loadPricingContext(supabase: SupabaseClient): Promise<Pric
     supabase.from("profiles").select("code, name, pulled_share, vol_full, vol_promo, vol_md1, vol_md2, vol_md3"),
     supabase
       .from("sub_categories")
-      .select("slug, code, category_slug, gender, name, weight_kg, profile_code, value_index, measure_type, market_ceiling, per_piece_cost, per_piece_share, standard_cost_pkr, active"),
+      .select("slug, code, category_slug, gender, name, weight_kg, profile_code, value_index, measure_type, market_ceiling, market_price, per_piece_cost, per_piece_share, standard_cost_pkr, active"),
   ]);
 
   const firstError = settingsRes.error ?? gradesRes.error ?? profilesRes.error ?? subsRes.error;
@@ -230,6 +242,7 @@ export async function loadPricingContext(supabase: SupabaseClient): Promise<Pric
     perPieceCost: s.per_piece_cost == null ? null : num(s.per_piece_cost),
     perPieceShare: num(s.per_piece_share),
     standardCost: s.standard_cost_pkr == null ? null : num(s.standard_cost_pkr),
+    marketPrice: s.market_price == null ? null : num(s.market_price),
     active: Boolean(s.active),
   }));
 

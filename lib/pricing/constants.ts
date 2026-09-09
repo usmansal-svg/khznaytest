@@ -25,6 +25,10 @@ export type Settings = {
   defaultDailyTarget: number;
   /** Share of saved garments randomly held for QC (0.10 = one in ten) */
   qcSampleRate: number;
+  /** "New in store" formula fallback: Premium shelf price × factor, per tier */
+  compareFactorRegular: number;
+  compareFactorAffordable: number;
+  compareFormulaEnabled: boolean;
   /** PKR per kg, charged on weight, so heavier garments carry more */
   dutyPerKg: number;
   /** Deliberately zero — sorting labour sits in overheads */
@@ -70,6 +74,9 @@ export const DEFAULT_SETTINGS: Settings = {
   ladderDepths: [0.25, 0.5, 0.75],
   defaultDailyTarget: 60,
   qcSampleRate: 0.1,
+  compareFactorRegular: 3,
+  compareFactorAffordable: 3.5,
+  compareFormulaEnabled: true,
 };
 
 /* ------------------------------------------------------------------ grades */

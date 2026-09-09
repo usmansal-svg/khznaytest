@@ -16,6 +16,7 @@ export type TagItem = {
   list_price: number;
   outlet: string | null;
   market_price?: number | null;
+  compare?: { new_price: number; saving_pct: number; source: string; confirmed: boolean } | null;
 };
 
 const rs = (n: number) => `Rs ${Math.round(n).toLocaleString("en-PK")}`;
@@ -52,9 +53,11 @@ export function TagFaces({ item }: { item: TagItem }) {
             </>
           )}
           <div className="absolute bottom-[4mm] left-[4mm] right-[4mm]">
-            {item.market_price ? <div className="text-[6.5pt] text-neutral-500">New in store <span className="line-through">{rs(item.market_price)}</span></div> : null}
-            <div className="text-[6pt] uppercase tracking-wide text-neutral-500">Our price</div>
-            <div className="text-[18pt] font-black leading-none tabular-nums">{rs(item.list_price)}</div>
+            {item.compare ? <div className="text-[6.5pt] text-neutral-500">New in store <span className="line-through">~{rs(item.compare.new_price)}</span></div> : null}
+            <div className="flex items-end justify-between">
+              <div><div className="text-[6pt] uppercase tracking-wide text-neutral-500">Our price</div><div className="text-[18pt] font-black leading-none tabular-nums">{rs(item.list_price)}</div></div>
+              {item.compare && item.compare.saving_pct >= 10 ? <div className="mb-[0.5mm] rounded-sm border border-black px-[1.2mm] py-[0.4mm] text-center leading-tight"><div className="text-[5pt] uppercase tracking-wide">You save</div><div className="text-[10pt] font-black">{item.compare.saving_pct}%</div></div> : null}
+            </div>
             <div className="mt-[1.5mm] h-[10mm] w-[42mm] border border-dashed border-neutral-400" title="discount sticker zone" />
             <div className="mt-[1mm] text-[5.5pt] text-neutral-500">Price includes sales tax</div>
           </div>

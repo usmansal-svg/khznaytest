@@ -9,6 +9,8 @@ import { markdownLadder } from "@/lib/pricing/engine";
 import { loadPricingContext } from "@/lib/pricing/repo";
 import { MEASUREMENT_FIELDS, type MeasureType } from "@/lib/pricing/sub-categories";
 import { shopifyTags, shopifyTitle } from "@/lib/shopify/tags";
+import { comparePrice, type ReferenceRow } from "@/lib/pricing/compare";
+import { computePrice } from "@/lib/pricing/engine";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ sku: string }> }) {
   const { sku: raw } = await params;
@@ -19,7 +21,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ sku
     supabase
       .from("items")
       .select(
-        "id, sku, brand_text, brand_tier, grade_code, is_rare, flaw_note, season, wearer, size_label, colour, fabric, measurements, weight_kg, adjustment, colour_tag, floored_on, landed_cost, price, price_manual, status, tagged_at, outlet_id, channel, photos, description, online_status, shopify_product_id, shopify_handle, shopify_tags, shopify_synced_at, shopify_error, outlets(name), lots(code), sub_categories(name, code, measure_type, market_price, categories(name))",
+        "id, sku, brand_id, brand_text, brand_tier, grade_code, is_rare, flaw_note, season, wearer, size_label, colour, fabric, measurements, weight_kg, adjustment, colour_tag, floored_on, landed_cost, price, price_manual, status, tagged_at, outlet_id, channel, photos, description, online_status, shopify_product_id, shopify_handle, shopify_tags, shopify_synced_at, shopify_error, sub_category_slug, outlets(name), lots(code), sub_categories(name, code, measure_type, market_price, category_slug, categories(name))",
       )
       .eq("sku", sku)
       .maybeSingle(),
@@ -35,12 +37,24 @@ export async function GET(_request: Request, { params }: { params: Promise<{ sku
   const outlet = one<{ name: string }>(data.outlets);
   const listPrice = data.price_manual ?? data.price ?? 0;
 
+  // "New in store" for the tag: reference table → sheet market price → formula.
+  const { data: refRows } = await supabase.from("reference_prices").select("brand_id, tier, sub_category_slug, category_slug, new_price_pkr, source, confirmed");
+  const scRow = ctx.subCategories.find((s) => s.slug === data.sub_category_slug);
+  const premium = scRow?.standardCost ? computePrice({ weightKg: 0, basis: "standard", effectiveRate: scRow.standardCost, profileCode: scRow.profileCode, valueIndex: scRow.valueIndex, tier: data.brand_tier as "regular" }, ctx.settings, ctx.refs).premiumPrice : null;
+  const compare = listPrice
+    ? comparePrice(
+        { brandId: data.brand_id, tier: data.brand_tier, subCategorySlug: data.sub_category_slug, categorySlug: (sub as { category_slug?: string } | null)?.category_slug ?? "", marketPrice: sub?.market_price ?? null, premiumPrice: premium, ourPrice: listPrice, settings: { compareFactorRegular: ctx.settings.compareFactorRegular, compareFactorAffordable: ctx.settings.compareFactorAffordable, compareFormulaEnabled: ctx.settings.compareFormulaEnabled } },
+        (refRows ?? []) as ReferenceRow[],
+      )
+    : null;
+
   const taggable = {
     wearer: data.wearer, season: data.season, category: category?.name ?? "", sub_category: sub?.name ?? "", brand: data.brand_text,
     brand_tier: data.brand_tier, grade: data.grade_code, size_label: data.size_label, colour: data.colour, fabric: data.fabric, is_rare: data.is_rare,
   };
 
   return NextResponse.json({
+    compare,
     shopify_preview: { title: shopifyTitle(taggable), tags: shopifyTags(taggable) },
     item: {
       id: data.id,
@@ -51,6 +65,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ sku
       sub_category: sub?.name ?? "",
       sub_category_code: sub?.code ?? "",
       market_price: sub?.market_price ?? null,
+      compare,
       measure_fields: sub ? MEASUREMENT_FIELDS[sub.measure_type] : [],
       grade: data.grade_code,
       is_rare: data.is_rare,

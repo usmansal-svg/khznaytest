@@ -69,7 +69,7 @@ export async function POST(request: Request) {
   return NextResponse.json({ version, ...repricePreview(ctx, proposed.settings) });
 }
 
-const RANGES: Record<keyof Omit<Settings, "brandFeedbackEnabled" | "ladderDepths">, [number, number]> = {
+const RANGES: Record<keyof Omit<Settings, "brandFeedbackEnabled" | "ladderDepths" | "compareFormulaEnabled">, [number, number]> = {
   fx: [1, 10000],
   blendedRate: [0.01, 1000],
   dutyPerKg: [0, 100000],
@@ -87,6 +87,8 @@ const RANGES: Record<keyof Omit<Settings, "brandFeedbackEnabled" | "ladderDepths
   defaultProvisionalYield: [0.3, 1],
   defaultDailyTarget: [1, 1000],
   qcSampleRate: [0, 1],
+  compareFactorRegular: [1, 20],
+  compareFactorAffordable: [1, 20],
 };
 
 /** Human-readable field changes between two audit snapshots. */
@@ -116,6 +118,7 @@ function validate(input: Partial<Settings> | undefined): { settings: Settings } 
   }
   if (typeof input.brandFeedbackEnabled !== "boolean") return { error: "brandFeedbackEnabled must be true or false." };
   out.brandFeedbackEnabled = input.brandFeedbackEnabled;
+  out.compareFormulaEnabled = input.compareFormulaEnabled !== false;
   if (out.charmEnd >= out.charmStep) return { error: "charmEnd must be smaller than charmStep." };
   return { settings: out };
 }

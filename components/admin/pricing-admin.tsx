@@ -37,6 +37,8 @@ const FIELDS: { key: keyof Settings; label: string; unit?: string; step: number;
   { key: "minPrice", label: "Minimum price", unit: "PKR", step: 10, group: "Rounding", help: "Floor for any grade at any markdown." },
   { key: "highValueThreshold", label: "High-value threshold", unit: "PKR", step: 100, group: "Control", help: "Items above this go to the QC review queue." },
   { key: "defaultDailyTarget", label: "Daily tagging target", unit: "garments per tagger", step: 5, group: "Control", help: "Shown to each tagger on the tag form; a personal target on the Staff page overrides it." },
+  { key: "compareFactorRegular", label: "Compare-at factor · high street", unit: "× Premium price", step: 0.1, group: "Compare at", help: "Formula fallback for the tag's New in store price when no reference price exists: Premium shelf price × this. Thrift usually sells at 25–35% of new, so 3 ≈ 67% saving." },
+  { key: "compareFactorAffordable", label: "Compare-at factor · affordable luxury", unit: "× Premium price", step: 0.1, group: "Compare at", help: "Same, for affordable-luxury brands." },
   { key: "qcSampleRate", label: "QC hold-back rate", unit: "0–1 (0.10 = one in ten)", step: 0.01, group: "Control", help: "Share of saved garments randomly held for a blind regrade. The tagger is told to set them aside; they cannot ship until a senior releases them." },
 ];
 
@@ -162,6 +164,12 @@ export function PricingAdmin() {
                       <p className="text-xs text-muted-foreground">{f.help}</p>
                     </div>
                   ))}
+                  {g === "Compare at" && (
+                    <label className="flex items-start gap-2 text-sm sm:col-span-2">
+                      <Checkbox checked={draft.compareFormulaEnabled} onCheckedChange={(v) => setDraft({ ...draft, compareFormulaEnabled: v === true })} className="mt-0.5" />
+                      <span><span className="font-medium">Use the formula when no reference price exists</span><span className="block text-xs text-muted-foreground">Off: tags print a New in store price only from the Compare prices table or the sheet&apos;s market price.</span></span>
+                    </label>
+                  )}
                   {g === "Margin" && (
                     <label className="flex items-start gap-2 text-sm sm:col-span-2">
                       <Checkbox checked={draft.brandFeedbackEnabled} onCheckedChange={(v) => setDraft({ ...draft, brandFeedbackEnabled: v === true })} className="mt-0.5" />
