@@ -105,9 +105,7 @@ export function TagForm() {
   const [weight, setWeight] = useState("");
   const [size, setSize] = useState("");
   const [colour, setColour] = useState("");
-  const [fabric, setFabric] = useState("");
   const [grade, setGrade] = useState<GradeCode>("premium");
-  const [flaw, setFlaw] = useState("");
   const [measure, setMeasure] = useState<Record<string, string>>({});
   const [sleeve, setSleeve] = useState<string>("");
   const [adjustPct, setAdjustPct] = useState(0);
@@ -121,8 +119,7 @@ export function TagForm() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState<Saved | null>(null);
   const [sessionSkus, setSessionSkus] = useState<string[]>([]);
-  const [last, setLast] = useState<{ brand: string; size: string; colour: string; fabric: string } | null>(null);
-  const [moreOpen, setMoreOpen] = useState(false);
+
 
   const brandRef = useRef<HTMLInputElement>(null);
   const weightRef = useRef<HTMLInputElement>(null);
@@ -251,7 +248,6 @@ export function TagForm() {
 
   const blocked = !rejected && Boolean(price?.block_reason);
   const needsManual = !rejected && (blocked || manualOn);
-  const showFlaw = grade === "excellent" || grade === "very_good";
   const listPrice = rejected ? 0 : needsManual ? Number(manualPrice) || 0 : price?.price ?? 0;
   const standardPrice = price?.standard_price ?? null;
   const below = !rejected && !blocked && standardPrice != null && listPrice > 0 && listPrice < standardPrice;
@@ -269,9 +265,7 @@ export function TagForm() {
     setWeight("");
     setSize("");
     setColour("");
-    setFabric("");
     setGrade("premium");
-    setFlaw("");
     setMeasure({});
     setSleeve("");
     setAdjustPct(0);
@@ -300,12 +294,12 @@ export function TagForm() {
           grade,
           adjust_pct: adjustPct,
           below_reason: below ? belowReason : null,
-          flaw_note: showFlaw ? flaw : null,
+          flaw_note: null,
           season,
           wearer,
           size_label: size,
           colour,
-          fabric,
+          fabric: null,
           measurements: { ...Object.fromEntries(Object.entries(measure).filter(([, v]) => v !== "")), ...(asksSleeve && sleeve ? { Sleeve: sleeve } : {}) },
           outlet_id: null,
           lot_id: Number(lotId),
@@ -318,7 +312,6 @@ export function TagForm() {
       if (!res.ok) throw new Error(json.error ?? "Save failed.");
       setSaved(json.item);
       setSessionSkus((list) => [...list, json.item.sku]);
-      setLast({ brand, size, colour, fabric });
       // The photo is the record of the garment; it goes up the moment the SKU exists.
       if (photo) {
         try {
@@ -493,7 +486,6 @@ export function TagForm() {
               >
                 <div className="flex gap-2">
                   <Input ref={brandRef} list="brands" value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Start typing…" autoComplete="off" autoFocus onKeyDown={(e) => { if (e.key === "Enter" && !(needsWeight && !weightKg)) { e.preventDefault(); e.stopPropagation(); sizeRef.current?.focus(); } }} />
-                  {last && <Button type="button" variant="outline" className="h-11 shrink-0 md:h-9" title={`${last.brand || "no brand"} · ${last.size || "no size"}`} onClick={() => { setBrand(last.brand); setSize(last.size); setColour(last.colour); setFabric(last.fabric); }}>Same as last</Button>}
                 </div>
                 <datalist id="brands">{brandHits.map((b) => <option key={b.name} value={b.name}>{tierLabel(b.tier)}</option>)}</datalist>
               </Field>
@@ -508,23 +500,13 @@ export function TagForm() {
                   {(isKids ? KIDS_SIZES.map((k) => k.label) : ADULT_SIZES).map((s) => <option key={s} value={s} />)}
                 </datalist>
               </Field>
+              <Field label="Colour">
+                <Input list="colours" value={colour} onChange={(e) => setColour(e.target.value)} placeholder="e.g. Black" autoComplete="off" />
+                <datalist id="colours">{COLOURS.map((c) => <option key={c} value={c} />)}</datalist>
+              </Field>
             </div>
 
-            <div>
-              <button type="button" className="text-sm text-muted-foreground underline-offset-2 hover:underline" onClick={() => setMoreOpen((o) => !o)}>{moreOpen ? "Hide" : "More details"} · colour, fabric{(colour || fabric) && !moreOpen ? ` (${[colour, fabric].filter(Boolean).join(", ")})` : ""}</button>
-              {moreOpen && (
-                <div className="mt-3 grid gap-4 sm:grid-cols-2">
-                  <Field label="Colour">
-                    <Input list="colours" value={colour} onChange={(e) => setColour(e.target.value)} placeholder="For the online listing" autoComplete="off" />
-                    <datalist id="colours">{COLOURS.map((c) => <option key={c} value={c} />)}</datalist>
-                  </Field>
-                  <Field label="Fabric">
-                    <Input list="fabrics" value={fabric} onChange={(e) => setFabric(e.target.value)} autoComplete="off" />
-                    <datalist id="fabrics">{FABRICS.map((f) => <option key={f} value={f} />)}</datalist>
-                  </Field>
-                </div>
-              )}
-            </div>
+
 
             <ButtonGroup
               label="Condition"
@@ -538,12 +520,6 @@ export function TagForm() {
               <Note tone="warn">Rejected — price 0. Still saved as an item so the reject rate is measured. Pull buttons and snaps, cut drawstrings, then bin it.</Note>
             )}
 
-            {showFlaw && (
-              <Field label="Flaw">
-                <Input list="flaws" value={flaw} onChange={(e) => setFlaw(e.target.value)} placeholder="What and where" autoComplete="off" />
-                <datalist id="flaws">{FLAWS.map((f) => <option key={f} value={f} />)}</datalist>
-              </Field>
-            )}
 
             {selectedSub && (
               <div className="space-y-3">
@@ -731,8 +707,6 @@ const selectClass =
   "flex h-11 md:h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base md:text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
 
 const COLOURS = ["Black", "White", "Grey", "Navy", "Blue", "Red", "Green", "Beige", "Brown", "Pink", "Yellow", "Orange", "Purple", "Multi"];
-const FABRICS = ["Cotton", "Polyester", "Denim", "Wool", "Linen", "Silk", "Leather", "Suede", "Cashmere", "Fleece", "Nylon", "Blend"];
-const FLAWS = ["Small stain front", "Small stain back", "Stain under arm", "Repaired seam", "Small hole repaired", "Pilling", "Fading", "Shape gone", "Missing button"];
 
 function tierLabel(tier: string) {
   return { regular: "Regular high street", affordable_luxury: "Affordable luxury", ultra_luxury: "Ultra luxury" }[tier] ?? tier;
