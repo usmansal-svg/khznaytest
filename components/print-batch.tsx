@@ -25,7 +25,7 @@ export function PrintBatch() {
       <style>{tagCss()}</style>
       <div className="no-print flex items-center gap-3 p-4 text-sm">
         <button onClick={() => window.print()} className="rounded-md bg-black px-4 py-2 font-semibold text-white">Print {items.length} tags</button>
-        <span className="text-neutral-600">{items.length * 2} pages · 50 × 90 mm</span>
+        <span className="text-neutral-600">{items.length} pages · 50 × 90 mm</span>
         {failed.length > 0 && <span className="text-red-700">Not found: {failed.join(", ")}</span>}
       </div>
       <div className="flex flex-wrap gap-6 p-4 print:gap-0 print:p-0">{items.map((it) => <TagFaces key={it.sku} item={it} />)}</div>

@@ -27,7 +27,7 @@ export function PrintTag({ sku }: { sku: string }) {
       <style>{tagCss()}</style>
       {!embed && <div className="no-print flex items-center gap-3 p-4 text-sm">
         <button onClick={() => window.print()} className="rounded-md bg-black px-4 py-2 font-semibold text-white">Print tag</button>
-        <span className="text-neutral-600">50 × 90 mm · front and back print as two pages</span>
+        <span className="text-neutral-600">50 × 90 mm · one page per tag</span>
         <a href={`/items/${item.sku}`} className="ml-auto text-neutral-600 underline">Garment</a>
       </div>}
       <div className="flex flex-wrap gap-6 p-4 print:gap-0 print:p-0"><TagFaces item={item} /></div>
