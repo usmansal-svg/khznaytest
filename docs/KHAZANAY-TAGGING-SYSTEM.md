@@ -57,10 +57,11 @@ Removed from this platform's sidebar (code kept for the POS): the Till (`/pos`) 
 
 ### 4.1 Where a price comes from
 
-Every sub-category on the pricing sheet carries a **cost per piece (Rs)** — what is paid for one garment, nothing else. From it:
+Every sub-category on the pricing sheet carries a **cost per piece (Rs)** — the ex-works price paid to the vendor for one garment, nothing else — and a **typical weight (kg)**, which is what import duty is charged on. From them:
 
 ```
-landed   = cost_per_piece × (1 − input_tax_rate × input_tax_recover) + sorting_per_piece
+landed   = (cost_per_piece + typical_weight_kg × duty_per_kg) × (1 − input_tax_rate × input_tax_recover) + sorting_per_piece
+           (local-market lots: no duty, no tax credit)
 premium  = charm( landed × profile_multiple × value_index × brand_multiplier × (1 + adjust_pct/100) )
 grade    = charm( premium × grade_multiplier )          (from the rounded premium)
 markdown = charm( price × (1 − depth) )                 (25 / 50 / 75 %, from the rounded price)

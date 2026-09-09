@@ -81,6 +81,11 @@ describe("lots", () => {
   it("a local purchase pays no duty and gets no tax credit — cost is what was paid", () => {
     assert.equal(landedCost({ basis: "pc", effectiveRate: 600, weightKg: 0, imported: false }), 600);
     assert.equal(Number(landedCost({ basis: "pc", effectiveRate: 600, weightKg: 0 }).toFixed(2)), 535.2);
+    // A per-piece imported cost still pays duty on the garment's typical weight.
+    const s = DEFAULT_SETTINGS;
+    const withDuty = (600 + 0.3 * s.dutyPerKg) * (1 - s.inputTaxRate * s.inputTaxRecover) + s.sortingPerPiece;
+    assert.equal(Number(landedCost({ basis: "pc", effectiveRate: 600, weightKg: 0.3 }).toFixed(2)), Number(withDuty.toFixed(2)));
+    assert.equal(landedCost({ basis: "pc", effectiveRate: 600, weightKg: 0.3, imported: false }), 600);
     const localKg = landedCost({ weightKg: 0.31, effectiveRate: 6.48, imported: false });
     assert.equal(Number(localKg.toFixed(2)), Number((0.31 * 6.48 * 283).toFixed(2)));
   });

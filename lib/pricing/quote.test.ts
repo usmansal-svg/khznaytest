@@ -39,8 +39,11 @@ describe("price quote", () => {
     const cheap = quote({ subCategory: sc, brand: { id: null, ...resolveBrand("Nike") }, grade: "premium", adjustment: "standard", isRare: false, lot: { ...lotS, rate: 5 }, weightKg: 0.2 }, std);
     const dear = quote({ subCategory: sc, brand: { id: null, ...resolveBrand("Nike") }, grade: "premium", adjustment: "standard", isRare: false, lot: { ...lotS, rate: 10 }, weightKg: 0.2 }, std);
     assert.equal(cheap.cost_basis, "standard");
-    // The sheet's cost per piece is the purchase cost; landed applies the recoverable input-tax credit.
-    assert.equal(cheap.landed_cost, Math.round(550 * (1 - DEFAULT_SETTINGS.inputTaxRate * DEFAULT_SETTINGS.inputTaxRecover) * 100) / 100);
+    // The sheet's cost per piece is the ex-works purchase cost; landed adds duty on the
+    // sub-category's typical weight, takes the input-tax credit and adds sorting.
+    const s = DEFAULT_SETTINGS;
+    const landed = (550 + sc.weightKg * s.dutyPerKg) * (1 - s.inputTaxRate * s.inputTaxRecover) + s.sortingPerPiece;
+    assert.equal(cheap.landed_cost, Math.round(landed * 100) / 100);
     assert.equal(cheap.price, dear.price);
     assert.equal(cheap.weight_kg, null);
   });
@@ -57,11 +60,16 @@ describe("price quote", () => {
     assert.equal(r.sub_category.code, "MBD");
   });
 
-  it("per-piece lots ignore weight", () => {
+  it("per-piece lots need no scale weight but still pay duty on the typical weight", () => {
     const r = q("sms-sports-t-shirt", { lot: lotPc, weight: null });
-    assert.equal(r.landed_cost, 535.2);
-    assert.equal(r.price, 1990);
+    const s = DEFAULT_SETTINGS;
+    const sc = ctx.subCategories.find((x) => x.slug === "sms-sports-t-shirt")!;
+    const landed = (600 + sc.weightKg * s.dutyPerKg) * (1 - s.inputTaxRate * s.inputTaxRecover) + s.sortingPerPiece;
+    assert.equal(r.landed_cost, Math.round(landed * 100) / 100);
+    assert.ok((r.price ?? 0) >= 1990);
     assert.equal(r.weight_kg, null);
+    const local = q("sms-sports-t-shirt", { lot: { ...lotPc, imported: false }, weight: null });
+    assert.equal(local.landed_cost, 600 + s.sortingPerPiece);
   });
 
   it("a kg lot without a weight is an error, not a guess", () => {

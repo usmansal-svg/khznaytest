@@ -86,8 +86,11 @@ export function quote(input: QuoteInput, ctx: PricingContext): Quote {
     warnings.push("No standard cost set for this sub-category — planning quote at the blended rate and default weight. Set one under Pricing.");
   }
 
+  // Per-piece costs still pay duty on weight: use the sub-category's typical
+  // weight for that, without recording it as a scale reading on the item.
+  const costWeightKg = basis === "pc" ? subCategory.weightKg : weightKg ?? 0;
   const baseInputs = {
-    weightKg: weightKg ?? 0,
+    weightKg: costWeightKg,
     basis,
     effectiveRate: effRate,
     imported: basis === "pc" && subCategory.standardCost ? true : lot ? lot.imported : true,
