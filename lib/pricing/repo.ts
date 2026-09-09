@@ -28,6 +28,7 @@ import {
   type Settings,
 } from "./constants";
 import { effectiveRate, lotYield, type PricingRefs } from "./engine";
+import { matchBrand, normaliseBrand } from "@/lib/brands/normalise";
 import { SUB_CATEGORIES, type MeasureType } from "./sub-categories";
 
 export type DbSubCategory = {
@@ -236,23 +237,43 @@ export type BrandResolution = {
   name: string;
   tier: BrandTier;
   matched: boolean;
+  /** What the tagger typed, when it differs from the name used */
+  corrected_from?: string;
+  /** True when no listed brand is close — saving will add it */
+  is_new?: boolean;
   warning?: string;
 };
 
-/** Resolve a typed brand to a tier from the brands table. Never judged by the tagger. */
+/**
+ * Resolve a typed brand to a tier from the brands table. Never judged by
+ * the tagger. Exact or near matches (small misspellings) snap to the listed
+ * brand; anything else is cleaned up as a new Regular brand.
+ */
 export async function resolveBrandDb(supabase: SupabaseClient, input: string | null | undefined): Promise<BrandResolution> {
   const text = (input ?? "").trim();
   if (!text) {
     return { id: null, name: "", tier: DEFAULT_BRAND_TIER, matched: false, warning: "No brand given — priced as Regular high street." };
   }
-  const { data } = await supabase.from("brands").select("id, name, tier").ilike("name", text).eq("active", true).limit(1).maybeSingle();
-  if (data) return { id: data.id, name: data.name, tier: data.tier as BrandTier, matched: true };
+  const { data } = await supabase.from("brands").select("id, name, tier").eq("active", true).limit(5000);
+  const hit = matchBrand(text, (data ?? []) as { id: number; name: string; tier: string }[]);
+  if (hit) {
+    return {
+      id: hit.brand.id,
+      name: hit.brand.name,
+      tier: hit.brand.tier as BrandTier,
+      matched: true,
+      ...(hit.corrected && text !== hit.brand.name ? { corrected_from: text } : {}),
+    };
+  }
+  const name = normaliseBrand(text);
   return {
     id: null,
-    name: text,
+    name,
     tier: DEFAULT_BRAND_TIER,
     matched: false,
-    warning: `Unknown brand "${text}" — priced as Regular high street. Check the brand list.`,
+    is_new: true,
+    ...(name !== text ? { corrected_from: text } : {}),
+    warning: `New brand "${name}" — priced as Regular high street until a manager sets its tier.`,
   };
 }
 

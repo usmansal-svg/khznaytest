@@ -96,6 +96,18 @@ export async function POST(request: Request) {
   const belowReason = body.below_reason?.trim() || null;
   if (below && !belowReason) return bad(`This is ${Math.round(((standardPrice - finalPrice) / standardPrice) * 100)}% below the pricing sheet (Rs ${standardPrice.toLocaleString()}). Give a reason — it is logged.`);
 
+  // A brand nobody has listed yet is added now, as Regular, marked as
+  // coming from a tagger so a manager can set its tier.
+  let brandId = brand.id;
+  if (!brandId && brand.name) {
+    const { data: created, error: brandErr } = await supabase
+      .from("brands")
+      .upsert({ name: brand.name, tier: "regular", active: true, source: "tagger", added_by: staff.id }, { onConflict: "name", ignoreDuplicates: false })
+      .select("id")
+      .single();
+    if (!brandErr && created) brandId = created.id;
+  }
+
   const { data: seq, error: seqError } = await supabase.rpc("next_sku_seq");
   if (seqError || typeof seq !== "number") {
     return NextResponse.json({ error: `Could not allocate a SKU: ${seqError?.message ?? "no sequence"}` }, { status: 500 });
@@ -110,7 +122,7 @@ export async function POST(request: Request) {
       outlet_id: body.outlet_id ?? null,
       tagged_by: staff.id,
       sub_category_slug: subCategory.slug,
-      brand_id: brand.id,
+      brand_id: brandId,
       brand_text: brand.name || null,
       brand_tier: brand.tier,
       grade_code: grade,

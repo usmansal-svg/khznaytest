@@ -14,9 +14,10 @@ type Tier = (typeof TIERS)[number];
 
 export async function GET() {
   const supabase = await createClient();
-  const { data, error } = await supabase.from("brands").select("id, name, tier, active").order("name");
+  const { data, error } = await supabase.from("brands").select("id, name, tier, active, source, added_at, staff:added_by(name)").order("name");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ brands: data ?? [] });
+  const one = (v: unknown) => (Array.isArray(v) ? v[0] : v) as { name: string } | null | undefined;
+  return NextResponse.json({ brands: (data ?? []).map((b) => ({ id: b.id, name: b.name, tier: b.tier, active: b.active, source: b.source, added_at: b.added_at, added_by: one(b.staff)?.name ?? null })) });
 }
 
 export async function POST(request: Request) {
@@ -34,7 +35,7 @@ export async function POST(request: Request) {
   const isCsv = new URL(request.url).searchParams.get("csv") === "1";
   const incoming = isCsv ? parseCsv(body.csv ?? "") : (body.brands ?? []).map((b) => ({ name: b.name ?? "", tier: b.tier ?? "", active: b.active ?? true }));
 
-  const clean: { name: string; tier: Tier; active: boolean }[] = [];
+  const clean: { name: string; tier: Tier; active: boolean; source: string }[] = [];
   const rejected: string[] = [];
   for (const b of incoming) {
     const name = b.name.trim();
@@ -43,7 +44,7 @@ export async function POST(request: Request) {
       rejected.push(`${b.name || "(blank)"} / ${b.tier || "(no tier)"}`);
       continue;
     }
-    clean.push({ name, tier, active: b.active ?? true });
+    clean.push({ name, tier, active: b.active ?? true, source: "admin" });
   }
   if (!clean.length) return NextResponse.json({ error: "No valid brands.", rejected }, { status: 400 });
 

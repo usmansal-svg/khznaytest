@@ -55,7 +55,7 @@ type PriceResponse = {
   grade_prices: Record<GradeCode, number> | null;
   markdowns: { stage: string; discount: number; price: number }[];
   gp_pct: number | null;
-  brand: { name: string; tier: string; matched: boolean };
+  brand: { name: string; tier: string; matched: boolean; corrected_from?: string; is_new?: boolean };
   block_reason?: string;
   warnings?: string[];
   error?: string;
@@ -480,11 +480,11 @@ export function TagForm() {
                 hint={
                   price?.brand && brand
                     ? price.brand.matched
-                      ? `${price.brand.name} — ${tierLabel(price.brand.tier)}`
-                      : "Unknown brand — priced as Regular"
-                    : "Tier resolves automatically"
+                      ? `${price.brand.corrected_from ? `Using ${price.brand.name} (you typed "${price.brand.corrected_from}")` : price.brand.name} — ${tierLabel(price.brand.tier)}`
+                      : `New brand — will be added as "${price.brand.name}" (Regular) when you save`
+                    : "Tier resolves automatically; misspellings are corrected"
                 }
-                hintTone={price?.brand && brand && !price.brand.matched ? "warn" : undefined}
+                hintTone={price?.brand && brand && (!price.brand.matched || price.brand.corrected_from) ? "warn" : undefined}
               >
                 <Input ref={brandRef} list="brands" value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Start typing…" autoComplete="off" autoFocus />
                 <datalist id="brands">{brandHits.map((b) => <option key={b.name} value={b.name}>{tierLabel(b.tier)}</option>)}</datalist>

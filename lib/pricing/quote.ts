@@ -44,7 +44,7 @@ export type Quote = {
   markdowns: { stage: string; discount: number; price: number }[];
   gp_pct: number | null;
   expected_revenue: number | null;
-  brand: { id: number | null; name: string; tier: string; matched: boolean };
+  brand: { id: number | null; name: string; tier: string; matched: boolean; corrected_from?: string; is_new?: boolean };
   brand_tier: string;
   grade: GradeCode;
   adjustment: Adjustment;
@@ -123,7 +123,7 @@ export function quote(input: QuoteInput, ctx: PricingContext): Quote {
     expected_revenue: priced
       ? round2(expectedRevenue({ price: result.price, landedCost: result.landedCost, gradeCode: grade, profileCode: subCategory.profileCode }, ctx.settings, ctx.refs))
       : null,
-    brand: { id: brand.id, name: brand.name, tier: brand.tier, matched: brand.matched },
+    brand: { id: brand.id, name: brand.name, tier: brand.tier, matched: brand.matched, ...(brand.corrected_from ? { corrected_from: brand.corrected_from } : {}), ...(brand.is_new ? { is_new: true } : {}) },
     brand_tier: brand.tier,
     grade,
     adjustment,
