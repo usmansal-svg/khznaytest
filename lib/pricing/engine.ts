@@ -101,11 +101,7 @@ export function effectiveRate(lot: LotCost, settings: Settings = DEFAULT_SETTING
 /* ------------------------------------------------------------------- cost */
 
 export type CostInputs = {
-  /**
-   * Weight the cost is charged on: the scale weight for kg lots, the
-   * sub-category's typical weight for per-piece costs (duty is per kg
-   * whichever way the vendor bills).
-   */
+  /** Scale weight of this garment. Ignored for pc lots. */
   weightKg: number;
   /** kg | pc | standard (a landed cost per garment, as-is). Defaults to kg */
   basis?: CostBasis;
@@ -119,23 +115,20 @@ export type CostInputs = {
 };
 
 /**
- * gross  = basis == 'pc' ? rate + weight * duty_per_kg
- *                        : weight * effective_rate * fx + weight * duty_per_kg
+ * gross  = basis == 'pc' ? rate : weight * effective_rate * fx + weight * duty_per_kg
  * landed = gross * (1 - input_tax_rate * input_tax_recover) + sorting_per_piece
  *
- * Freight is already inside the vendor (ex-works) rate. Duty is added on
- * weight for imported stock however it was billed, recoverable input tax
- * subtracted, sorting added. Output sales tax is added later, in the multiple.
+ * Freight is already inside the vendor rate. Duty is added on kg lots;
+ * a per-piece cost is entered with duty already in it (Usman's rule),
+ * so none is added there. Recoverable input tax is subtracted. Output sales tax is added later, in the multiple.
  */
 export function grossCost(inputs: CostInputs, settings: Settings = DEFAULT_SETTINGS): number {
   const basis = inputs.basis ?? "kg";
   const rate = inputs.effectiveRate ?? settings.blendedRate;
   const imported = inputs.imported ?? true;
-  if (basis === "standard") return rate;
-  const duty = imported ? inputs.weightKg * settings.dutyPerKg : 0;
-  if (basis === "pc") return rate + duty;
+  if (basis === "pc" || basis === "standard") return rate;
   // A local kg purchase is quoted in USD-equivalent terms too, but pays no duty.
-  return inputs.weightKg * rate * settings.fx + duty;
+  return inputs.weightKg * rate * settings.fx + (imported ? inputs.weightKg * settings.dutyPerKg : 0);
 }
 
 export function landedCost(inputs: CostInputs, settings: Settings = DEFAULT_SETTINGS): number {

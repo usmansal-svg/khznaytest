@@ -51,10 +51,10 @@ type Estimate = { landed_cost: number; bnwt: number; premium: number; excellent:
  * price and is null until one is set. Imported (duty + tax credit), like
  * the Excel sheet.
  */
-/** From the purchase cost per piece: landed (duty on the typical weight, input-tax credit, sorting), then the shelf prices; a market price sets Premium. */
+/** From the purchase cost per piece: landed (constants applied), then the shelf prices; a market price sets Premium. */
 function estimates(r: EstimateInput, ctx: Awaited<ReturnType<typeof loadPricingContext>>): { estimate: Estimate | null } {
   if (!r.standard_cost_pkr) return { estimate: null };
-  const e = computePrice({ weightKg: r.weight_kg, basis: "pc", effectiveRate: r.standard_cost_pkr, imported: true, profileCode: r.profile_code as "fast", valueIndex: r.value_index, premiumOverride: r.market_price }, ctx.settings, ctx.refs);
+  const e = computePrice({ weightKg: 0, basis: "pc", effectiveRate: r.standard_cost_pkr, imported: true, profileCode: r.profile_code as "fast", valueIndex: r.value_index, premiumOverride: r.market_price }, ctx.settings, ctx.refs);
   return { estimate: { landed_cost: Math.round(e.landedCost), bnwt: e.gradePrices.bnwt, premium: e.gradePrices.premium, excellent: e.gradePrices.excellent, very_good: e.gradePrices.very_good, gp_pct: e.gpPct } };
 }
 

@@ -57,11 +57,10 @@ Removed from this platform's sidebar (code kept for the POS): the Till (`/pos`) 
 
 ### 4.1 Where a price comes from
 
-Every sub-category on the pricing sheet carries a **cost per piece (Rs)** — the ex-works price paid to the vendor for one garment, nothing else — and a **typical weight (kg)**, which is what import duty is charged on. From them:
+Every sub-category on the pricing sheet carries a **cost per piece (Rs)** — what one garment costs **with import duty already included** (entered that way; the engine adds no duty to it). From it:
 
 ```
-landed   = (cost_per_piece + typical_weight_kg × duty_per_kg) × (1 − input_tax_rate × input_tax_recover) + sorting_per_piece
-           (local-market lots: no duty, no tax credit)
+landed   = cost_per_piece × (1 − input_tax_rate × input_tax_recover) + sorting_per_piece
 premium  = charm( landed × profile_multiple × value_index × brand_multiplier × (1 + adjust_pct/100) )
 grade    = charm( premium × grade_multiplier )          (from the rounded premium)
 markdown = charm( price × (1 − depth) )                 (25 / 50 / 75 %, from the rounded price)
@@ -226,6 +225,7 @@ Garment page: channel switch, photos (camera capture, on-device background remov
 
 - **Markdowns round** (25/50/75 → 1,390 / 890 / 490 on a 1,790 shirt); the original spec's floor example was an error, corrected by spec v2.
 - **Standard cost per sub-category, not scale weight**, sets the shelf price (10 Sep). Weight-based pricing remains in the engine for lot P&L.
+- **Cost per piece is entered duty-inclusive.** Duty per kg applies only to kg lots; adding it to per-piece costs was tried and reverted the same day.
 - **Lot numbers never reuse** a deleted number (tried and reverted the same day).
 - **Two-level catalogue per gender** (Category → Sub-category) with type-to-find, after trying flat.
 - **QC by random hold-back at tagging**, not at the outlet or by shipment sample.
