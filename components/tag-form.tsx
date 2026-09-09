@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Printer, RotateCcw, Save } from "lucide-react";
+import { Camera, Printer, RotateCcw, Save } from "lucide-react";
+import { downscale, uploadPhoto } from "@/lib/photos";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -124,6 +125,18 @@ export function TagForm() {
   const brandRef = useRef<HTMLInputElement>(null);
   const weightRef = useRef<HTMLInputElement>(null);
   const printRef = useRef<HTMLIFrameElement>(null);
+  const photoRef = useRef<HTMLInputElement>(null);
+  const [photo, setPhoto] = useState<{ blob: Blob; url: string } | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+
+  async function onPhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    const blob = await downscale(f);
+    if (photo) URL.revokeObjectURL(photo.url);
+    setPhoto({ blob, url: URL.createObjectURL(blob) });
+  }
   const [autoPrint, setAutoPrint] = useState(true);
   const [printing, setPrinting] = useState<string | null>(null);
 
@@ -242,8 +255,9 @@ export function TagForm() {
   const weightOk = !needsWeight || weightKg > 0;
   const sleeveOk = !asksSleeve || Boolean(sleeve);
   const reasonOk = !below || belowReason.trim().length >= 3;
+  const photoOk = Boolean(photo) || rejected;
   const canSave =
-    Boolean(ref?.tagger) && Boolean(sub) && Boolean(selectedLot) && weightOk && sleeveOk && reasonOk && !saving && !price?.error &&
+    Boolean(ref?.tagger) && Boolean(sub) && Boolean(selectedLot) && weightOk && sleeveOk && reasonOk && photoOk && !saving && !price?.error &&
     (rejected ? price?.price === 0 : needsManual ? listPrice > 0 : Boolean(price?.price));
 
   const resetForNext = useCallback(() => {
@@ -260,6 +274,9 @@ export function TagForm() {
     setManualOn(false);
     setManualPrice("");
     setBelowReason("");
+    if (photo) URL.revokeObjectURL(photo.url);
+    setPhoto(null);
+    setPhotoError(null);
     setSaved(null);
     setSaveError(null);
     requestAnimationFrame(() => brandRef.current?.focus());
@@ -297,6 +314,14 @@ export function TagForm() {
       if (!res.ok) throw new Error(json.error ?? "Save failed.");
       setSaved(json.item);
       setSessionSkus((list) => [...list, json.item.sku]);
+      // The photo is the record of the garment; it goes up the moment the SKU exists.
+      if (photo) {
+        try {
+          await uploadPhoto(json.item.sku, photo.blob);
+        } catch (err) {
+          setPhotoError(err instanceof Error ? err.message : "Photo upload failed.");
+        }
+      }
       if (autoPrint && json.item.status !== "rejected") printTag(json.item.sku);
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Save failed.");
@@ -436,6 +461,19 @@ export function TagForm() {
             <CardTitle className="text-base">Garment</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
+            <input ref={photoRef} type="file" accept="image/*" capture="environment" hidden onChange={onPhoto} />
+            <div className="flex items-center gap-4">
+              <button type="button" onClick={() => photoRef.current?.click()} className={cn("flex size-24 shrink-0 items-center justify-center overflow-hidden rounded-md border-2 border-dashed", photo ? "border-transparent" : "border-amber-500")}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {photo ? <img src={photo.url} alt="garment" className="size-full object-cover" /> : <Camera className="size-8 text-muted-foreground" />}
+              </button>
+              <div className="grid gap-1">
+                <Label>Photo <span className="font-normal text-muted-foreground">· required, one is enough</span></Label>
+                <Button type="button" variant={photo ? "outline" : "default"} className="h-11 w-fit" onClick={() => photoRef.current?.click()}><Camera className="size-4" /> {photo ? "Retake" : "Take photo"}</Button>
+                <p className="text-xs text-muted-foreground">{photo ? "Saved with the garment on Save." : "Opens the camera on the iPad. The garment can't be saved without one."}</p>
+              </div>
+            </div>
+
             <div className="grid gap-4 sm:grid-cols-2">
               <Field
                 label="Brand"
@@ -633,6 +671,9 @@ export function TagForm() {
                   Saved <span className="font-mono font-semibold">{saved.sku}</span> · {pkr(saved.list_price)}
                   {saved.status === "set_aside" && " · set aside"}
                 </Note>
+                {photoError && (
+                  <Note tone="warn">Garment saved, but the photo didn&apos;t upload ({photoError}). <button type="button" className="underline" onClick={() => photo && uploadPhoto(saved.sku, photo.blob).then(() => setPhotoError(null)).catch((e) => setPhotoError(e.message))}>Retry</button></Note>
+                )}
                 <div className="grid grid-cols-2 gap-2">
                   <Button type="button" variant="outline" className="h-12" onClick={() => printTag(saved.sku)}>
                     <Printer className="size-4" /> {printing === saved.sku ? "Printing…" : "Print tag"}
