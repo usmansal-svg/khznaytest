@@ -14,6 +14,7 @@ export type TagItem = {
   measurements: Record<string, number | string>;
   measure_fields: string[];
   list_price: number;
+  status?: string;
   outlet: string | null;
   market_price?: number | null;
   compare?: { new_price: number; saving_pct: number; source: string; confirmed: boolean } | null;
@@ -53,6 +54,12 @@ export function TagFaces({ item }: { item: TagItem }) {
             </>
           )}
           <div className="absolute bottom-[4mm] left-[4mm] right-[4mm]">
+            {item.status === "set_aside" && !item.list_price ? (
+              <div className="rounded-sm border-2 border-black p-[1.5mm] text-center">
+                <div className="text-[9pt] font-black uppercase tracking-wide">Rare find</div>
+                <div className="text-[6pt] text-neutral-700">Set aside · to be priced by a senior</div>
+              </div>
+            ) : (<>
             {item.compare ? <div className="text-[6.5pt] text-neutral-500">New in store <span className="line-through">~{rs(item.compare.new_price)}</span></div> : null}
             <div className="flex items-end justify-between">
               <div><div className="text-[6pt] uppercase tracking-wide text-neutral-500">Our price</div><div className="text-[18pt] font-black leading-none tabular-nums">{rs(item.list_price)}</div></div>
@@ -60,6 +67,7 @@ export function TagFaces({ item }: { item: TagItem }) {
             </div>
             <div className="mt-[1.5mm] h-[10mm] w-[42mm] border border-dashed border-neutral-400" title="discount sticker zone" />
             <div className="mt-[1mm] text-[5.5pt] text-neutral-500">Price includes sales tax</div>
+            </>)}
           </div>
         </div>
       </div>

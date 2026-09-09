@@ -83,15 +83,15 @@ export async function POST(request: Request) {
   if (q.error) return bad(q.error);
 
   const rejected = grade === REJECTED;
-  const blocked = !rejected && Boolean(q.block_reason);
-  if (blocked && body.price_manual == null) {
-    return bad(body.is_rare ? "Rare pieces need a manual price." : "Ultra luxury needs a manual price.");
-  }
+  // Rare finds and ultra luxury are handed off: saved with no price, set
+  // aside, priced later by a senior with the garment in hand.
+  const handoff = !rejected && (Boolean(body.is_rare) || Boolean(q.block_reason));
+  const blocked = handoff;
 
   // Under-pricing: any final price below the pricing sheet's standard price
   // at this grade needs a reason and is logged with the tagger's name.
-  const manual = body.price_manual != null;
-  const finalPrice = rejected ? 0 : manual ? Number(body.price_manual) : q.price ?? 0;
+  const manual = !handoff && body.price_manual != null;
+  const finalPrice = rejected ? 0 : handoff ? 0 : manual ? Number(body.price_manual) : q.price ?? 0;
   const standardPrice = rejected ? 0 : q.standard_price ?? 0;
   const below = !rejected && !blocked && standardPrice > 0 && finalPrice < standardPrice;
   const belowReason = body.below_reason?.trim() || null;
@@ -143,9 +143,9 @@ export async function POST(request: Request) {
       below_reason: below ? belowReason : null,
       landed_cost: q.landed_cost,
       price: blocked ? null : rejected ? 0 : q.price,
-      price_manual: blocked || manual ? body.price_manual : null,
+      price_manual: manual ? body.price_manual : null,
       settings_version: ctx.settingsVersion,
-      status: rejected ? "rejected" : blocked ? "set_aside" : "tagged",
+      status: rejected ? "rejected" : handoff ? "set_aside" : "tagged",
       channel: body.channel === "online" ? "online" : "outlet",
       online_status: body.channel === "online" ? "draft" : null,
     })
@@ -156,7 +156,7 @@ export async function POST(request: Request) {
 
   // Random QC hold-back: the tagger is told to set this one aside for a
   // blind regrade. Decided here, after the save, so it cannot be gamed.
-  const qcHold = !rejected && Math.random() < ctx.settings.qcSampleRate;
+  const qcHold = !rejected && !handoff && Math.random() < ctx.settings.qcSampleRate;
   if (qcHold) await supabase.from("items").update({ qc_hold: true }).eq("id", item.id);
 
   if (below) {

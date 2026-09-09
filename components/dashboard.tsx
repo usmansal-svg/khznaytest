@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-type Tagger = { id: number; name: string; tagged: number; today: number; week: number; per_day: number; days_active: number; secs_per_garment: number | null; premium_pct: number; rejects: number; reject_pct: number; avg_adjust: number; above_pct: number; below_pct: number; balance_flag: boolean; under_priced: number; manual_prices: number; no_photo: number; value: number; last_tagged: string | null; target: number; accuracy: { n: number; agree: number; low: number; high: number; rupees_low: number } | null };
+type Tagger = { id: number; name: string; tagged: number; today: number; week: number; per_day: number; days_active: number; secs_per_garment: number | null; premium_pct: number; rejects: number; reject_pct: number; avg_adjust: number; above_pct: number; below_pct: number; balance_flag: boolean; under_priced: number; manual_prices: number; no_photo: number; value: number; last_tagged: string | null; target: number; rare_pct: number; accuracy: { n: number; agree: number; low: number; high: number; rupees_low: number } | null };
 type Data = {
   days: number;
   kpis: { today: number; week: number; period: number; per_hour_today: number | null; value: number; cost: number; expected_gp: number; gp_pct: number; rejects: number; reject_pct: number; awaiting_floor: number; in_transit: number; on_floor: number; active_taggers_today: number };
@@ -63,7 +63,7 @@ export function Dashboard() {
     a.new_brands.length > 0 && { text: `${a.new_brands.length} new brand${a.new_brands.length === 1 ? "" : "s"} from taggers need a tier`, href: "/admin/brands", tone: "warn" as const },
     a.no_photo > 0 && { text: `${a.no_photo} garment${a.no_photo === 1 ? "" : "s"} without a photo`, href: "/items", tone: "warn" as const },
     a.qc_held > 0 && { text: `${a.qc_held} garment${a.qc_held === 1 ? "" : "s"} on the QC rail waiting for a regrade`, href: "/qc", tone: "warn" as const },
-    a.set_aside > 0 && { text: `${a.set_aside} set aside awaiting a manual price`, href: "/items", tone: "info" as const },
+    a.set_aside > 0 && { text: `${a.set_aside} rare or luxury piece${a.set_aside === 1 ? "" : "s"} waiting for a senior to price`, href: "/qc", tone: "warn" as const },
     a.lots_nearly_done.length > 0 && { text: `Lots nearly finished: ${a.lots_nearly_done.join(", ")} — time to close and true-up`, href: "/lots", tone: "info" as const },
     k.awaiting_floor > 0 && { text: `${k.awaiting_floor} tagged garments not yet on a transfer`, href: "/transfers", tone: "info" as const },
   ].filter(Boolean) as { text: string; href: string; tone: "warn" | "info" }[];
@@ -112,7 +112,7 @@ export function Dashboard() {
             <div className="overflow-x-auto"><table className="w-full text-sm">
               <thead className="text-left text-xs uppercase text-muted-foreground"><tr>
                 <th className="pb-2">Tagger</th><th className="pb-2 text-right">Tagged</th><th className="pb-2">Today vs target</th><th className="pb-2 text-right">Per day</th><th className="pb-2 text-right">Per garment</th><th className="pb-2 text-right">Grading</th>
-                <th className="pb-2 text-right">Premium+</th><th className="pb-2 text-right">Rejects</th><th className="pb-2 text-right">Avg adj.</th><th className="pb-2 text-right">Under-priced</th><th className="pb-2 text-right">By hand</th><th className="pb-2 text-right">No photo</th><th className="pb-2 text-right">Value</th><th className="pb-2">Last</th>
+                <th className="pb-2 text-right">Premium+</th><th className="pb-2 text-right">Rejects</th><th className="pb-2 text-right">Avg adj.</th><th className="pb-2 text-right">Under-priced</th><th className="pb-2 text-right">By hand</th><th className="pb-2 text-right">Rare</th><th className="pb-2 text-right">No photo</th><th className="pb-2 text-right">Value</th><th className="pb-2">Last</th>
               </tr></thead>
               <tbody className="divide-y">{data.taggers.map((t) => (
                 <tr key={t.id} className={cn((t.balance_flag || t.under_priced > 0) && "bg-amber-50/60 dark:bg-amber-950/30")}>
@@ -127,6 +127,7 @@ export function Dashboard() {
                   <td className={cn("py-1.5 text-right tabular-nums", t.balance_flag && "font-semibold text-amber-700 dark:text-amber-300")}>{t.avg_adjust > 0 ? "+" : ""}{t.avg_adjust.toFixed(1)}%</td>
                   <td className={cn("py-1.5 text-right tabular-nums", t.under_priced > 0 && "font-semibold text-red-700 dark:text-red-400")}>{t.under_priced}</td>
                   <td className="py-1.5 text-right tabular-nums">{t.manual_prices}</td>
+                  <td className={cn("py-1.5 text-right tabular-nums", t.rare_pct > 0.03 && "font-semibold text-amber-700 dark:text-amber-300")}>{pct(t.rare_pct)}</td>
                   <td className={cn("py-1.5 text-right tabular-nums", t.no_photo > 0 && "text-amber-700 dark:text-amber-300")}>{t.no_photo}</td>
                   <td className="py-1.5 text-right tabular-nums">{rs(t.value)}</td>
                   <td className="py-1.5 text-xs text-muted-foreground">{when(t.last_tagged)}</td>

@@ -70,7 +70,6 @@ type Saved = {
 };
 
 const GRADE_LABELS: Record<GradeCode, string> = { bnwt: "BNWT", premium: "Premium", excellent: "Excellent", very_good: "Very Good", rejected: "Rejected" };
-const SELLABLE: GradeCode[] = ["bnwt", "premium", "excellent", "very_good"];
 const SEASON_OPTIONS: { code: Season; label: string }[] = [{ code: "summer", label: "Summer" }, { code: "winter", label: "Winter" }];
 const WEARER_OPTIONS: { code: Wearer; label: string }[] = [{ code: "men", label: "Men" }, { code: "women", label: "Women" }, { code: "boy", label: "Boy" }, { code: "girl", label: "Girl" }, { code: "infant", label: "Infant" }, { code: "unisex", label: "Unisex" }];
 const GENDER_ORDER: Gender[] = ["men", "women", "teenage", "kid", "toddler", "infant"];
@@ -109,6 +108,7 @@ export function TagForm() {
   const [sleeve, setSleeve] = useState<string>("");
   const [adjustPct, setAdjustPct] = useState(0);
   const [manualOn, setManualOn] = useState(false);
+  const [rareFind, setRareFind] = useState(false);
   const [manualPrice, setManualPrice] = useState("");
   const [belowReason, setBelowReason] = useState("");
 
@@ -228,7 +228,7 @@ export function TagForm() {
           method: "POST",
           headers: { "content-type": "application/json" },
           signal: ctrl.signal,
-          body: JSON.stringify({ sub_category_id: sub, brand_text: brand, grade, adjust_pct: adjustPct, lot_id: lotId ? Number(lotId) : null }),
+          body: JSON.stringify({ sub_category_id: sub, brand_text: brand, grade, adjust_pct: adjustPct, is_rare: rareFind, lot_id: lotId ? Number(lotId) : null }),
         });
         setPrice(await res.json());
       } catch (e) {
@@ -241,10 +241,11 @@ export function TagForm() {
       clearTimeout(t);
       ctrl.abort();
     };
-  }, [sub, brand, grade, adjustPct, lotId]);
+  }, [sub, brand, grade, adjustPct, lotId, rareFind]);
 
   const blocked = !rejected && Boolean(price?.block_reason);
-  const needsManual = !rejected && (blocked || manualOn);
+  const handoff = !rejected && (rareFind || blocked);
+  const needsManual = !rejected && !handoff && manualOn;
   const listPrice = rejected ? 0 : needsManual ? Number(manualPrice) || 0 : price?.price ?? 0;
   const standardPrice = price?.standard_price ?? null;
   const below = !rejected && !blocked && standardPrice != null && listPrice > 0 && listPrice < standardPrice;
@@ -255,7 +256,7 @@ export function TagForm() {
   const photoOk = Boolean(photo) || rejected;
   const canSave =
     Boolean(ref?.tagger) && Boolean(sub) && Boolean(selectedLot) && weightOk && sleeveOk && reasonOk && photoOk && !saving && !price?.error &&
-    (rejected ? price?.price === 0 : needsManual ? listPrice > 0 : Boolean(price?.price));
+    (rejected ? price?.price === 0 : handoff ? true : needsManual ? listPrice > 0 : Boolean(price?.price));
 
   const resetForNext = useCallback(() => {
     setBrand("");
@@ -266,6 +267,7 @@ export function TagForm() {
     setSleeve("");
     setAdjustPct(0);
     setManualOn(false);
+    setRareFind(false);
     setManualPrice("");
     setBelowReason("");
     if (photo) URL.revokeObjectURL(photo.url);
@@ -289,6 +291,7 @@ export function TagForm() {
           brand_text: brand,
           grade,
           adjust_pct: adjustPct,
+          is_rare: rareFind,
           below_reason: below ? belowReason : null,
           flaw_note: null,
           season,
@@ -514,6 +517,16 @@ export function TagForm() {
               onChange={setGrade}
             />
 
+            {!rejected && (
+              <label className={cn("flex items-start gap-3 rounded-md border p-3 text-sm", rareFind && "border-amber-500 bg-amber-50 dark:bg-amber-950/40")}>
+                <Checkbox checked={rareFind} onCheckedChange={(v) => setRareFind(v === true)} className="mt-0.5" />
+                <span>
+                  <span className="font-medium">Rare find — hand off to a senior to price</span>
+                  <span className="block text-xs text-muted-foreground">Two or more of: special fabric (leather, silk, wool, cashmere, linen) · handwork · lined or tailored structure · vintage markings · occasion wear · matching set · statement piece · limited edition. You don&apos;t price it: Save prints a hold tag, and it goes on the Set Aside rail.</span>
+                </span>
+              </label>
+            )}
+
             {rejected && (
               <Note tone="warn">Rejected — price 0. Still saved as an item so the reject rate is measured. Pull buttons and snaps, cut drawstrings, then bin it.</Note>
             )}
@@ -537,7 +550,7 @@ export function TagForm() {
               </div>
             )}
 
-            {!rejected && !blocked && (
+            {!rejected && !handoff && (
               <div className="grid gap-2">
                 <Label>Price adjustment <span className="font-normal text-muted-foreground">· 5% steps</span></Label>
                 <div className="flex items-center gap-2">
@@ -550,7 +563,7 @@ export function TagForm() {
               </div>
             )}
 
-            {!rejected && (
+            {!rejected && !handoff && (
               <div className="grid gap-2">
                 {!blocked && (
                   <label className="flex items-center gap-2 text-sm"><Checkbox checked={manualOn} onCheckedChange={(v) => { setManualOn(v === true); if (v !== true) setManualPrice(""); }} /> Set the price by hand (exceptional piece)</label>
@@ -582,28 +595,21 @@ export function TagForm() {
           </CardHeader>
           <CardContent className="space-y-4">
             {price?.error && <Note tone="error">{price.error}</Note>}
-            {blocked && <Note tone="error">{price?.block_reason}</Note>}
-
-            <div>
-              <div className="text-xs uppercase tracking-wide text-muted-foreground">Our price</div>
-              <div className="text-4xl font-bold tabular-nums">{listPrice ? pkr(listPrice) : "—"}</div>
-              <div className="text-xs text-muted-foreground">Price includes sales tax</div>
-            </div>
+            {handoff ? (
+              <Note tone="warn">{rareFind ? "Rare find — no price now. Save prints a hold tag; a senior prices it with the garment in hand." : price?.block_reason}</Note>
+            ) : (
+              <div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Our price</div>
+                <div className="text-4xl font-bold tabular-nums">{listPrice ? pkr(listPrice) : "—"}</div>
+                <div className="text-xs text-muted-foreground">Price includes sales tax</div>
+              </div>
+            )}
 
             {price?.cost_basis === "planning" && (
               <Note tone="warn">No standard cost set for this sub-category yet — ask a manager to set it under Pricing.</Note>
             )}
 
-            {price?.grade_prices && !needsManual && !rejected && (
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-                {SELLABLE.map((g) => (
-                  <div key={g} className={cn("flex justify-between", g === grade && "font-semibold")}>
-                    <dt className="text-muted-foreground">{GRADE_LABELS[g]}</dt>
-                    <dd className="tabular-nums">{pkr(price.grade_prices![g])}</dd>
-                  </div>
-                ))}
-              </dl>
-            )}
+
 
             {price && !price.restricted && price.markdowns?.length ? (
               <dl className="space-y-1 border-t pt-3 text-sm">
@@ -652,8 +658,7 @@ export function TagForm() {
             {saved ? (
               <>
                 <Note tone="ok">
-                  Saved <span className="font-mono font-semibold">{saved.sku}</span> · {pkr(saved.list_price)}
-                  {saved.status === "set_aside" && " · set aside"}
+                  Saved <span className="font-mono font-semibold">{saved.sku}</span>{saved.status === "set_aside" ? " · set aside for a senior to price — hold tag printed" : ` · ${pkr(saved.list_price)}`}
                 </Note>
                 {photoError && (
                   <Note tone="warn">Garment saved, but the photo didn&apos;t upload ({photoError}). <button type="button" className="underline" onClick={() => photo && uploadPhoto(saved.sku, photo.blob).then(() => setPhotoError(null)).catch((e) => setPhotoError(e.message))}>Retry</button></Note>

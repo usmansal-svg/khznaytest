@@ -47,6 +47,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ item: blind(data as unknown as Row), already_audited: prior?.audited_at ?? null });
   }
 
+  if (mode === "rare") {
+    const { data } = await db.from("items").select("id, sku, brand_text, brand_tier, size_label, colour, photos, weight_kg, lot_id, grade_code, adjust_pct, price, qc_hold, tagged_by, tagged_at, sub_categories(name, gender, categories(name)), staff:tagged_by(name)").eq("status", "set_aside").is("price_manual", null).order("tagged_at", { ascending: true }).limit(200);
+    return NextResponse.json({ items: ((data ?? []) as unknown as Row[]).map(blind) });
+  }
+
   if (mode === "held") {
     const { data } = await db.from("items").select("id, sku, brand_text, brand_tier, size_label, colour, photos, weight_kg, lot_id, grade_code, adjust_pct, price, qc_hold, tagged_by, tagged_at, sub_categories(name, gender, categories(name)), staff:tagged_by(name)").eq("qc_hold", true).order("tagged_at", { ascending: true }).limit(200);
     return NextResponse.json({ items: ((data ?? []) as unknown as Row[]).map(blind) });
@@ -99,4 +104,36 @@ export async function POST(request: Request) {
 
   const direction = RANK[grade] === RANK[item.grade_code] ? "agree" : RANK[grade] > RANK[item.grade_code] ? "tagger_low" : "tagger_high";
   return NextResponse.json({ ok: true, original_grade: item.grade_code, audit_grade: grade, direction, price_delta: priceDelta, released: Boolean(item.qc_hold) });
+}
+
+export const RARE_TRIGGERS = ["Fabric (leather, suede, silk, wool, cashmere, linen)", "Handwork (embroidery, beading, appliqué)", "Structure (lined blazer, tailored coat)", "Vintage markings (Made in Italy/Japan/USA, pre-2005)", "Occasion wear", "Matching set", "Statement piece", "Limited edition"];
+
+/**
+ * PUT /api/qc { sku, price, triggers[], note? } — a senior prices a rare
+ * find (or ultra-luxury piece) with the garment in hand. The item becomes
+ * a normal tagged garment carrying the senior's name and reasons.
+ */
+export async function PUT(request: Request) {
+  const gate = await requireStaff();
+  if ("response" in gate) return gate.response;
+  if (!senior(gate.staff.role)) return NextResponse.json({ error: "Only seniors and managers price rare finds." }, { status: 403 });
+  let body: { sku?: string; price?: number; triggers?: string[]; note?: string | null };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Body must be JSON." }, { status: 400 });
+  }
+  const sku = (body.sku ?? "").trim().toUpperCase();
+  if (!sku) return NextResponse.json({ error: "sku is required." }, { status: 400 });
+  if (!(Number.isInteger(body.price) && body.price! > 0)) return NextResponse.json({ error: "Price must be a whole rupee amount above 0." }, { status: 400 });
+  const triggers = (body.triggers ?? []).filter((t) => typeof t === "string" && t.trim());
+  const db = gate.db;
+  const { data: item } = await db.from("items").select("id, status, is_rare, brand_tier, price, price_manual").eq("sku", sku).maybeSingle();
+  if (!item) return NextResponse.json({ error: `No item with SKU ${sku}.` }, { status: 404 });
+  if (item.status !== "set_aside") return NextResponse.json({ error: `${sku} is not set aside (status ${item.status}).` }, { status: 400 });
+  if (item.is_rare && triggers.length < 1) return NextResponse.json({ error: "Tick at least one reason it is rare." }, { status: 400 });
+  const { error } = await db.from("items").update({ price_manual: body.price, status: "tagged", rare_triggers: triggers, priced_by: gate.staff.id, priced_at: new Date().toISOString(), below_reason: body.note?.trim() || null }).eq("id", item.id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  await db.from("admin_audits").insert({ table_name: "items", row_key: sku, before: { status: "set_aside", price_manual: null }, after: { status: "tagged", price_manual: body.price, rare_triggers: triggers }, changed_by: gate.staff.id, note: item.is_rare ? "rare find priced" : "ultra luxury priced" });
+  return NextResponse.json({ ok: true, sku, price: body.price });
 }

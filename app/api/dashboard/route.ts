@@ -30,7 +30,7 @@ export async function GET(request: Request) {
   const until = custom ? new Date(rangeEnd!).toISOString() : new Date().toISOString();
 
   const [itemsRes, transfersRes, staffRes, outletsRes, lotsRes, alertsRes, brandsRes, auditsRes, settingsRes] = await Promise.all([
-    db.from("items").select("id, sku, tagged_at, tagged_by, outlet_id, grade_code, adjustment, adjust_pct, status, channel, online_status, price, price_manual, standard_price, landed_cost, colour_tag, floored_on, photos, shopify_product_id, shopify_error, shopify_synced_at, received_at, lot_id, weight_kg, qc_hold, sub_categories(name, gender, categories(name))").gte("tagged_at", since).lte("tagged_at", until).order("tagged_at", { ascending: false }),
+    db.from("items").select("id, sku, tagged_at, tagged_by, outlet_id, grade_code, adjustment, adjust_pct, status, channel, online_status, price, price_manual, standard_price, landed_cost, colour_tag, floored_on, photos, shopify_product_id, shopify_error, shopify_synced_at, received_at, lot_id, weight_kg, qc_hold, is_rare, sub_categories(name, gender, categories(name))").gte("tagged_at", since).lte("tagged_at", until).order("tagged_at", { ascending: false }),
     db.from("transfers").select("id, code, to_outlet_id, status, created_at, sent_at, received_at, note, created_by, transfer_items(item_id, items(sku))").order("created_at", { ascending: false }).limit(50),
     db.from("staff").select("id, name, role, active, daily_target"),
     db.from("outlets").select("id, name, is_online"),
@@ -118,6 +118,7 @@ export async function GET(request: Request) {
       under_priced: belowBy.get(id) ?? 0,
       manual_prices: list.filter((i) => i.price_manual != null && i.status !== "set_aside").length,
       no_photo: sellable.filter((i) => photosOf(i) === 0).length,
+      rare_pct: list.length ? list.filter((i) => (i as unknown as { is_rare?: boolean }).is_rare).length / list.length : 0,
       value: Math.round(list.reduce((s, i) => s + listPrice(i), 0)),
       last_tagged: list[0]?.tagged_at ?? null,
       target: targetOf.get(id) ?? defaultTarget,
