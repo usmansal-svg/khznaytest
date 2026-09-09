@@ -11,7 +11,7 @@
 
 import { NextResponse } from "next/server";
 
-import { currentStaff, dbFor, requireStaff } from "@/lib/auth/staff";
+import { currentStaff, dbFor, requireManager, requireStaff } from "@/lib/auth/staff";
 import { lotPnl, type LotItem } from "@/lib/pricing/lot-pnl";
 import { LOT_COLUMNS, loadPricingContext, lotFromRow, type DbLot } from "@/lib/pricing/repo";
 
@@ -34,10 +34,11 @@ export async function GET() {
     const lot = lotFromRow(r as Parameters<typeof lotFromRow>[0], ctx.settings);
     return { ...serialise(lot), pnl: lotPnl(lot, byLot.get(lot.id) ?? [], ctx.subCategories, ctx.settings, ctx.refs) };
   });
-  return NextResponse.json({ lots, settings: { default_provisional_yield: ctx.settings.defaultProvisionalYield, fx: ctx.settings.fx } });
+  const { data: counter } = await supabase.from("lot_counter").select("seq").eq("id", 1).maybeSingle();
+  return NextResponse.json({ lots, next_code: `LOT-${String((counter?.seq ?? 0) + 1).padStart(4, "0")}`, settings: { default_provisional_yield: ctx.settings.defaultProvisionalYield, fx: ctx.settings.fx } });
 }
 
-type CreateBody = { code?: string; supplier?: string; basis?: string; rate?: number; kg?: number | null; pieces?: number | null; provisional_yield?: number | null; arrived_on?: string | null; notes?: string | null; description?: string | null; parent_lot_id?: number | null };
+type CreateBody = { supplier?: string; basis?: string; rate?: number; kg?: number | null; pieces?: number | null; provisional_yield?: number | null; arrived_on?: string | null; notes?: string | null; description?: string | null; imported?: boolean };
 
 export async function POST(request: Request) {
   let body: CreateBody;
@@ -50,8 +51,6 @@ export async function POST(request: Request) {
   if ("response" in gate) return gate.response;
   const supabase = gate.db;
 
-  const code = body.code?.trim().toUpperCase();
-  if (!code) return bad("Lot code is required.");
   const basis = body.basis === "pc" ? "pc" : body.basis === "kg" ? "kg" : null;
   if (!basis) return bad("Basis must be kg or pc.");
   if (!(typeof body.rate === "number" && body.rate > 0)) return bad(basis === "kg" ? "Rate must be USD per kg, above 0." : "Rate must be PKR per piece, above 0.");
@@ -60,11 +59,16 @@ export async function POST(request: Request) {
   if (body.provisional_yield != null && !(body.provisional_yield > 0 && body.provisional_yield <= 1)) return bad("Provisional yield must be between 0 and 1.");
 
   const ctx = await loadPricingContext(supabase);
+  // Codes are issued in sequence, never typed.
+  const { data: seq, error: seqErr } = await supabase.rpc("next_lot_seq");
+  if (seqErr || typeof seq !== "number") return NextResponse.json({ error: `Could not number the lot: ${seqErr?.message ?? "no sequence"}` }, { status: 500 });
+  const code = `LOT-${String(seq).padStart(4, "0")}`;
   const { data, error } = await supabase
     .from("lots")
     .insert({
       code,
-      supplier: body.supplier?.trim() || code,
+      imported: body.imported ?? true,
+      supplier: body.supplier?.trim() || "Unknown vendor",
       basis,
       rate: body.rate,
       rate_usd_per_kg: basis === "kg" ? body.rate : null,
@@ -74,7 +78,6 @@ export async function POST(request: Request) {
       provisional_yield: body.provisional_yield ?? ctx.settings.defaultProvisionalYield,
       arrived_on: body.arrived_on || null,
       notes: body.notes?.trim() || null,
-      parent_lot_id: body.parent_lot_id ?? null,
     })
     .select(LOT_COLUMNS)
     .single();
@@ -82,7 +85,7 @@ export async function POST(request: Request) {
   return NextResponse.json({ lot: serialise(lotFromRow(data as Parameters<typeof lotFromRow>[0], ctx.settings)) });
 }
 
-type PatchBody = { id?: number; action?: "close" | "reopen" | "split"; kg_tagged?: number | null; piles?: { kg?: number; pieces?: number; description?: string; note?: string }[]; rate?: number; provisional_yield?: number; supplier?: string; notes?: string | null; description?: string | null; kg?: number | null; pieces?: number | null; arrived_on?: string | null };
+type PatchBody = { id?: number; action?: "close" | "reopen" | "split"; imported?: boolean; kg_tagged?: number | null; piles?: { kg?: number; pieces?: number; description?: string; note?: string }[]; rate?: number; provisional_yield?: number; supplier?: string; notes?: string | null; description?: string | null; kg?: number | null; pieces?: number | null; arrived_on?: string | null };
 
 export async function PATCH(request: Request) {
   let body: PatchBody;
@@ -121,7 +124,7 @@ export async function PATCH(request: Request) {
       const code = `${parent.code}-${String.fromCharCode(65 + i)}`;
       const { data: child, error } = await supabase
         .from("lots")
-        .insert({ code, supplier: parent.supplier, basis: parent.basis, rate: parent.rate, rate_usd_per_kg: byKg ? parent.rate : null, kg: byKg ? piles[i].kg : null, pieces: byKg ? null : piles[i].pieces, provisional_yield: parent.provisional_yield, arrived_on: parent.arrived_on, description: piles[i].description?.trim() || parent.description, notes: piles[i].note?.trim() || null, parent_lot_id: parent.id })
+        .insert({ code, supplier: parent.supplier, basis: parent.basis, rate: parent.rate, imported: parent.imported, rate_usd_per_kg: byKg ? parent.rate : null, kg: byKg ? piles[i].kg : null, pieces: byKg ? null : piles[i].pieces, provisional_yield: parent.provisional_yield, arrived_on: parent.arrived_on, description: piles[i].description?.trim() || parent.description, notes: piles[i].note?.trim() || null, parent_lot_id: parent.id })
         .select(LOT_COLUMNS)
         .single();
       if (error) return NextResponse.json({ error: `${code}: ${error.message}` }, { status: error.code === "23505" ? 409 : 500 });
@@ -153,6 +156,7 @@ export async function PATCH(request: Request) {
     if ("notes" in body) patch.notes = body.notes?.trim() || null;
     if ("description" in body) patch.description = body.description?.trim() || null;
     if ("arrived_on" in body) patch.arrived_on = body.arrived_on || null;
+    if ("imported" in body) patch.imported = Boolean(body.imported);
   }
   if (!Object.keys(patch).length) return bad("Nothing to change.");
 
@@ -180,7 +184,39 @@ function serialise(l: DbLot) {
     parent_lot_id: l.parentLotId,
     arrived_on: l.arrivedOn,
     notes: l.notes,
+    imported: l.imported,
   };
+}
+
+/**
+ * DELETE /api/lots { id, confirm: "<code>" } — managers only. Refused while
+ * any garment or child pile references the lot; the caller must repeat the
+ * lot code, and the screen asks twice before it gets here.
+ */
+export async function DELETE(request: Request) {
+  const gate = await requireManager();
+  if ("response" in gate) return gate.response;
+  let body: { id?: number; confirm?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Body must be JSON." }, { status: 400 });
+  }
+  if (!Number.isInteger(body.id)) return bad("id is required.");
+  const db = gate.db;
+  const { data: lot } = await db.from("lots").select("id, code").eq("id", body.id).maybeSingle();
+  if (!lot) return NextResponse.json({ error: "No such lot." }, { status: 404 });
+  if ((body.confirm ?? "").trim().toUpperCase() !== lot.code) return bad(`Type the lot code ${lot.code} to confirm.`);
+  const [{ count: items }, { count: children }] = await Promise.all([
+    db.from("items").select("id", { count: "exact", head: true }).eq("lot_id", lot.id),
+    db.from("lots").select("id", { count: "exact", head: true }).eq("parent_lot_id", lot.id),
+  ]);
+  if (items) return bad(`${lot.code} has ${items} tagged garment${items === 1 ? "" : "s"} — it cannot be deleted. Close it instead.`);
+  if (children) return bad(`${lot.code} has ${children} pile${children === 1 ? "" : "s"} split from it — delete those first.`);
+  const { error } = await db.from("lots").delete().eq("id", lot.id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  await db.from("admin_audits").insert({ table_name: "lots", row_key: lot.code, before: lot, after: null, changed_by: gate.staff.id, note: "deleted" });
+  return NextResponse.json({ deleted: lot.code });
 }
 
 const bad = (message: string) => NextResponse.json({ error: message }, { status: 400 });

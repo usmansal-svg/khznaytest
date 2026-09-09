@@ -78,6 +78,13 @@ describe("lots", () => {
     assert.equal(effectiveRate(LOT_A_01), 600);
   });
 
+  it("a local purchase pays no duty and gets no tax credit — cost is what was paid", () => {
+    assert.equal(landedCost({ basis: "pc", effectiveRate: 600, weightKg: 0, imported: false }), 600);
+    assert.equal(Number(landedCost({ basis: "pc", effectiveRate: 600, weightKg: 0 }).toFixed(2)), 535.2);
+    const localKg = landedCost({ weightKg: 0.31, effectiveRate: 6.48, imported: false });
+    assert.equal(Number(localKg.toFixed(2)), Number((0.31 * 6.48 * 283).toFixed(2)));
+  });
+
   it("a five-point yield error moves a price by at most one step", () => {
     const at = (y: number) => computePrice({ weightKg: 0.31, effectiveRate: 6 / y, profileCode: "fast", valueIndex: 1 }).premiumPrice;
     assert.ok(Math.abs(at(0.9) - at(0.95)) <= DEFAULT_SETTINGS.charmStep);

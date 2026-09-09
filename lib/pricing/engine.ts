@@ -110,6 +110,8 @@ export type CostInputs = {
    * lots. Defaults to settings.blendedRate — a planning quote with no lot.
    */
   effectiveRate?: number;
+  /** False for local purchases: no duty, no input-tax credit. Default true. */
+  imported?: boolean;
 };
 
 /**
@@ -122,12 +124,15 @@ export type CostInputs = {
 export function grossCost(inputs: CostInputs, settings: Settings = DEFAULT_SETTINGS): number {
   const basis = inputs.basis ?? "kg";
   const rate = inputs.effectiveRate ?? settings.blendedRate;
+  const imported = inputs.imported ?? true;
   if (basis === "pc") return rate;
-  return inputs.weightKg * rate * settings.fx + inputs.weightKg * settings.dutyPerKg;
+  // A local kg purchase is quoted in USD-equivalent terms too, but pays no duty.
+  return inputs.weightKg * rate * settings.fx + (imported ? inputs.weightKg * settings.dutyPerKg : 0);
 }
 
 export function landedCost(inputs: CostInputs, settings: Settings = DEFAULT_SETTINGS): number {
-  const taxCredit = 1 - settings.inputTaxRate * settings.inputTaxRecover;
+  const imported = inputs.imported ?? true;
+  const taxCredit = imported ? 1 - settings.inputTaxRate * settings.inputTaxRecover : 1;
   return grossCost(inputs, settings) * taxCredit + settings.sortingPerPiece;
 }
 

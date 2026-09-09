@@ -13,7 +13,7 @@ type Pnl = { pieces: number; rejects: number; reject_pct: number; kg_tagged_so_f
 type Lot = {
   id: number; code: string; supplier: string; basis: "kg" | "pc"; rate: number | null; kg_bought: number | null; kg_tagged: number | null; pieces_bought: number | null;
   provisional_yield: number; yield: number; effective_rate: number | null; status: "open" | "closed" | "split"; parent_lot_id: number | null;
-  arrived_on: string | null; notes: string | null; description: string | null; pnl: Pnl;
+  arrived_on: string | null; notes: string | null; description: string | null; imported: boolean; pnl: Pnl;
 };
 
 const rs = (n: number) => `Rs ${Math.round(n).toLocaleString("en-PK")}`;
@@ -22,23 +22,25 @@ const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
 export function LotsAdmin() {
   const [lots, setLots] = useState<Lot[] | null>(null);
   const [defaultYield, setDefaultYield] = useState(0.9);
+  const [nextCode, setNextCode] = useState("LOT-0001");
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<Lot | null>(null);
   const [splitting, setSplitting] = useState<Lot | null>(null);
 
   // Create form
-  const [f, setF] = useState({ code: "", supplier: "", basis: "kg" as "kg" | "pc", rate: "", kg: "", pieces: "", yieldEst: "", arrived: "", description: "", notes: "" });
-  const set = (k: keyof typeof f, v: string) => setF((x) => ({ ...x, [k]: v }));
+  const [f, setF] = useState({ supplier: "", basis: "kg" as "kg" | "pc", imported: true, rate: "", kg: "", pieces: "", yieldEst: "", arrived: "", description: "", notes: "" });
+  const set = (k: keyof typeof f, v: string | boolean) => setF((x) => ({ ...x, [k]: v }));
 
   async function load() {
     const j = await (await fetch("/api/lots")).json();
     setLots(j.lots ?? []);
+    if (j.next_code) setNextCode(j.next_code);
     if (j.settings?.default_provisional_yield) setDefaultYield(j.settings.default_provisional_yield);
   }
   useEffect(() => { void load(); }, []);
 
-  async function call(method: "POST" | "PATCH", body: unknown, ok: string) {
+  async function call(method: "POST" | "PATCH" | "DELETE", body: unknown, ok: string) {
     setBusy(true); setMessage(null);
     try {
       const res = await fetch("/api/lots", { method, headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -55,11 +57,11 @@ export function LotsAdmin() {
 
   async function create() {
     const ok = await call("POST", {
-      code: f.code, supplier: f.supplier, basis: f.basis, rate: Number(f.rate),
+      supplier: f.supplier, basis: f.basis, imported: f.imported, rate: Number(f.rate),
       kg: f.basis === "kg" ? Number(f.kg) : null, pieces: f.basis === "pc" && f.pieces ? Number(f.pieces) : null,
       provisional_yield: f.yieldEst ? Number(f.yieldEst) : null, arrived_on: f.arrived || null, description: f.description, notes: f.notes,
-    }, `Lot ${f.code.toUpperCase()} created.`);
-    if (ok) setF({ code: "", supplier: "", basis: f.basis, rate: "", kg: "", pieces: "", yieldEst: "", arrived: "", description: "", notes: "" });
+    }, `Lot ${nextCode} created.`);
+    if (ok) setF({ supplier: "", basis: f.basis, imported: f.imported, rate: "", kg: "", pieces: "", yieldEst: "", arrived: "", description: "", notes: "" });
   }
 
   async function close(lot: Lot) {
@@ -76,7 +78,15 @@ export function LotsAdmin() {
   if (!lots) return <p className="text-muted-foreground">Loading…</p>;
   const open = lots.filter((l) => l.status === "open");
   const done = lots.filter((l) => l.status !== "open");
-  const canCreate = f.code && f.rate && (f.basis === "pc" || f.kg);
+  const canCreate = f.rate && (f.basis === "pc" || f.kg);
+
+  // Deletion asks twice: a plain confirm, then the lot code typed back.
+  async function remove(lot: Lot) {
+    if (!window.confirm(`Delete ${lot.code}? This cannot be undone.`)) return;
+    const typed = window.prompt(`Are you sure? Type the lot code ${lot.code} to delete it permanently:`);
+    if (typed === null) return;
+    await call("DELETE", { id: lot.id, confirm: typed }, `${lot.code} deleted.`);
+  }
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -88,9 +98,9 @@ export function LotsAdmin() {
 
       <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
         <Card className="self-start">
-          <CardHeader className="pb-3"><CardTitle className="text-base">New lot</CardTitle></CardHeader>
+          <CardHeader className="pb-3"><CardTitle className="flex items-center justify-between text-base">New lot <span className="font-mono text-sm font-normal text-muted-foreground">next: {nextCode}</span></CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            <div className="grid gap-1.5"><Label htmlFor="code">Lot code</Label><Input id="code" value={f.code} onChange={(e) => set("code", e.target.value.toUpperCase())} placeholder="LOT-B-02" /></div>
+            <p className="text-xs text-muted-foreground">Lot numbers are issued in sequence when you press Add.</p>
             <div className="grid gap-1.5"><Label htmlFor="vendor">Vendor</Label><Input id="vendor" value={f.supplier} onChange={(e) => set("supplier", e.target.value)} /></div>
             <div className="grid gap-1.5">
               <Label>Basis</Label>
@@ -98,6 +108,14 @@ export function LotsAdmin() {
                 <Button type="button" size="sm" variant={f.basis === "kg" ? "default" : "outline"} onClick={() => set("basis", "kg")}>By weight (kg)</Button>
                 <Button type="button" size="sm" variant={f.basis === "pc" ? "default" : "outline"} onClick={() => set("basis", "pc")}>Per piece</Button>
               </div>
+            </div>
+            <div className="grid gap-1.5">
+              <Label>Bought</Label>
+              <div className="flex gap-2">
+                <Button type="button" size="sm" variant={f.imported ? "default" : "outline"} onClick={() => set("imported", true)}>Imported</Button>
+                <Button type="button" size="sm" variant={!f.imported ? "default" : "outline"} onClick={() => set("imported", false)}>Local market</Button>
+              </div>
+              <p className="text-xs text-muted-foreground">{f.imported ? "Pays duty on weight; 10.8% input tax is reclaimable and comes off the cost." : "No duty, no tax credit — cost is exactly what you paid."}</p>
             </div>
             <div className="grid gap-1.5"><Label htmlFor="rate">{f.basis === "kg" ? "Rate · USD per kg" : "Rate · PKR per piece"}</Label><Input id="rate" type="number" step={f.basis === "kg" ? "0.01" : "1"} min="0" value={f.rate} onChange={(e) => set("rate", e.target.value)} placeholder={f.basis === "kg" ? "6.00" : "600"} /></div>
             {f.basis === "kg" ? (
@@ -111,15 +129,15 @@ export function LotsAdmin() {
             <div className="grid gap-1.5"><Label htmlFor="arrived">Arrived</Label><Input id="arrived" type="date" value={f.arrived} onChange={(e) => set("arrived", e.target.value)} /></div>
             <div className="grid gap-1.5"><Label htmlFor="desc">Description <span className="font-normal text-muted-foreground">· what&apos;s in it</span></Label><Textarea id="desc" rows={2} value={f.description} onChange={(e) => set("description", e.target.value)} placeholder="e.g. Mixed men's winter — jackets, hoodies, some shirts. UK grade A." /></div>
             <div className="grid gap-1.5"><Label htmlFor="notes">Notes <span className="font-normal text-muted-foreground">· internal</span></Label><Input id="notes" value={f.notes} onChange={(e) => set("notes", e.target.value)} placeholder="e.g. paid 50% deposit" /></div>
-            <Button onClick={create} disabled={busy || !canCreate} className="w-full">Create lot</Button>
+            <Button onClick={create} disabled={busy || !canCreate} className="w-full">Add new lot · {nextCode}</Button>
           </CardContent>
         </Card>
 
         <div className="space-y-6">
           {editing && <EditCard lot={editing} busy={busy} onCancel={() => setEditing(null)} onSave={async (patch) => { const ok = await call("PATCH", { id: editing.id, ...patch }, `${editing.code} updated.`); if (ok) setEditing(null); }} />}
           {splitting && <SplitCard lot={splitting} busy={busy} onCancel={() => setSplitting(null)} onSplit={async (piles) => { const ok = await call("PATCH", { id: splitting.id, action: "split", piles }, `${splitting.code} split into ${piles.length} piles. Tag from the piles.`); if (ok) setSplitting(null); }} />}
-          <LotTable title={`Open · ${open.length}`} lots={open} busy={busy} onEdit={setEditing} onSplit={setSplitting} onClose={close} />
-          {done.length > 0 && <LotTable title={`Closed & split · ${done.length}`} lots={done} busy={busy} onEdit={setEditing} onReopen={(l) => call("PATCH", { id: l.id, action: "reopen" }, `${l.code} reopened.`)} />}
+          <LotTable title={`Open · ${open.length}`} lots={open} busy={busy} onEdit={setEditing} onSplit={setSplitting} onClose={close} onDelete={remove} />
+          {done.length > 0 && <LotTable title={`Closed & split · ${done.length}`} lots={done} busy={busy} onEdit={setEditing} onReopen={(l) => call("PATCH", { id: l.id, action: "reopen" }, `${l.code} reopened.`)} onDelete={remove} />}
         </div>
       </div>
     </div>
@@ -129,6 +147,7 @@ export function LotsAdmin() {
 /* ------------------------------------------------------------------ edit */
 
 function EditCard({ lot, busy, onCancel, onSave }: { lot: Lot; busy: boolean; onCancel: () => void; onSave: (patch: Record<string, unknown>) => void }) {
+  const [imported, setImported] = useState(lot.imported);
   const [e, setE] = useState({ supplier: lot.supplier, rate: String(lot.rate ?? ""), kg: String(lot.kg_bought ?? ""), pieces: String(lot.pieces_bought ?? ""), yieldEst: String(lot.provisional_yield), arrived: lot.arrived_on ?? "", description: lot.description ?? "", notes: lot.notes ?? "" });
   const s = (k: keyof typeof e, v: string) => setE((x) => ({ ...x, [k]: v }));
   const tagged = lot.pnl.pieces > 0;
@@ -144,10 +163,14 @@ function EditCard({ lot, busy, onCancel, onSave }: { lot: Lot; busy: boolean; on
           {lot.basis === "kg" && <div className="grid gap-1.5"><Label>Provisional yield</Label><Input type="number" step="0.01" min="0.1" max="1" value={e.yieldEst} onChange={(x) => s("yieldEst", x.target.value)} /></div>}
           <div className="grid gap-1.5"><Label>Arrived</Label><Input type="date" value={e.arrived} onChange={(x) => s("arrived", x.target.value)} /></div>
         </div>
+        <div className="grid gap-1.5">
+          <Label>Bought</Label>
+          <div className="flex gap-2"><Button type="button" size="sm" variant={imported ? "default" : "outline"} onClick={() => setImported(true)}>Imported</Button><Button type="button" size="sm" variant={!imported ? "default" : "outline"} onClick={() => setImported(false)}>Local market</Button></div>
+        </div>
         <div className="grid gap-1.5"><Label>Description · what&apos;s in it</Label><Textarea rows={2} value={e.description} onChange={(x) => s("description", x.target.value)} /></div>
         <div className="grid gap-1.5"><Label>Notes · internal</Label><Input value={e.notes} onChange={(x) => s("notes", x.target.value)} /></div>
         <div className="flex gap-2">
-          <Button disabled={busy} onClick={() => onSave({ supplier: e.supplier, rate: Number(e.rate), ...(lot.basis === "kg" ? { kg: Number(e.kg) || null, provisional_yield: Number(e.yieldEst) } : { pieces: e.pieces ? Number(e.pieces) : null }), arrived_on: e.arrived || null, description: e.description, notes: e.notes })}>Save changes</Button>
+          <Button disabled={busy} onClick={() => onSave({ supplier: e.supplier, rate: Number(e.rate), ...(lot.basis === "kg" ? { kg: Number(e.kg) || null, provisional_yield: Number(e.yieldEst) } : { pieces: e.pieces ? Number(e.pieces) : null }), arrived_on: e.arrived || null, description: e.description, notes: e.notes, imported })}>Save changes</Button>
           <Button variant="ghost" onClick={onCancel}>Cancel</Button>
         </div>
       </CardContent>
@@ -188,7 +211,7 @@ function SplitCard({ lot, busy, onCancel, onSplit }: { lot: Lot; busy: boolean; 
 
 /* ----------------------------------------------------------------- table */
 
-function LotTable({ title, lots, busy, onEdit, onSplit, onClose, onReopen }: { title: string; lots: Lot[]; busy: boolean; onEdit: (l: Lot) => void; onSplit?: (l: Lot) => void; onClose?: (l: Lot) => void; onReopen?: (l: Lot) => void }) {
+function LotTable({ title, lots, busy, onEdit, onSplit, onClose, onReopen, onDelete }: { title: string; lots: Lot[]; busy: boolean; onEdit: (l: Lot) => void; onSplit?: (l: Lot) => void; onClose?: (l: Lot) => void; onReopen?: (l: Lot) => void; onDelete?: (l: Lot) => void }) {
   return (
     <Card>
       <CardHeader className="pb-2"><CardTitle className="text-base">{title}</CardTitle></CardHeader>
@@ -208,7 +231,7 @@ function LotTable({ title, lots, busy, onEdit, onSplit, onClose, onReopen }: { t
                   <tr key={l.id}>
                     <td className="py-2 pr-2">
                       <div className="font-mono text-xs font-semibold">{l.code}</div>
-                      <div className="text-xs text-muted-foreground">{l.supplier}{l.parent_lot_id ? " · pile" : ""}{l.arrived_on ? ` · ${l.arrived_on}` : ""}</div>
+                      <div className="text-xs text-muted-foreground">{l.supplier}{l.parent_lot_id ? " · pile" : ""}{!l.imported && <span className="ml-1 rounded border px-1">local</span>}{l.arrived_on ? ` · ${l.arrived_on}` : ""}</div>
                       {l.description && <div className="mt-0.5 max-w-[16rem] truncate text-xs" title={l.description}>{l.description}</div>}
                     </td>
                     <td className="py-2 pr-2 tabular-nums">{l.rate == null ? "—" : l.basis === "kg" ? `$${l.rate}/kg` : `Rs ${l.rate}/pc`}</td>
@@ -229,6 +252,7 @@ function LotTable({ title, lots, busy, onEdit, onSplit, onClose, onReopen }: { t
                         {onClose && <Button size="sm" variant="outline" disabled={busy} onClick={() => onClose(l)}>Close</Button>}
                         {onReopen && l.status === "closed" && <Button size="sm" variant="outline" disabled={busy} onClick={() => onReopen(l)}>Reopen</Button>}
                         {l.status === "split" && <span className="self-center text-xs text-muted-foreground">split into piles</span>}
+                        {onDelete && l.pnl.pieces === 0 && <Button size="sm" variant="ghost" className="text-red-700 hover:text-red-800 dark:text-red-400" disabled={busy} onClick={() => onDelete(l)}>Delete</Button>}
                       </div>
                     </td>
                   </tr>

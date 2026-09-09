@@ -79,6 +79,7 @@ export function quote(input: QuoteInput, ctx: PricingContext): Quote {
       weightKg: weightKg ?? 0,
       basis,
       effectiveRate: effRate,
+      imported: lot ? lot.imported : true,
       profileCode: subCategory.profileCode,
       valueIndex: subCategory.valueIndex,
       gradeCode: grade,

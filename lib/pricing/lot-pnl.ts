@@ -58,10 +58,10 @@ export function lotPnl(lot: DbLot, items: LotItem[], subCategories: DbSubCategor
 
   // Landed cost of everything bought, for kg lots: kg × rate × fx + duty,
   // less recoverable input tax. Per-piece lots have no fixed quantity.
-  const taxCredit = 1 - settings.inputTaxRate * settings.inputTaxRecover;
+  const taxCredit = lot.imported ? 1 - settings.inputTaxRate * settings.inputTaxRecover : 1;
   const lotCost =
     lot.basis === "kg" && lot.kgBought && lot.rate
-      ? (lot.kgBought * lot.rate * settings.fx + lot.kgBought * settings.dutyPerKg) * taxCredit
+      ? (lot.kgBought * lot.rate * settings.fx + (lot.imported ? lot.kgBought * settings.dutyPerKg : 0)) * taxCredit
       : lot.basis === "pc" && lot.pieces && lot.rate
         ? lot.pieces * lot.rate * taxCredit
         : null;

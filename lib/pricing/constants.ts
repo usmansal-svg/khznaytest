@@ -213,6 +213,11 @@ export type LotCost = {
   kgTagged?: number | null;
   /** Estimate used while open. Falls back to settings.defaultProvisionalYield */
   provisionalYield?: number | null;
+  /**
+   * Imported lots pay duty on weight and carry the reclaimable input-tax
+   * credit. Local purchases carry neither. Defaults to imported.
+   */
+  imported?: boolean | null;
 };
 
 /* --------------------------------------------------------- colour rotation */

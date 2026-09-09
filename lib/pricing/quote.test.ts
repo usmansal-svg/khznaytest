@@ -21,8 +21,8 @@ const ctx: PricingContext = {
   source: "database",
 };
 
-const lotS: DbLot = { id: 1, code: "LOT-B-01-S", supplier: "B", basis: "kg", rate: 6, kgBought: 27, kgTagged: 25, provisionalYield: 0.9, status: "closed", parentLotId: null, arrivedOn: null, notes: null, description: null, pieces: null, effectiveRate: 6 / (25 / 27), yield: 25 / 27 };
-const lotPc: DbLot = { id: 2, code: "LOT-A-01", supplier: "A", basis: "pc", rate: 600, kgBought: null, kgTagged: null, provisionalYield: 0.9, status: "open", parentLotId: null, arrivedOn: null, notes: null, description: null, pieces: null, effectiveRate: 600, yield: 1 };
+const lotS: DbLot = { id: 1, code: "LOT-B-01-S", supplier: "B", basis: "kg", rate: 6, kgBought: 27, kgTagged: 25, provisionalYield: 0.9, status: "closed", parentLotId: null, arrivedOn: null, notes: null, description: null, pieces: null, imported: true, effectiveRate: 6 / (25 / 27), yield: 25 / 27 };
+const lotPc: DbLot = { id: 2, code: "LOT-A-01", supplier: "A", basis: "pc", rate: 600, kgBought: null, kgTagged: null, provisionalYield: 0.9, status: "open", parentLotId: null, arrivedOn: null, notes: null, description: null, pieces: null, imported: true, effectiveRate: 600, yield: 1 };
 
 function q(slug: string, opts: { brand?: string; grade?: GradeCode; adjustment?: Adjustment; rare?: boolean; lot?: DbLot | null; weight?: number | null } = {}) {
   const subCategory = ctx.subCategories.find((s) => s.slug === slug)!;
