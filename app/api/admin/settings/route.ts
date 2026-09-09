@@ -85,6 +85,8 @@ const RANGES: Record<keyof Omit<Settings, "brandFeedbackEnabled" | "ladderDepths
   minPrice: [0, 1000000],
   highValueThreshold: [0, 100000000],
   defaultProvisionalYield: [0.3, 1],
+  defaultDailyTarget: [1, 1000],
+  qcSampleRate: [0, 1],
 };
 
 /** Human-readable field changes between two audit snapshots. */

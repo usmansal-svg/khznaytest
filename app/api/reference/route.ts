@@ -23,7 +23,17 @@ export async function GET() {
     loadOpenLots(supabase, ctx.settings),
   ]);
 
-  const tagger = me ? { name: me.name, role: me.role, outlet_id: me.outlet_id } : null;
+  let tagger: { name: string; role: string; outlet_id: number | null; today: number; target: number } | null = null;
+  if (me) {
+    // "Today" in Pakistan time.
+    const nowPk = new Date(Date.now() + 5 * 3600_000);
+    const startIso = new Date(Date.UTC(nowPk.getUTCFullYear(), nowPk.getUTCMonth(), nowPk.getUTCDate()) - 5 * 3600_000).toISOString();
+    const [{ count }, { data: row }] = await Promise.all([
+      supabase.from("items").select("id", { count: "exact", head: true }).eq("tagged_by", me.id).gte("tagged_at", startIso),
+      supabase.from("staff").select("daily_target").eq("id", me.id).maybeSingle(),
+    ]);
+    tagger = { name: me.name, role: me.role, outlet_id: me.outlet_id, today: count ?? 0, target: row?.daily_target ?? ctx.settings.defaultDailyTarget };
+  }
 
   // A failed lookup must not masquerade as an empty list: say so, visibly.
   const warnings = [ctx.warning];

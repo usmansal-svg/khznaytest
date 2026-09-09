@@ -21,6 +21,10 @@ export type Settings = {
   defaultProvisionalYield: number;
   /** Markdown ladder depths for md1, md2, md3 — 25%, 50%, 75% by default. */
   ladderDepths: [number, number, number];
+  /** Garments per day expected of a tagger, unless the staff row says otherwise */
+  defaultDailyTarget: number;
+  /** Share of saved garments randomly held for QC (0.10 = one in ten) */
+  qcSampleRate: number;
   /** PKR per kg, charged on weight, so heavier garments carry more */
   dutyPerKg: number;
   /** Deliberately zero — sorting labour sits in overheads */
@@ -64,6 +68,8 @@ export const DEFAULT_SETTINGS: Settings = {
   highValueThreshold: 4000,
   defaultProvisionalYield: 0.9,
   ladderDepths: [0.25, 0.5, 0.75],
+  defaultDailyTarget: 60,
+  qcSampleRate: 0.1,
 };
 
 /* ------------------------------------------------------------------ grades */

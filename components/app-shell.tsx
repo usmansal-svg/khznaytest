@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Activity, ArrowRightLeft, LayoutDashboard, Package, Search, SlidersHorizontal, Tag, Tags, Users, type LucideIcon } from "lucide-react";
+import { Activity, ArrowRightLeft, ClipboardCheck, LayoutDashboard, Package, Search, SlidersHorizontal, Tag, Tags, Users, type LucideIcon } from "lucide-react";
 
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,7 @@ const WORK: NavItem[] = [
   { href: "/tag", label: "Tag item", icon: Tag, hint: "Grade, price, print" },
   { href: "/items", label: "Items", icon: Search, hint: "Search & reprint" },
   { href: "/transfers", label: "Transfers", icon: ArrowRightLeft, hint: "Ship to outlets", min: "qc_senior" },
+  { href: "/qc", label: "QC", icon: ClipboardCheck, hint: "Regrade blind", min: "qc_senior" },
   { href: "/lots", label: "Lots", icon: Package, hint: "Bales & P&L", min: "manager" },
 ];
 

@@ -36,6 +36,8 @@ const FIELDS: { key: keyof Settings; label: string; unit?: string; step: number;
   { key: "charmEnd", label: "Price ending", unit: "PKR", step: 1, group: "Rounding", help: "Every price ends in this. 90 means 1,290 not 1,300." },
   { key: "minPrice", label: "Minimum price", unit: "PKR", step: 10, group: "Rounding", help: "Floor for any grade at any markdown." },
   { key: "highValueThreshold", label: "High-value threshold", unit: "PKR", step: 100, group: "Control", help: "Items above this go to the QC review queue." },
+  { key: "defaultDailyTarget", label: "Daily tagging target", unit: "garments per tagger", step: 5, group: "Control", help: "Shown to each tagger on the tag form; a personal target on the Staff page overrides it." },
+  { key: "qcSampleRate", label: "QC hold-back rate", unit: "0–1 (0.10 = one in ten)", step: 0.01, group: "Control", help: "Share of saved garments randomly held for a blind regrade. The tagger is told to set them aside; they cannot ship until a senior releases them." },
 ];
 
 export function PricingAdmin() {

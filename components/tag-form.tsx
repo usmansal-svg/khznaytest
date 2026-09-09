@@ -37,7 +37,7 @@ type Reference = {
   outlets: { id: number; name: string; is_online: boolean }[];
   lots: { id: number; code: string; supplier: string; basis: "kg" | "pc"; rate: number | null; effective_rate: number | null; yield: number; status: string }[];
   grades: { code: GradeCode; name: string }[];
-  tagger: { name: string; role: string; outlet_id: number | null } | null;
+  tagger: { name: string; role: string; outlet_id: number | null; today: number; target: number } | null;
   colour_tag: ColourTag;
   pricing_source: "database" | "defaults";
   warning?: string;
@@ -118,6 +118,7 @@ export function TagForm() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState<Saved | null>(null);
+  const [qcHold, setQcHold] = useState<string | null>(null);
   const [sessionSkus, setSessionSkus] = useState<string[]>([]);
 
 
@@ -312,6 +313,7 @@ export function TagForm() {
       if (!res.ok) throw new Error(json.error ?? "Save failed.");
       setSaved(json.item);
       setSessionSkus((list) => [...list, json.item.sku]);
+      if (json.qc_hold) setQcHold(json.item.sku);
       // The photo is the record of the garment; it goes up the moment the SKU exists.
       if (photo) {
         try {
@@ -346,6 +348,17 @@ export function TagForm() {
 
   return (
     <>
+    {qcHold && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6" role="alertdialog" aria-modal="true">
+        <div className="w-full max-w-md rounded-2xl border-4 border-amber-500 bg-background p-8 text-center shadow-2xl">
+          <div className="text-5xl">🛑</div>
+          <h2 className="mt-3 text-2xl font-bold">Quality control</h2>
+          <p className="mt-2 text-lg">Keep <span className="font-mono font-semibold">{qcHold}</span> aside on the QC rail.</p>
+          <p className="mt-1 text-sm text-muted-foreground">This garment was picked at random for a senior to regrade. Its tag has printed — attach it, then put the garment on the rail, not in the box. It cannot ship until it is released.</p>
+          <Button type="button" size="lg" className="mt-6 h-14 w-full text-lg" onClick={() => setQcHold(null)}>I&apos;ve set it aside</Button>
+        </div>
+      </div>
+    )}
     <iframe ref={printRef} title="print" aria-hidden className="pointer-events-none fixed -left-[9999px] top-0 h-px w-px opacity-0" onLoad={() => setTimeout(() => setPrinting(null), 1500)} />
     <form
       onSubmit={(e) => {
@@ -365,9 +378,12 @@ export function TagForm() {
             </CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Field label="Tagger">
+            <Field label="Tagger" hint={ref.tagger ? `${ref.tagger.today + sessionSkus.length} of ${ref.tagger.target} today` : undefined}>
               {ref.tagger ? (
-                <Input value={ref.tagger.name} readOnly className="bg-muted" />
+                <div className="space-y-1">
+                  <Input value={ref.tagger.name} readOnly className="bg-muted" />
+                  <div className="h-1.5 rounded bg-muted"><div className={cn("h-1.5 rounded", ref.tagger.today + sessionSkus.length >= ref.tagger.target ? "bg-green-600" : "bg-foreground/70")} style={{ width: `${Math.min(100, ((ref.tagger.today + sessionSkus.length) / Math.max(1, ref.tagger.target)) * 100)}%` }} /></div>
+                </div>
               ) : (
                 <p className="text-sm text-amber-600 dark:text-amber-400">
                   Not signed in — <Link href="/login?next=/tag" className="underline">sign in with your PIN</Link> to save.

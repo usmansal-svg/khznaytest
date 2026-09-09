@@ -153,6 +153,11 @@ export async function POST(request: Request) {
 
   if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
 
+  // Random QC hold-back: the tagger is told to set this one aside for a
+  // blind regrade. Decided here, after the save, so it cannot be gamed.
+  const qcHold = !rejected && Math.random() < ctx.settings.qcSampleRate;
+  if (qcHold) await supabase.from("items").update({ qc_hold: true }).eq("id", item.id);
+
   if (below) {
     await supabase.from("price_alerts").insert({
       item_id: item.id, sku: item.sku, tagged_by: staff.id, standard_price: standardPrice, final_price: finalPrice,
@@ -161,6 +166,7 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({
+    qc_hold: qcHold,
     below_standard: below,
     item: { ...item, list_price: item.price_manual ?? item.price, brand: brand.name, sub_category: subCategory.name, lot: lot.code, tagged_by: staff.name },
     markdowns: q.markdowns,

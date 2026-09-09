@@ -76,6 +76,8 @@ type SettingsRow = {
   high_value_threshold: number;
   default_provisional_yield?: number | string | null;
   ladder_depths?: (number | string)[] | null;
+  default_daily_target?: number | null;
+  qc_sample_rate?: number | string | null;
 };
 
 const num = (v: number | string | null | undefined, fallback = 0) => (v == null ? fallback : Number(v));
@@ -99,6 +101,8 @@ export function settingsFromRow(row: SettingsRow): Settings {
     highValueThreshold: num(row.high_value_threshold),
     defaultProvisionalYield: num(row.default_provisional_yield, DEFAULT_SETTINGS.defaultProvisionalYield),
     ladderDepths: depthsFromRow(row.ladder_depths),
+    defaultDailyTarget: num(row.default_daily_target, DEFAULT_SETTINGS.defaultDailyTarget),
+    qcSampleRate: num(row.qc_sample_rate, DEFAULT_SETTINGS.qcSampleRate),
   };
 }
 
@@ -130,6 +134,8 @@ export function settingsToRow(s: Settings) {
     default_provisional_yield: s.defaultProvisionalYield,
     ladder_depths: [0, ...s.ladderDepths],
     ladder_months: [1, 1, 1, 1],
+    default_daily_target: s.defaultDailyTarget,
+    qc_sample_rate: s.qcSampleRate,
   };
 }
 

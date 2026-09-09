@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
-type Line = { id: number; sku: string; brand: string; sub_category: string; grade: string; size_label: string | null; list_price: number | null; status: string };
+type Line = { id: number; sku: string; brand: string; sub_category: string; grade: string; size_label: string | null; list_price: number | null; status: string; qc?: boolean };
 type Transfer = { id: number; code: string; to_outlet_id: number; to_outlet: string; status: "open" | "sent" | "received"; created_at: string; sent_at: string | null; received_at: string | null; note: string | null; items: Line[] };
 type Outlet = { id: number; name: string; is_online: boolean };
 

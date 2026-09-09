@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-type Line = { sku: string; brand: string; sub_category: string; grade: string; size_label: string | null; list_price: number | null };
+type Line = { sku: string; brand: string; sub_category: string; grade: string; size_label: string | null; list_price: number | null; qc?: boolean };
 type Transfer = { id: number; code: string; to_outlet: string; status: string; created_at: string; note: string | null; items: Line[] };
 
 const rs = (n: number) => `Rs ${Math.round(n).toLocaleString("en-PK")}`;

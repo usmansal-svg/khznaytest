@@ -5,11 +5,11 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-type Tagger = { id: number; name: string; tagged: number; today: number; week: number; per_day: number; days_active: number; secs_per_garment: number | null; premium_pct: number; rejects: number; reject_pct: number; avg_adjust: number; above_pct: number; below_pct: number; balance_flag: boolean; under_priced: number; manual_prices: number; no_photo: number; value: number; last_tagged: string | null };
+type Tagger = { id: number; name: string; tagged: number; today: number; week: number; per_day: number; days_active: number; secs_per_garment: number | null; premium_pct: number; rejects: number; reject_pct: number; avg_adjust: number; above_pct: number; below_pct: number; balance_flag: boolean; under_priced: number; manual_prices: number; no_photo: number; value: number; last_tagged: string | null; target: number; accuracy: { n: number; agree: number; low: number; high: number; rupees_low: number } | null };
 type Data = {
   days: number;
   kpis: { today: number; week: number; period: number; per_hour_today: number | null; value: number; cost: number; expected_gp: number; gp_pct: number; rejects: number; reject_pct: number; awaiting_floor: number; in_transit: number; on_floor: number; active_taggers_today: number };
-  attention: { under_priced: number; new_brands: { name: string; by: string; at: string }[]; no_photo: number; lots_nearly_done: string[]; set_aside: number };
+  attention: { under_priced: number; new_brands: { name: string; by: string; at: string }[]; no_photo: number; lots_nearly_done: string[]; set_aside: number; qc_held: number };
   by_day: { day: string; n: number; value: number }[];
   taggers: Tagger[];
   grade_mix: Record<string, number>;
@@ -20,6 +20,7 @@ type Data = {
   lots: { code: string; supplier: string; description: string | null; basis: string; bought: number; used: number; pieces: number; pct_done: number | null }[];
   alerts: { id: number; sku: string; tagger: string; standard_price: number; final_price: number; pct_below: number; kind: string; reason: string | null; created_at: string }[];
   recent: { sku: string; tagged_at: string; tagger: string; sub_category: string; grade: string; price: number; photos: number; status: string }[];
+  grading: { total: number; agree: number; low: number; high: number; rupees_low: number; physical: number; photo: number; recent: { sku: string; tagger: string; by: string; at: string; original: string; audit: string; dir: string; method: string; delta: number }[] };
   online: { totals: { items: number; draft: number; ready: number; listed: number; unlisted: number; listed_value: number; no_photos: number; errors: number } };
 };
 
@@ -61,6 +62,7 @@ export function Dashboard() {
     a.under_priced > 0 && { text: `${a.under_priced} garment${a.under_priced === 1 ? "" : "s"} priced below the sheet`, href: "#alerts", tone: "warn" as const },
     a.new_brands.length > 0 && { text: `${a.new_brands.length} new brand${a.new_brands.length === 1 ? "" : "s"} from taggers need a tier`, href: "/admin/brands", tone: "warn" as const },
     a.no_photo > 0 && { text: `${a.no_photo} garment${a.no_photo === 1 ? "" : "s"} without a photo`, href: "/items", tone: "warn" as const },
+    a.qc_held > 0 && { text: `${a.qc_held} garment${a.qc_held === 1 ? "" : "s"} on the QC rail waiting for a regrade`, href: "/qc", tone: "warn" as const },
     a.set_aside > 0 && { text: `${a.set_aside} set aside awaiting a manual price`, href: "/items", tone: "info" as const },
     a.lots_nearly_done.length > 0 && { text: `Lots nearly finished: ${a.lots_nearly_done.join(", ")} — time to close and true-up`, href: "/lots", tone: "info" as const },
     k.awaiting_floor > 0 && { text: `${k.awaiting_floor} tagged garments not yet on a transfer`, href: "/transfers", tone: "info" as const },
@@ -109,14 +111,17 @@ export function Dashboard() {
           {data.taggers.length === 0 ? <p className="text-sm text-muted-foreground">Nothing tagged in this period.</p> : (
             <div className="overflow-x-auto"><table className="w-full text-sm">
               <thead className="text-left text-xs uppercase text-muted-foreground"><tr>
-                <th className="pb-2">Tagger</th><th className="pb-2 text-right">Tagged</th><th className="pb-2 text-right">Today</th><th className="pb-2 text-right">Per day</th><th className="pb-2 text-right">Per garment</th>
+                <th className="pb-2">Tagger</th><th className="pb-2 text-right">Tagged</th><th className="pb-2">Today vs target</th><th className="pb-2 text-right">Per day</th><th className="pb-2 text-right">Per garment</th><th className="pb-2 text-right">Grading</th>
                 <th className="pb-2 text-right">Premium+</th><th className="pb-2 text-right">Rejects</th><th className="pb-2 text-right">Avg adj.</th><th className="pb-2 text-right">Under-priced</th><th className="pb-2 text-right">By hand</th><th className="pb-2 text-right">No photo</th><th className="pb-2 text-right">Value</th><th className="pb-2">Last</th>
               </tr></thead>
               <tbody className="divide-y">{data.taggers.map((t) => (
                 <tr key={t.id} className={cn((t.balance_flag || t.under_priced > 0) && "bg-amber-50/60 dark:bg-amber-950/30")}>
                   <td className="py-1.5 font-medium">{t.name}<div className="text-xs font-normal text-muted-foreground">{t.days_active} day{t.days_active === 1 ? "" : "s"} active</div></td>
-                  <td className="py-1.5 text-right tabular-nums">{t.tagged}</td><td className="py-1.5 text-right tabular-nums">{t.today}</td><td className="py-1.5 text-right tabular-nums">{t.per_day}</td>
+                  <td className="py-1.5 text-right tabular-nums">{t.tagged}</td>
+                  <td className="py-1.5"><div className="flex items-center gap-2"><span className="tabular-nums">{t.today} / {t.target}</span><div className="h-1.5 w-20 rounded bg-muted"><div className={cn("h-1.5 rounded", t.today >= t.target ? "bg-green-600" : "bg-foreground/70")} style={{ width: `${Math.min(100, (t.today / Math.max(1, t.target)) * 100)}%` }} /></div></div></td>
+                  <td className="py-1.5 text-right tabular-nums">{t.per_day}</td>
                   <td className="py-1.5 text-right tabular-nums">{secs(t.secs_per_garment)}</td>
+                  <td className={cn("py-1.5 text-right tabular-nums", t.accuracy && t.accuracy.low / Math.max(1, t.accuracy.n) > 0.1 && "font-semibold text-amber-700 dark:text-amber-300")}>{t.accuracy ? `${pct(t.accuracy.agree / t.accuracy.n)} · ${t.accuracy.low}↓` : "—"}</td>
                   <td className="py-1.5 text-right tabular-nums">{pct(t.premium_pct)}</td>
                   <td className={cn("py-1.5 text-right tabular-nums", t.reject_pct > 0.05 && "text-red-700 dark:text-red-400")}>{t.rejects} <span className="text-xs text-muted-foreground">{pct(t.reject_pct)}</span></td>
                   <td className={cn("py-1.5 text-right tabular-nums", t.balance_flag && "font-semibold text-amber-700 dark:text-amber-300")}>{t.avg_adjust > 0 ? "+" : ""}{t.avg_adjust.toFixed(1)}%</td>
@@ -129,7 +134,7 @@ export function Dashboard() {
               ))}</tbody>
             </table></div>
           )}
-          <p className="mt-2 text-xs text-muted-foreground">Per garment is the median time between a tagger&apos;s saves. Premium+ is the share graded Premium or BNWT — a low share against the others may mean downgrading (the safe error). Avg adj. drifting negative, under-priced counts and by-hand prices are the things to ask about.</p>
+          <p className="mt-2 text-xs text-muted-foreground">Grading is the QC agreement rate with the number graded too low (↓) beside it. Per garment is the median time between a tagger&apos;s saves. Premium+ is the share graded Premium or BNWT — a low share against the others may mean downgrading (the safe error). Avg adj. drifting negative, under-priced counts and by-hand prices are the things to ask about.</p>
         </CardContent>
       </Card>
 
@@ -173,6 +178,28 @@ export function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* ---------------------------------------- grading accuracy */}
+      <Card className={cn(data.grading.low > 0 && "border-amber-500")}>
+        <CardHeader className="pb-2"><CardTitle className="text-base">Grading accuracy · QC regrades</CardTitle></CardHeader>
+        <CardContent>
+          {data.grading.total === 0 ? <p className="text-sm text-muted-foreground">No QC regrades in this period. Garments are held at random as they are tagged; a senior regrades them blind from the QC screen.</p> : (
+            <>
+              <div className="mb-3 grid gap-3 sm:grid-cols-5">
+                <Stat label="Regraded" value={String(data.grading.total)} sub={`${data.grading.physical} in hand · ${data.grading.photo} by photo`} />
+                <Stat label="Agreed" value={pct(data.grading.agree / data.grading.total)} />
+                <Stat label="Tagger too low" value={String(data.grading.low)} sub="the costly direction" tone={data.grading.low / data.grading.total > 0.1 ? "warn" : undefined} />
+                <Stat label="Tagger too high" value={String(data.grading.high)} />
+                <Stat label="Lost to downgrading" value={rs(data.grading.rupees_low)} sub="in the sample alone" tone={data.grading.rupees_low > 0 ? "warn" : undefined} />
+              </div>
+              <table className="w-full text-sm">
+                <thead className="text-left text-xs uppercase text-muted-foreground"><tr><th className="pb-2">When</th><th className="pb-2">SKU</th><th className="pb-2">Tagger</th><th className="pb-2">Tagger said</th><th className="pb-2">Senior said</th><th className="pb-2">By</th><th className="pb-2 text-right">Δ price</th></tr></thead>
+                <tbody className="divide-y">{data.grading.recent.map((g, i) => <tr key={i} className={cn(g.dir === "low" && "bg-amber-50/60 dark:bg-amber-950/30")}><td className="py-1 text-xs">{when(g.at)}</td><td className="py-1 font-mono text-xs"><a href={`/items/${g.sku}`} className="hover:underline">{g.sku}</a></td><td className="py-1">{g.tagger}</td><td className="py-1">{GRADE[g.original]}</td><td className="py-1 font-medium">{GRADE[g.audit]}{g.dir === "agree" && <span className="ml-1 text-xs text-green-700">✓</span>}</td><td className="py-1 text-xs">{g.by} · {g.method}</td><td className={cn("py-1 text-right tabular-nums", g.delta > 0 && "text-amber-700 dark:text-amber-300")}>{g.delta ? (g.delta > 0 ? "+" : "") + rs(g.delta).replace("Rs ", "") : "—"}</td></tr>)}</tbody>
+              </table>
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       {/* --------------------------------------------- alerts */}
       <Card id="alerts" className={cn(data.alerts.length > 0 && "border-amber-500")}>

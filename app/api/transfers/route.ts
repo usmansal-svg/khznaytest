@@ -14,7 +14,7 @@ import { NextResponse } from "next/server";
 
 import { currentStaff, dbFor, requireStaff } from "@/lib/auth/staff";
 
-const SELECT = "id, code, to_outlet_id, status, created_at, sent_at, received_at, note, outlets!transfers_to_outlet_id_fkey(name), transfer_items(item_id, items(id, sku, brand_text, grade_code, size_label, price, price_manual, status, sub_categories(name)))";
+const SELECT = "id, code, to_outlet_id, status, created_at, sent_at, received_at, note, outlets!transfers_to_outlet_id_fkey(name), transfer_items(item_id, qc, items(id, sku, brand_text, grade_code, size_label, price, price_manual, status, sub_categories(name)))";
 
 export async function GET(request: Request) {
   const supabase = await dbFor(await currentStaff());
@@ -104,8 +104,9 @@ export async function PATCH(request: Request) {
 
 async function addSku(db: Awaited<ReturnType<typeof dbFor>>, transferId: number, toOutletId: number, raw: string): Promise<{ ok: true; sku: string } | { ok: false; error: string }> {
   const sku = raw.trim().toUpperCase();
-  const { data: item } = await db.from("items").select("id, sku, status, outlet_id").eq("sku", sku).maybeSingle();
+  const { data: item } = await db.from("items").select("id, sku, status, outlet_id, qc_hold").eq("sku", sku).maybeSingle();
   if (!item) return { ok: false, error: "no such SKU" };
+  if (item.qc_hold) return { ok: false, error: "held for QC — a senior must regrade and release it first" };
   if (item.status === "sold" || item.status === "rejected" || item.status === "pulled") return { ok: false, error: `is ${item.status}` };
   const { data: elsewhere } = await db.from("transfer_items").select("transfer_id, transfers(status, code)").eq("item_id", item.id);
   const open = (elsewhere ?? []).find((e) => (Array.isArray(e.transfers) ? e.transfers[0] : e.transfers)?.status !== "received");
@@ -119,7 +120,7 @@ async function addSku(db: Awaited<ReturnType<typeof dbFor>>, transferId: number,
 
 function shape(t: Record<string, unknown>) {
   const one = <T,>(v: unknown) => (Array.isArray(v) ? v[0] : v) as T | null | undefined;
-  const lines = (t.transfer_items as { items: unknown }[] | null) ?? [];
+  const lines = (t.transfer_items as { items: unknown; qc?: boolean }[] | null) ?? [];
   return {
     id: t.id,
     code: t.code,
@@ -131,8 +132,8 @@ function shape(t: Record<string, unknown>) {
     received_at: t.received_at,
     note: t.note,
     items: lines
-      .map((l) => one<{ id: number; sku: string; brand_text: string | null; grade_code: string; size_label: string | null; price: number | null; price_manual: number | null; status: string; sub_categories: unknown }>(l.items))
-      .filter(Boolean)
-      .map((i) => ({ id: i!.id, sku: i!.sku, brand: i!.brand_text ?? "", sub_category: one<{ name: string }>(i!.sub_categories)?.name ?? "", grade: i!.grade_code, size_label: i!.size_label, list_price: i!.price_manual ?? i!.price, status: i!.status })),
+      .map((l) => ({ i: one<{ id: number; sku: string; brand_text: string | null; grade_code: string; size_label: string | null; price: number | null; price_manual: number | null; status: string; sub_categories: unknown }>(l.items), qc: Boolean(l.qc) }))
+      .filter((x) => x.i)
+      .map(({ i, qc }) => ({ id: i!.id, sku: i!.sku, brand: i!.brand_text ?? "", sub_category: one<{ name: string }>(i!.sub_categories)?.name ?? "", grade: i!.grade_code, size_label: i!.size_label, list_price: i!.price_manual ?? i!.price, status: i!.status, qc })),
   };
 }

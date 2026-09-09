@@ -15,7 +15,7 @@ const ROLES = ["tagger", "qc_senior", "manager", "founder"];
 export async function GET() {
   const gate = await requireManager();
   if ("response" in gate) return gate.response;
-  const { data, error } = await gate.db.from("staff").select("id, name, role, outlet_id, active, pin_set_at, last_login, outlets(name)").order("name");
+  const { data, error } = await gate.db.from("staff").select("id, name, role, outlet_id, active, pin_set_at, last_login, daily_target, outlets(name)").order("name");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   const one = (v: unknown) => (Array.isArray(v) ? v[0] : v) as { name: string } | null | undefined;
   return NextResponse.json({ staff: (data ?? []).map((s) => ({ ...s, outlet: one(s.outlets)?.name ?? null, outlets: undefined, has_pin: Boolean(s.pin_set_at) })) });
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const gate = await requireManager();
   if ("response" in gate) return gate.response;
-  let body: { id?: number; name?: string; role?: string; outlet_id?: number | null; active?: boolean; pin?: string };
+  let body: { id?: number; name?: string; role?: string; outlet_id?: number | null; active?: boolean; pin?: string; daily_target?: number | null };
   try {
     body = await request.json();
   } catch {
@@ -65,6 +65,10 @@ export async function PATCH(request: Request) {
     patch.role = body.role;
   }
   if (body.outlet_id !== undefined) patch.outlet_id = body.outlet_id;
+  if (body.daily_target !== undefined) {
+    if (body.daily_target != null && !(Number.isInteger(body.daily_target) && body.daily_target > 0)) return NextResponse.json({ error: "Daily target must be a whole number above 0, or empty for the default." }, { status: 400 });
+    patch.daily_target = body.daily_target;
+  }
   if (body.active !== undefined) {
     if (body.id === gate.staff.id && body.active === false) return NextResponse.json({ error: "You cannot deactivate yourself." }, { status: 400 });
     patch.active = body.active;

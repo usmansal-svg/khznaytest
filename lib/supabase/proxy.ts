@@ -94,7 +94,7 @@ export async function updateSession(request: NextRequest) {
   // floor and transfers need QC senior or above.
   if (staff) {
     const managerOnly = ["/dashboard", "/lots", "/admin", "/api/dashboard", "/api/lots", "/api/admin", "/api/export"];
-    const seniorUp = ["/floor", "/transfers", "/api/floor", "/api/transfers"];
+    const seniorUp = ["/floor", "/transfers", "/qc", "/api/floor", "/api/transfers", "/api/qc"];
     const rank = { tagger: 0, qc_senior: 1, manager: 2, founder: 3 }[staff.role] ?? 0;
     const need = managerOnly.some((p) => path.startsWith(p)) ? 2 : seniorUp.some((p) => path.startsWith(p)) ? 1 : 0;
     if (rank < need) {
