@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 type Brand = { id: number; name: string; tier: string; active: boolean; source: string; added_at: string; added_by: string | null };
@@ -21,7 +20,6 @@ export function BrandsAdmin() {
   const [q, setQ] = useState("");
   const [name, setName] = useState("");
   const [tier, setTier] = useState("regular");
-  const [csv, setCsv] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
 
@@ -31,10 +29,10 @@ export function BrandsAdmin() {
   const shown = useMemo(() => (brands ?? []).filter((b) => b.active && b.name.toLowerCase().includes(q.toLowerCase())), [brands, q]);
   const fromTaggers = useMemo(() => (brands ?? []).filter((b) => b.source === "tagger"), [brands]);
 
-  async function post(body: unknown, csvMode = false) {
+  async function post(body: unknown) {
     setBusy(true); setMessage(null);
     try {
-      const res = await fetch(`/api/admin/brands${csvMode ? "?csv=1" : ""}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      const res = await fetch("/api/admin/brands", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "Failed.");
       setMessage({ tone: "ok", text: `Saved ${j.upserted} brand${j.upserted === 1 ? "" : "s"}${j.rejected?.length ? ` · skipped ${j.rejected.length}: ${j.rejected.slice(0, 5).join(", ")}` : ""}.` });
@@ -106,24 +104,14 @@ export function BrandsAdmin() {
         })}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader className="pb-3"><CardTitle className="text-base">Add a brand</CardTitle></CardHeader>
-          <CardContent className="flex flex-wrap items-end gap-3">
-            <div className="grid gap-1.5"><Label htmlFor="bn">Name</Label><Input id="bn" value={name} onChange={(e) => setName(e.target.value)} className="w-56" /></div>
-            <div className="grid gap-1.5"><Label htmlFor="bt">Tier</Label><select id="bt" value={tier} onChange={(e) => setTier(e.target.value)} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">{TIERS.map((t) => <option key={t.code} value={t.code}>{t.label}</option>)}</select></div>
-            <Button disabled={!name.trim() || busy} onClick={() => post({ brands: [{ name, tier }] }).then(() => setName(""))}>Add</Button>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-3"><CardTitle className="text-base">Import CSV</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-xs text-muted-foreground">Columns: Brand, Tier — the header row is skipped. Existing names are updated, new ones added.</p>
-            <Textarea value={csv} onChange={(e) => setCsv(e.target.value)} rows={4} placeholder={"Brand,Tier\nZara,Regular\nNike,Affordable Luxury\nGucci,Ultra Luxury"} className="font-mono text-xs" />
-            <Button variant="outline" disabled={!csv.trim() || busy} onClick={() => post({ csv }, true).then(() => setCsv(""))}>Import</Button>
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardHeader className="pb-3"><CardTitle className="text-base">Add a brand</CardTitle></CardHeader>
+        <CardContent className="flex flex-wrap items-end gap-3">
+          <div className="grid gap-1.5"><Label htmlFor="bn">Name</Label><Input id="bn" value={name} onChange={(e) => setName(e.target.value)} className="w-56" /></div>
+          <div className="grid gap-1.5"><Label htmlFor="bt">Tier</Label><select id="bt" value={tier} onChange={(e) => setTier(e.target.value)} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">{TIERS.map((t) => <option key={t.code} value={t.code}>{t.label}</option>)}</select></div>
+          <Button disabled={!name.trim() || busy} onClick={() => post({ brands: [{ name, tier }] }).then(() => setName(""))}>Add</Button>
+        </CardContent>
+      </Card>
     </div>
   );
 }
