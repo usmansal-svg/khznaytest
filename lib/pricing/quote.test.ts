@@ -17,7 +17,7 @@ const ctx: PricingContext = {
   settings: DEFAULT_SETTINGS,
   settingsVersion: SETTINGS_VERSION,
   refs: { grades: GRADES, profiles: PROFILES, brandTiers: BRAND_TIERS },
-  subCategories: SUB_CATEGORIES.map((s) => ({ ...s, gender: /women/.test(s.categorySlug) ? "women" : /children/.test(s.categorySlug) ? "kid" : "men" })),
+  subCategories: SUB_CATEGORIES.map((s) => ({ ...s, gender: /women/.test(s.categorySlug) ? "women" : /children/.test(s.categorySlug) ? "kid" : "men", standardCost: null })),
   source: "database",
 };
 
@@ -33,6 +33,17 @@ function q(slug: string, opts: { brand?: string; grade?: GradeCode; adjustment?:
 }
 
 describe("price quote", () => {
+  it("a standard cost per garment wins over the lot: one shelf price whichever vendor", () => {
+    const std = { ...ctx, subCategories: ctx.subCategories.map((s) => (s.slug === "sms-sports-t-shirt" ? { ...s, standardCost: 550 } : s)) };
+    const sc = std.subCategories.find((s) => s.slug === "sms-sports-t-shirt")!;
+    const cheap = quote({ subCategory: sc, brand: { id: null, ...resolveBrand("Nike") }, grade: "premium", adjustment: "standard", isRare: false, lot: { ...lotS, rate: 5 }, weightKg: 0.2 }, std);
+    const dear = quote({ subCategory: sc, brand: { id: null, ...resolveBrand("Nike") }, grade: "premium", adjustment: "standard", isRare: false, lot: { ...lotS, rate: 10 }, weightKg: 0.2 }, std);
+    assert.equal(cheap.cost_basis, "standard");
+    assert.equal(cheap.landed_cost, 550);
+    assert.equal(cheap.price, dear.price);
+    assert.equal(cheap.weight_kg, null);
+  });
+
   it("prices the section 9 worked example from a lot and scale weight", () => {
     const r = q("smt-men-button-down-shirt", { brand: "Zara", lot: lotS, weight: 0.31 });
     assert.equal(r.cost_basis, "lot");

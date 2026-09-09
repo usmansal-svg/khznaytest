@@ -33,7 +33,7 @@ import {
   type Grade,
   type GradeCode,
   type LadderStage,
-  type LotBasis,
+  type CostBasis,
   type LotCost,
   type Profile,
   type ProfileCode,
@@ -103,8 +103,8 @@ export function effectiveRate(lot: LotCost, settings: Settings = DEFAULT_SETTING
 export type CostInputs = {
   /** Scale weight of this garment. Ignored for pc lots. */
   weightKg: number;
-  /** Defaults to kg */
-  basis?: LotBasis;
+  /** kg | pc | standard (a landed cost per garment, as-is). Defaults to kg */
+  basis?: CostBasis;
   /**
    * The lot's effective rate: USD/kg for kg lots, PKR per piece for pc
    * lots. Defaults to settings.blendedRate — a planning quote with no lot.
@@ -125,12 +125,14 @@ export function grossCost(inputs: CostInputs, settings: Settings = DEFAULT_SETTI
   const basis = inputs.basis ?? "kg";
   const rate = inputs.effectiveRate ?? settings.blendedRate;
   const imported = inputs.imported ?? true;
-  if (basis === "pc") return rate;
+  if (basis === "pc" || basis === "standard") return rate;
   // A local kg purchase is quoted in USD-equivalent terms too, but pays no duty.
   return inputs.weightKg * rate * settings.fx + (imported ? inputs.weightKg * settings.dutyPerKg : 0);
 }
 
 export function landedCost(inputs: CostInputs, settings: Settings = DEFAULT_SETTINGS): number {
+  // A standard cost is already landed: no duty, no tax credit, no sorting.
+  if (inputs.basis === "standard") return inputs.effectiveRate ?? 0;
   const imported = inputs.imported ?? true;
   const taxCredit = imported ? 1 - settings.inputTaxRate * settings.inputTaxRecover : 1;
   return grossCost(inputs, settings) * taxCredit + settings.sortingPerPiece;

@@ -36,6 +36,10 @@ export type LotPnl = {
   gp_per_piece: number;
   sold: number;
   sold_revenue: number;
+  /** What was actually paid per garment so far (lot cost ÷ pieces), vs the standard costs priced from */
+  actual_per_piece: number | null;
+  standard_per_piece: number | null;
+  cost_variance: number | null;
 };
 
 export function lotPnl(lot: DbLot, items: LotItem[], subCategories: DbSubCategory[], settings: Settings, refs: PricingRefs): LotPnl {
@@ -67,7 +71,11 @@ export function lotPnl(lot: DbLot, items: LotItem[], subCategories: DbSubCategor
         : null;
 
   const gp = expected - cost;
+  const actualPerPiece = lotCost != null && pieces ? lotCost / pieces : null;
   return {
+    actual_per_piece: actualPerPiece == null ? null : Math.round(actualPerPiece),
+    standard_per_piece: pieces ? Math.round(cost / pieces) : null,
+    cost_variance: actualPerPiece == null ? null : Math.round(cost - actualPerPiece * pieces),
     pieces,
     rejects,
     reject_pct: pieces ? rejects / pieces : 0,

@@ -13,14 +13,14 @@ import { computePrice } from "@/lib/pricing/engine";
 import { loadPricingContext } from "@/lib/pricing/repo";
 
 const PROFILES = ["fast", "standard", "slow"];
-const EDITABLE = ["category_slug", "gender", "name", "weight_kg", "profile_code", "value_index", "market_ceiling", "market_price", "per_piece_cost", "per_piece_share", "planning_rate_usd_per_kg", "active"] as const;
+const EDITABLE = ["category_slug", "gender", "name", "weight_kg", "profile_code", "value_index", "market_ceiling", "market_price", "per_piece_cost", "per_piece_share", "planning_rate_usd_per_kg", "standard_cost_pkr", "active"] as const;
 const GENDERS = ["men", "women", "teenage", "kid", "toddler", "infant"];
 
 export async function GET() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("sub_categories")
-    .select("slug, code, category_slug, gender, name, weight_kg, profile_code, value_index, measure_type, market_ceiling, market_price, per_piece_cost, per_piece_share, planning_rate_usd_per_kg, active, categories(name, sort_order)")
+    .select("slug, code, category_slug, gender, name, weight_kg, profile_code, value_index, measure_type, market_ceiling, market_price, per_piece_cost, per_piece_share, planning_rate_usd_per_kg, standard_cost_pkr, active, categories(name, sort_order)")
     .order("name");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   const genderOrder = ["men", "women", "teenage", "kid", "toddler", "infant"];
@@ -35,14 +35,14 @@ export async function GET() {
         category: cat?.name ?? "",
         category_order: cat?.sort_order ?? 0,
         categories: undefined,
-        ...estimates({ weight_kg: Number(r.weight_kg), profile_code: r.profile_code, value_index: Number(r.value_index), planning_rate_usd_per_kg: r.planning_rate_usd_per_kg == null ? null : Number(r.planning_rate_usd_per_kg), per_piece_cost: r.per_piece_cost == null ? null : Number(r.per_piece_cost) }, ctx),
+        ...estimates({ weight_kg: Number(r.weight_kg), profile_code: r.profile_code, value_index: Number(r.value_index), planning_rate_usd_per_kg: r.planning_rate_usd_per_kg == null ? null : Number(r.planning_rate_usd_per_kg), per_piece_cost: r.per_piece_cost == null ? null : Number(r.per_piece_cost), standard_cost_pkr: r.standard_cost_pkr == null ? null : Number(r.standard_cost_pkr) }, ctx),
       };
     })
     .sort((a, b) => genderOrder.indexOf(a.gender) - genderOrder.indexOf(b.gender) || a.category_order - b.category_order || a.name.localeCompare(b.name));
   return NextResponse.json({ rows, basis: { planning_rate: ctx.settings.blendedRate, fx: ctx.settings.fx } });
 }
 
-type EstimateInput = { weight_kg: number; profile_code: string; value_index: number; planning_rate_usd_per_kg: number | null; per_piece_cost: number | null };
+type EstimateInput = { weight_kg: number; profile_code: string; value_index: number; planning_rate_usd_per_kg: number | null; per_piece_cost: number | null; standard_cost_pkr: number | null };
 type Estimate = { landed_cost: number; bnwt: number; premium: number; excellent: number; very_good: number; gp_pct: number };
 
 /**
@@ -51,12 +51,11 @@ type Estimate = { landed_cost: number; bnwt: number; premium: number; excellent:
  * price and is null until one is set. Imported (duty + tax credit), like
  * the Excel sheet.
  */
-function estimates(r: EstimateInput, ctx: Awaited<ReturnType<typeof loadPricingContext>>): { estimate: Estimate; estimate_pc: Estimate | null; rate_used: number } {
-  const rate = r.planning_rate_usd_per_kg ?? ctx.settings.blendedRate;
-  const pack = (e: ReturnType<typeof computePrice>): Estimate => ({ landed_cost: Math.round(e.landedCost), bnwt: e.gradePrices.bnwt, premium: e.gradePrices.premium, excellent: e.gradePrices.excellent, very_good: e.gradePrices.very_good, gp_pct: e.gpPct });
-  const kg = computePrice({ weightKg: r.weight_kg, basis: "kg", effectiveRate: rate, profileCode: r.profile_code as "fast", valueIndex: r.value_index }, ctx.settings, ctx.refs);
-  const pc = r.per_piece_cost ? computePrice({ weightKg: 0, basis: "pc", effectiveRate: r.per_piece_cost, profileCode: r.profile_code as "fast", valueIndex: r.value_index }, ctx.settings, ctx.refs) : null;
-  return { estimate: pack(kg), estimate_pc: pc ? pack(pc) : null, rate_used: rate };
+/** The shelf prices this sub-category gets from its standard cost — the same for every vendor. */
+function estimates(r: EstimateInput, ctx: Awaited<ReturnType<typeof loadPricingContext>>): { estimate: Estimate | null } {
+  if (!r.standard_cost_pkr) return { estimate: null };
+  const e = computePrice({ weightKg: 0, basis: "standard", effectiveRate: r.standard_cost_pkr, profileCode: r.profile_code as "fast", valueIndex: r.value_index }, ctx.settings, ctx.refs);
+  return { estimate: { landed_cost: Math.round(e.landedCost), bnwt: e.gradePrices.bnwt, premium: e.gradePrices.premium, excellent: e.gradePrices.excellent, very_good: e.gradePrices.very_good, gp_pct: e.gpPct } };
 }
 
 /**
@@ -67,14 +66,14 @@ function estimates(r: EstimateInput, ctx: Awaited<ReturnType<typeof loadPricingC
 export async function POST(request: Request) {
   const gate = await requireManager();
   if ("response" in gate) return gate.response;
-  let body: { rows?: { slug?: string; weight_kg?: number; profile_code?: string; value_index?: number; planning_rate_usd_per_kg?: number | null; per_piece_cost?: number | null }[] };
+  let body: { rows?: { slug?: string; profile_code?: string; value_index?: number; standard_cost_pkr?: number | null }[] };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Body must be JSON." }, { status: 400 });
   }
   const ctx = await loadPricingContext(gate.db);
-  const { data: current } = await gate.db.from("sub_categories").select("slug, weight_kg, profile_code, value_index, planning_rate_usd_per_kg, per_piece_cost").in("slug", (body.rows ?? []).map((r) => r.slug ?? ""));
+  const { data: current } = await gate.db.from("sub_categories").select("slug, weight_kg, profile_code, value_index, planning_rate_usd_per_kg, per_piece_cost, standard_cost_pkr").in("slug", (body.rows ?? []).map((r) => r.slug ?? ""));
   const out: Record<string, ReturnType<typeof estimates>> = {};
   for (const r of body.rows ?? []) {
     const base = (current ?? []).find((s) => s.slug === r.slug);
@@ -82,11 +81,12 @@ export async function POST(request: Request) {
     const num = (v: unknown, fallback: number) => (typeof v === "number" && v > 0 ? v : fallback);
     const opt = (v: unknown, fallback: number | null) => (v === null ? null : typeof v === "number" && v > 0 ? v : fallback);
     out[base.slug] = estimates({
-      weight_kg: num(r.weight_kg, Number(base.weight_kg)),
+      weight_kg: Number(base.weight_kg),
       profile_code: ["fast", "standard", "slow"].includes(String(r.profile_code)) ? String(r.profile_code) : base.profile_code,
       value_index: num(r.value_index, Number(base.value_index)),
-      planning_rate_usd_per_kg: opt(r.planning_rate_usd_per_kg, base.planning_rate_usd_per_kg == null ? null : Number(base.planning_rate_usd_per_kg)),
-      per_piece_cost: opt(r.per_piece_cost, base.per_piece_cost == null ? null : Number(base.per_piece_cost)),
+      planning_rate_usd_per_kg: base.planning_rate_usd_per_kg == null ? null : Number(base.planning_rate_usd_per_kg),
+      per_piece_cost: base.per_piece_cost == null ? null : Number(base.per_piece_cost),
+      standard_cost_pkr: opt(r.standard_cost_pkr, base.standard_cost_pkr == null ? null : Number(base.standard_cost_pkr)),
     }, ctx);
   }
   return NextResponse.json({ estimates: out });
@@ -117,7 +117,7 @@ function suggestCode(name: string, used: Set<string>): string {
 export async function PUT(request: Request) {
   const gate = await requireManager();
   if ("response" in gate) return gate.response;
-  let body: { name?: string; category_slug?: string; weight_kg?: number; profile_code?: string; value_index?: number; measure_type?: string; code?: string; market_ceiling?: number | null; market_price?: number | null };
+  let body: { name?: string; category_slug?: string; weight_kg?: number; standard_cost_pkr?: number; profile_code?: string; value_index?: number; measure_type?: string; code?: string; market_ceiling?: number | null; market_price?: number | null };
   try {
     body = await request.json();
   } catch {
@@ -129,7 +129,8 @@ export async function PUT(request: Request) {
   if (!catRow) return NextResponse.json({ error: "Pick a category." }, { status: 400 });
   const cat = { slug: catRow.slug };
   const gender = catRow.gender as string;
-  const err = check({ weight_kg: body.weight_kg, profile_code: body.profile_code, value_index: body.value_index, market_ceiling: body.market_ceiling ?? null, market_price: body.market_price ?? null });
+  if (!(typeof body.standard_cost_pkr === "number" && body.standard_cost_pkr > 0)) return NextResponse.json({ error: "Standard cost per garment (Rs) is required." }, { status: 400 });
+  const err = check({ weight_kg: body.weight_kg ?? 0.3, profile_code: body.profile_code, value_index: body.value_index, market_ceiling: body.market_ceiling ?? null, market_price: body.market_price ?? null });
   if (err) return NextResponse.json({ error: err }, { status: 400 });
   if (!MEASURE_TYPES.includes(String(body.measure_type))) return NextResponse.json({ error: "Measurement type must be top, bottom, dress, outer, kids_top or kids_bottom." }, { status: 400 });
 
@@ -146,7 +147,7 @@ export async function PUT(request: Request) {
   let slug = `${gender}-${slugify(name)}`;
   for (let i = 2; usedSlugs.has(slug); i++) slug = `${slug}-${i}`;
 
-  const row = { slug, code, category_slug: cat.slug, gender, name, weight_kg: body.weight_kg, profile_code: body.profile_code, value_index: body.value_index, measure_type: body.measure_type, market_ceiling: body.market_ceiling ?? null, market_price: body.market_price ?? null, per_piece_share: 0, active: true };
+  const row = { slug, code, category_slug: cat.slug, gender, name, weight_kg: body.weight_kg ?? 0.3, standard_cost_pkr: body.standard_cost_pkr, profile_code: body.profile_code, value_index: body.value_index, measure_type: body.measure_type, market_ceiling: body.market_ceiling ?? null, market_price: body.market_price ?? null, per_piece_share: 0, active: true };
   const { data, error } = await gate.db.from("sub_categories").insert(row).select("slug, code, name").single();
   if (error) return NextResponse.json({ error: error.message }, { status: error.code === "23505" ? 409 : 500 });
   await audit(gate.db, gate.staff.id, "sub_categories", slug, null, row, "created");
@@ -180,7 +181,7 @@ export async function PATCH(request: Request) {
 
     const { data: before } = await supabase
       .from("sub_categories")
-      .select("category_slug, gender, name, weight_kg, profile_code, value_index, market_ceiling, market_price, per_piece_cost, per_piece_share, planning_rate_usd_per_kg, active")
+      .select("category_slug, gender, name, weight_kg, profile_code, value_index, market_ceiling, market_price, per_piece_cost, per_piece_share, planning_rate_usd_per_kg, standard_cost_pkr, active")
       .eq("slug", slug)
       .maybeSingle();
     if (!before) {
@@ -210,7 +211,7 @@ function check(p: Record<string, unknown>): string | null {
   if ("profile_code" in p && !PROFILES.includes(String(p.profile_code))) return "profile_code must be fast, standard or slow.";
   if ("gender" in p && !GENDERS.includes(String(p.gender))) return "gender must be men, women, teenage, kid, toddler or infant.";
   if ("name" in p && !String(p.name ?? "").trim()) return "name cannot be empty.";
-  for (const k of ["market_ceiling", "market_price", "per_piece_cost", "planning_rate_usd_per_kg"] as const) {
+  for (const k of ["market_ceiling", "market_price", "per_piece_cost", "planning_rate_usd_per_kg", "standard_cost_pkr"] as const) {
     if (k in p && p[k] !== null && !(typeof p[k] === "number" && (p[k] as number) >= 0)) return `${k} must be a non-negative number or empty.`;
   }
   if ("per_piece_share" in p && !(typeof p.per_piece_share === "number" && p.per_piece_share >= 0 && p.per_piece_share <= 1)) return "per_piece_share must be between 0 and 1.";

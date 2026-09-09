@@ -44,6 +44,8 @@ export type DbSubCategory = {
   marketCeiling: number | null;
   perPieceCost: number | null;
   perPieceShare: number;
+  /** Landed cost per garment used for pricing — the same for every vendor */
+  standardCost: number | null;
   active: boolean;
 };
 
@@ -165,6 +167,7 @@ function defaultsContext(warning: string): PricingContext {
       marketCeiling: s.marketCeiling,
       perPieceCost: s.perPieceCost,
       perPieceShare: s.perPieceShare,
+      standardCost: null,
       active: s.active,
     })),
     source: "defaults",
@@ -184,7 +187,7 @@ export async function loadPricingContext(supabase: SupabaseClient): Promise<Pric
     supabase.from("profiles").select("code, name, pulled_share, vol_full, vol_promo, vol_md1, vol_md2, vol_md3"),
     supabase
       .from("sub_categories")
-      .select("slug, code, category_slug, gender, name, weight_kg, profile_code, value_index, measure_type, market_ceiling, per_piece_cost, per_piece_share, active"),
+      .select("slug, code, category_slug, gender, name, weight_kg, profile_code, value_index, measure_type, market_ceiling, per_piece_cost, per_piece_share, standard_cost_pkr, active"),
   ]);
 
   const firstError = settingsRes.error ?? gradesRes.error ?? profilesRes.error ?? subsRes.error;
@@ -226,6 +229,7 @@ export async function loadPricingContext(supabase: SupabaseClient): Promise<Pric
     marketCeiling: s.market_ceiling == null ? null : num(s.market_ceiling),
     perPieceCost: s.per_piece_cost == null ? null : num(s.per_piece_cost),
     perPieceShare: num(s.per_piece_share),
+    standardCost: s.standard_cost_pkr == null ? null : num(s.standard_cost_pkr),
     active: Boolean(s.active),
   }));
 

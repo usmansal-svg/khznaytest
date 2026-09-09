@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
-type Pnl = { pieces: number; rejects: number; reject_pct: number; kg_tagged_so_far: number; pct_done: number | null; lot_cost: number | null; cost_tagged: number; expected_revenue: number; expected_gp: number; gp_pct: number; gp_per_piece: number; sold: number; sold_revenue: number };
+type Pnl = { pieces: number; rejects: number; reject_pct: number; kg_tagged_so_far: number; pct_done: number | null; lot_cost: number | null; cost_tagged: number; expected_revenue: number; expected_gp: number; gp_pct: number; gp_per_piece: number; sold: number; sold_revenue: number; actual_per_piece: number | null; standard_per_piece: number | null; cost_variance: number | null };
 type Lot = {
   id: number; code: string; supplier: string; basis: "kg" | "pc"; rate: number | null; kg_bought: number | null; kg_tagged: number | null; pieces_bought: number | null;
   provisional_yield: number; yield: number; effective_rate: number | null; status: "open" | "closed" | "split"; parent_lot_id: number | null;
@@ -223,7 +223,7 @@ function LotTable({ title, lots, busy, onEdit, onSplit, onClose, onReopen, onDel
                 <tr>
                   <th className="pb-2 pr-2">Lot</th><th className="pb-2 pr-2">Rate</th><th className="pb-2 pr-2 text-right">Bought</th><th className="pb-2 pr-2">Yield</th><th className="pb-2 pr-2">Effective</th>
                   <th className="pb-2 pr-2 text-right">Done</th><th className="pb-2 pr-2 text-right">Tagged</th><th className="pb-2 pr-2 text-right">Rejects</th>
-                  <th className="pb-2 pr-2 text-right">Cost tagged</th><th className="pb-2 pr-2 text-right">Exp. revenue</th><th className="pb-2 pr-2 text-right">Exp. GP</th><th className="pb-2 pr-2 text-right">GP/piece</th><th className="pb-2"></th>
+                  <th className="pb-2 pr-2 text-right">Actual vs standard</th><th className="pb-2 pr-2 text-right">Cost tagged</th><th className="pb-2 pr-2 text-right">Exp. revenue</th><th className="pb-2 pr-2 text-right">Exp. GP</th><th className="pb-2 pr-2 text-right">GP/piece</th><th className="pb-2"></th>
                 </tr>
               </thead>
               <tbody className="divide-y align-top">
@@ -241,6 +241,7 @@ function LotTable({ title, lots, busy, onEdit, onSplit, onClose, onReopen, onDel
                     <td className="py-2 pr-2 text-right tabular-nums">{l.pnl.pct_done == null ? "—" : pct(l.pnl.pct_done)}{l.basis === "kg" ? <div className="text-xs text-muted-foreground">{l.pnl.kg_tagged_so_far} kg</div> : null}</td>
                     <td className="py-2 pr-2 text-right tabular-nums">{l.pnl.pieces}</td>
                     <td className={cn("py-2 pr-2 text-right tabular-nums", l.pnl.reject_pct > 0.03 && "text-red-700 dark:text-red-400")}>{l.pnl.rejects}{l.pnl.pieces ? <div className="text-xs text-muted-foreground">{pct(l.pnl.reject_pct)}</div> : null}</td>
+                    <td className="py-2 pr-2 text-right tabular-nums">{l.pnl.actual_per_piece != null ? <>{rs(l.pnl.actual_per_piece)} <span className="text-muted-foreground">/ {rs(l.pnl.standard_per_piece ?? 0)}</span><div className={cn("text-xs", (l.pnl.cost_variance ?? 0) >= 0 ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400")}>{(l.pnl.cost_variance ?? 0) >= 0 ? "cheaper" : "dearer"} by {rs(Math.abs(l.pnl.cost_variance ?? 0))}</div></> : "—"}</td>
                     <td className="py-2 pr-2 text-right tabular-nums">{rs(l.pnl.cost_tagged)}{l.pnl.lot_cost != null ? <div className="text-xs text-muted-foreground">of {rs(l.pnl.lot_cost)}</div> : null}</td>
                     <td className="py-2 pr-2 text-right tabular-nums">{rs(l.pnl.expected_revenue)}</td>
                     <td className="py-2 pr-2 text-right tabular-nums">{rs(l.pnl.expected_gp)}<div className="text-xs text-muted-foreground">{pct(l.pnl.gp_pct)}</div></td>

@@ -14,7 +14,7 @@ import type { Settings } from "@/lib/pricing/constants";
 type SettingsResponse = { settings: Settings; version: number; source: string; history: { version: number; note: string | null; created_at: string; by: string | null }[]; audits: { id: number; table: string; key: string; at: string; by: string; note: string | null; changes: { field: string; from: string; to: string }[] }[]; warning?: string };
 type Preview = { rows: { slug: string; name: string; profile: string; weight_kg: number; current: number; proposed: number; change_pct: number }[]; multiples: { profile: string; current: number; proposed: number }[] };
 type Est = { landed_cost: number; bnwt: number; premium: number; excellent: number; very_good: number; gp_pct: number };
-type SubRow = { slug: string; code: string; name: string; gender: string; category_slug: string; category: string; weight_kg: number; profile_code: string; value_index: number; market_ceiling: number | null; market_price: number | null; per_piece_cost: number | null; planning_rate_usd_per_kg: number | null; active: boolean; estimate?: Est; estimate_pc?: Est | null; rate_used?: number };
+type SubRow = { slug: string; code: string; name: string; gender: string; category_slug: string; category: string; weight_kg: number; profile_code: string; value_index: number; market_ceiling: number | null; market_price: number | null; standard_cost_pkr: number | null; active: boolean; estimate?: Est | null };
 
 const rs = (n: number) => `Rs ${Math.round(n).toLocaleString("en-PK")}`;
 const pct = (n: number) => `${n >= 0 ? "+" : ""}${(n * 100).toFixed(1)}%`;
@@ -289,8 +289,7 @@ function SubCategoryEditor() {
   const [rows, setRows] = useState<SubRow[] | null>(null);
   const [cats, setCats] = useState<{ slug: string; name: string; gender: string }[]>([]);
   const [edits, setEdits] = useState<Record<string, Partial<SubRow>>>({});
-  const [live, setLive] = useState<Record<string, { estimate: Est; estimate_pc: Est | null; rate_used: number }>>({});
-  const [basis, setBasis] = useState<"kg" | "pc">("kg");
+  const [live, setLive] = useState<Record<string, { estimate: Est | null }>>({});
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
 
@@ -355,16 +354,11 @@ function SubCategoryEditor() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-muted-foreground">Estimate by</span>
-          <Button size="sm" variant={basis === "kg" ? "default" : "outline"} onClick={() => setBasis("kg")}>Per kg · $/kg</Button>
-          <Button size="sm" variant={basis === "pc" ? "default" : "outline"} onClick={() => setBasis("pc")}>Per piece · Rs each</Button>
-        </div>
-        <p className="mb-3 text-xs text-muted-foreground">Prices shown are planning estimates at the default weight and planning rate (imported), exactly like the Excel sheet; a real garment prices from its lot and scale weight. Edit a weight, profile, index or rate and the row&apos;s prices update as you type — in amber until you press Save. Per kg uses the row&apos;s own $/kg, or the planning rate from Constants when blank; per piece needs a Rs price on the row. Weights are the spec&apos;s open item #1 — weigh 20 pieces per category and replace the estimates. Market ceiling warns the tagger when cost-led pricing runs above the market; market price is the &quot;new in store&quot; anchor printed on the tag.</p>
+        <p className="mb-3 text-xs text-muted-foreground">Every garment in a sub-category prices from its <strong>standard cost</strong> — your average landed cost per piece, the same whichever vendor it came from — so the shelf price is one price. Edit the cost, profile or index and the row&apos;s prices update as you type, in amber until you press Save. What you actually paid is tracked on the lot and compared in the lot P&amp;L. Weights are the spec&apos;s open item #1 — weigh 20 pieces per category and replace the estimates. Market ceiling warns the tagger when cost-led pricing runs above the market; market price is the &quot;new in store&quot; anchor printed on the tag.</p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-left text-xs uppercase text-muted-foreground">
-              <tr><th className="pb-2">Gender</th><th className="pb-2">Category</th><th className="pb-2">Sub-category</th><th className="pb-2">Code</th><th className="pb-2">Weight kg</th><th className="pb-2">Profile</th><th className="pb-2">Value index</th><th className="pb-2">{basis === "kg" ? "$ per kg" : "Rs per piece"}</th><th className="pb-2 text-right">Landed</th><th className="pb-2 text-right">BNWT</th><th className="pb-2 text-right">Premium</th><th className="pb-2 text-right">Excellent</th><th className="pb-2 text-right">Very Good</th><th className="pb-2 text-right">GP %</th><th className="pb-2">Market ceiling</th><th className="pb-2">Market price</th><th className="pb-2">Active</th></tr>
+              <tr><th className="pb-2">Gender</th><th className="pb-2">Category</th><th className="pb-2">Sub-category</th><th className="pb-2">Code</th><th className="pb-2">Standard cost Rs</th><th className="pb-2">Profile</th><th className="pb-2">Value index</th><th className="pb-2 text-right">BNWT</th><th className="pb-2 text-right">Premium</th><th className="pb-2 text-right">Excellent</th><th className="pb-2 text-right">Very Good</th><th className="pb-2 text-right">GP %</th><th className="pb-2">Market ceiling</th><th className="pb-2">Market price</th><th className="pb-2">Active</th></tr>
             </thead>
             <tbody className="divide-y">
               {rows.map((r) => {
@@ -372,9 +366,8 @@ function SubCategoryEditor() {
                 const v = { ...r, ...e };
                 const changed = (k: keyof SubRow) => k in e;
                 const lv = live[r.slug];
-                const est = basis === "kg" ? (lv?.estimate ?? r.estimate) : (lv ? lv.estimate_pc : r.estimate_pc);
+                const est = lv ? lv.estimate : r.estimate;
                 const previewing = Boolean(lv);
-                const rateUsed = lv?.rate_used ?? r.rate_used;
                 const num = cn("py-1.5 pr-2 text-right tabular-nums", previewing && "text-amber-700 dark:text-amber-400");
                 return (
                   <tr key={r.slug} className={cn(!v.active && "opacity-50")}>
@@ -388,21 +381,14 @@ function SubCategoryEditor() {
                     </td>
                     <td className="py-1.5 pr-2"><Input value={v.name} onChange={(ev) => edit(r.slug, { name: ev.target.value })} className={cn("h-8 w-44", changed("name") && "border-amber-500")} /></td>
                     <td className="py-1.5 pr-2 font-mono text-xs">{r.code}</td>
-                    <td className="py-1.5 pr-2"><Input type="number" step="0.01" min="0.01" value={v.weight_kg} onChange={(ev) => edit(r.slug, { weight_kg: Number(ev.target.value) })} className={cn("h-8 w-24", changed("weight_kg") && "border-amber-500")} /></td>
+                    <td className="py-1.5 pr-2"><Input type="number" step="10" min="1" value={v.standard_cost_pkr ?? ""} placeholder="set me" onChange={(ev) => edit(r.slug, { standard_cost_pkr: ev.target.value === "" ? null : Number(ev.target.value) })} className={cn("h-8 w-28", changed("standard_cost_pkr") && "border-amber-500", !v.standard_cost_pkr && "border-amber-500")} /></td>
                     <td className="py-1.5 pr-2">
                       <select value={v.profile_code} onChange={(ev) => edit(r.slug, { profile_code: ev.target.value })} className={cn("h-8 rounded-md border border-input bg-transparent px-2 text-sm", changed("profile_code") && "border-amber-500")}>
                         <option value="fast">Fast</option><option value="standard">Standard</option><option value="slow">Slow</option>
                       </select>
                     </td>
                     <td className="py-1.5 pr-2"><Input type="number" step="0.05" min="0.05" value={v.value_index} onChange={(ev) => edit(r.slug, { value_index: Number(ev.target.value) })} className={cn("h-8 w-24", changed("value_index") && "border-amber-500")} /></td>
-                    <td className="py-1.5 pr-2">
-                      {basis === "kg" ? (
-                        <Input type="number" step="0.1" min="0" value={v.planning_rate_usd_per_kg ?? ""} placeholder={rateUsed != null ? String(rateUsed) : ""} onChange={(ev) => edit(r.slug, { planning_rate_usd_per_kg: ev.target.value === "" ? null : Number(ev.target.value) })} className={cn("h-8 w-20", changed("planning_rate_usd_per_kg") && "border-amber-500")} />
-                      ) : (
-                        <Input type="number" step="10" min="0" value={v.per_piece_cost ?? ""} placeholder="—" onChange={(ev) => edit(r.slug, { per_piece_cost: ev.target.value === "" ? null : Number(ev.target.value) })} className={cn("h-8 w-24", changed("per_piece_cost") && "border-amber-500")} />
-                      )}
-                    </td>
-                    <td className={cn(num, !previewing && "text-muted-foreground")}>{est ? rs(est.landed_cost) : "—"}</td>
+
                     <td className={num}>{est ? rs(est.bnwt) : "—"}</td>
                     <td className={cn(num, "font-semibold")}>{est ? rs(est.premium) : "—"}</td>
                     <td className={num}>{est ? rs(est.excellent) : "—"}</td>
@@ -435,7 +421,7 @@ const MEASURE_LABELS: Record<string, string> = { top: "Top · chest, length", bo
 function AddForms({ cats, onAdded, onError }: { cats: { slug: string; name: string; gender: string }[]; onAdded: (text: string) => void; onError: (text: string) => void }) {
   const [open, setOpen] = useState<"sub" | "cat" | null>(null);
   const [busy, setBusy] = useState(false);
-  const [sc, setSc] = useState({ name: "", gender: "men", category_slug: "", weight_kg: "", profile_code: "fast", value_index: "1.00", measure_type: "top", code: "" });
+  const [sc, setSc] = useState({ name: "", gender: "men", category_slug: "", standard_cost: "", profile_code: "fast", value_index: "1.00", measure_type: "top", code: "" });
   const [cat, setCat] = useState({ gender: "men", name: "" });
   const catsFor = cats.filter((c) => c.gender === sc.gender);
   useEffect(() => { if (catsFor.length && !catsFor.some((c) => c.slug === sc.category_slug)) setSc((x) => ({ ...x, category_slug: catsFor[0].slug })); }, [catsFor, sc.category_slug]);
@@ -455,11 +441,11 @@ function AddForms({ cats, onAdded, onError }: { cats: { slug: string; name: stri
   async function addSub() {
     setBusy(true);
     try {
-      const res = await fetch("/api/admin/sub-categories", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: sc.name, category_slug: sc.category_slug, weight_kg: Number(sc.weight_kg), profile_code: sc.profile_code, value_index: Number(sc.value_index), measure_type: sc.measure_type, code: sc.code || undefined }) });
+      const res = await fetch("/api/admin/sub-categories", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: sc.name, category_slug: sc.category_slug, standard_cost_pkr: Number(sc.standard_cost), profile_code: sc.profile_code, value_index: Number(sc.value_index), measure_type: sc.measure_type, code: sc.code || undefined }) });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error);
       onAdded(`Added ${j.sub_category.name} (code ${j.sub_category.code}) under ${cats.find((c) => c.slug === sc.category_slug)?.name}. It's on the tag form now.`);
-      setSc((x) => ({ ...x, name: "", weight_kg: "", code: "" }));
+      setSc((x) => ({ ...x, name: "", standard_cost: "", code: "" }));
       setOpen(null);
     } catch (e) { onError(e instanceof Error ? e.message : "Failed."); } finally { setBusy(false); }
   }
@@ -480,12 +466,12 @@ function AddForms({ cats, onAdded, onError }: { cats: { slug: string; name: stri
           <div className="grid gap-1.5"><Label>Gender</Label><select value={sc.gender} onChange={(e) => setSc({ ...sc, gender: e.target.value })} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">{GENDER_OPTIONS.map((g) => <option key={g.code} value={g.code}>{g.name}</option>)}</select></div>
           <div className="grid gap-1.5"><Label>Category</Label><select value={sc.category_slug} onChange={(e) => setSc({ ...sc, category_slug: e.target.value })} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">{catsFor.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}{catsFor.length === 0 && <option value="">Add a category first</option>}</select></div>
           <div className="grid gap-1.5"><Label>Sub-category name</Label><Input value={sc.name} onChange={(e) => setSc({ ...sc, name: e.target.value })} placeholder="e.g. Crop top" /></div>
-          <div className="grid gap-1.5"><Label>Default weight kg</Label><Input type="number" step="0.01" min="0.01" value={sc.weight_kg} onChange={(e) => setSc({ ...sc, weight_kg: e.target.value })} placeholder="0.45" /></div>
+          <div className="grid gap-1.5"><Label>Standard cost · Rs per garment</Label><Input type="number" step="10" min="1" value={sc.standard_cost} onChange={(e) => setSc({ ...sc, standard_cost: e.target.value })} placeholder="550" /></div>
           <div className="grid gap-1.5"><Label>Profile</Label><select value={sc.profile_code} onChange={(e) => setSc({ ...sc, profile_code: e.target.value })} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"><option value="fast">Fast</option><option value="standard">Standard</option><option value="slow">Slow</option></select></div>
           <div className="grid gap-1.5"><Label>Value index</Label><Input type="number" step="0.05" min="0.05" value={sc.value_index} onChange={(e) => setSc({ ...sc, value_index: e.target.value })} /></div>
           <div className="grid gap-1.5 sm:col-span-2"><Label>Measurements on the tag</Label><select value={sc.measure_type} onChange={(e) => setSc({ ...sc, measure_type: e.target.value })} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">{Object.entries(MEASURE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
           <div className="grid gap-1.5"><Label>SKU code <span className="font-normal text-muted-foreground">· 3 letters, optional</span></Label><Input value={sc.code} maxLength={3} onChange={(e) => setSc({ ...sc, code: e.target.value.toUpperCase().replace(/[^A-Z]/g, "") })} placeholder="auto" className="font-mono uppercase" /></div>
-          <div className="sm:col-span-3"><Button disabled={busy || !sc.name.trim() || !sc.category_slug || !(Number(sc.weight_kg) > 0) || !(Number(sc.value_index) > 0)} onClick={addSub}>Add sub-category</Button><span className="ml-3 text-xs text-muted-foreground">Weigh a few pieces for the default weight — it drives the planning estimate.</span></div>
+          <div className="sm:col-span-3"><Button disabled={busy || !sc.name.trim() || !sc.category_slug || !(Number(sc.standard_cost) > 0) || !(Number(sc.value_index) > 0)} onClick={addSub}>Add sub-category</Button><span className="ml-3 text-xs text-muted-foreground">Standard cost is your average landed cost per garment across vendors — it sets the shelf price.</span></div>
         </CardContent>
       )}
       {open === "cat" && (

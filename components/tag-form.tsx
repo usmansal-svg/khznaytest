@@ -102,7 +102,6 @@ export function TagForm() {
   // Cleared after save
   const [brand, setBrand] = useState("");
   const [brandHits, setBrandHits] = useState<{ name: string; tier: string }[]>([]);
-  const [weight, setWeight] = useState("");
   const [size, setSize] = useState("");
   const [colour, setColour] = useState("");
   const [grade, setGrade] = useState<GradeCode>("premium");
@@ -123,7 +122,6 @@ export function TagForm() {
 
 
   const brandRef = useRef<HTMLInputElement>(null);
-  const weightRef = useRef<HTMLInputElement>(null);
   const sizeRef = useRef<HTMLInputElement>(null);
   const printRef = useRef<HTMLIFrameElement>(null);
   const photoRef = useRef<HTMLInputElement>(null);
@@ -137,7 +135,7 @@ export function TagForm() {
     const blob = await downscale(f);
     if (photo) URL.revokeObjectURL(photo.url);
     setPhoto({ blob, url: URL.createObjectURL(blob) });
-    requestAnimationFrame(() => (needsWeight && !weightKg ? weightRef.current : brandRef.current)?.focus());
+    requestAnimationFrame(() => brandRef.current?.focus());
   }
   const [autoPrint, setAutoPrint] = useState(true);
   const [printing, setPrinting] = useState<string | null>(null);
@@ -197,8 +195,6 @@ export function TagForm() {
   const asksSleeve = Boolean(selectedSub?.asks_sleeve);
   const isManager = ref?.tagger?.role === "manager" || ref?.tagger?.role === "founder";
   const selectedLot = ref?.lots.find((l) => String(l.id) === lotId) ?? null;
-  const needsWeight = selectedLot?.basis === "kg";
-  const weightKg = Number(weight) || 0;
   const rejected = grade === "rejected";
 
   /* brand datalist */
@@ -232,7 +228,7 @@ export function TagForm() {
           method: "POST",
           headers: { "content-type": "application/json" },
           signal: ctrl.signal,
-          body: JSON.stringify({ sub_category_id: sub, brand_text: brand, grade, adjust_pct: adjustPct, lot_id: lotId ? Number(lotId) : null, weight_kg: needsWeight && weightKg > 0 ? weightKg : null }),
+          body: JSON.stringify({ sub_category_id: sub, brand_text: brand, grade, adjust_pct: adjustPct, lot_id: lotId ? Number(lotId) : null }),
         });
         setPrice(await res.json());
       } catch (e) {
@@ -245,7 +241,7 @@ export function TagForm() {
       clearTimeout(t);
       ctrl.abort();
     };
-  }, [sub, brand, grade, adjustPct, lotId, weightKg, needsWeight]);
+  }, [sub, brand, grade, adjustPct, lotId]);
 
   const blocked = !rejected && Boolean(price?.block_reason);
   const needsManual = !rejected && (blocked || manualOn);
@@ -253,7 +249,7 @@ export function TagForm() {
   const standardPrice = price?.standard_price ?? null;
   const below = !rejected && !blocked && standardPrice != null && listPrice > 0 && listPrice < standardPrice;
   const belowPct = below ? Math.round(((standardPrice! - listPrice) / standardPrice!) * 100) : 0;
-  const weightOk = !needsWeight || weightKg > 0;
+  const weightOk = true;
   const sleeveOk = !asksSleeve || Boolean(sleeve);
   const reasonOk = !below || belowReason.trim().length >= 3;
   const photoOk = Boolean(photo) || rejected;
@@ -263,7 +259,6 @@ export function TagForm() {
 
   const resetForNext = useCallback(() => {
     setBrand("");
-    setWeight("");
     setSize("");
     setColour("");
     setGrade("premium");
@@ -304,7 +299,6 @@ export function TagForm() {
           measurements: { ...Object.fromEntries(Object.entries(measure).filter(([, v]) => v !== "")), ...(asksSleeve && sleeve ? { Sleeve: sleeve } : {}) },
           outlet_id: null,
           lot_id: Number(lotId),
-          weight_kg: needsWeight ? weightKg : null,
           channel,
           price_manual: needsManual ? Number(manualPrice) : null,
         }),
@@ -334,11 +328,6 @@ export function TagForm() {
   function onKeyDown(e: React.KeyboardEvent<HTMLFormElement>) {
     if (e.key !== "Enter" || e.target instanceof HTMLTextAreaElement) return;
     e.preventDefault();
-    // Brand → Weight is the scale step; Enter on Brand moves there when the lot is by weight.
-    if (e.target === brandRef.current && needsWeight && !weightKg) {
-      weightRef.current?.focus();
-      return;
-    }
     if (saved) resetForNext();
     else void save();
   }
@@ -403,9 +392,7 @@ export function TagForm() {
               label="Lot"
               hint={
                 selectedLot
-                  ? selectedLot.basis === "pc"
-                    ? `Per piece · Rs ${selectedLot.rate?.toLocaleString()} each`
-                    : `By weight · $${selectedLot.rate}/kg → $${selectedLot.effective_rate?.toFixed(2)}/kg effective at ${(selectedLot.yield * 100).toFixed(1)}% yield`
+                  ? `${selectedLot.supplier} · records where this garment came from`
                   : ref.lots.length
                     ? undefined
                     : "No open lots — ask a manager to create one"
@@ -501,15 +488,10 @@ export function TagForm() {
                 hintTone={price?.brand && brand && (!price.brand.matched || price.brand.corrected_from) ? "warn" : undefined}
               >
                 <div className="flex gap-2">
-                  <Input ref={brandRef} list="brands" value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Start typing…" autoComplete="off" autoFocus onKeyDown={(e) => { if (e.key === "Enter" && !(needsWeight && !weightKg)) { e.preventDefault(); e.stopPropagation(); sizeRef.current?.focus(); } }} />
+                  <Input ref={brandRef} list="brands" value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Start typing…" autoComplete="off" autoFocus onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); sizeRef.current?.focus(); } }} />
                 </div>
                 <datalist id="brands">{brandHits.map((b) => <option key={b.name} value={b.name}>{tierLabel(b.tier)}</option>)}</datalist>
               </Field>
-              {needsWeight && (
-                <Field label="Weight kg" hint="From the scale. This garment's own weight drives its cost.">
-                  <Input ref={weightRef} type="number" inputMode="decimal" step="0.005" min="0.005" max="49" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="0.310" autoComplete="off" />
-                </Field>
-              )}
               <Field label="Size on label" hint={isKids ? kidsHint(size) : undefined}>
                 <Input ref={sizeRef} list="sizes" value={size} onChange={(e) => setSize(e.target.value)} placeholder={isKids ? "e.g. 4–5 Y or 4T" : "e.g. M or 32"} autoComplete="off" />
                 <datalist id="sizes">
@@ -608,8 +590,8 @@ export function TagForm() {
               <div className="text-xs text-muted-foreground">Price includes sales tax</div>
             </div>
 
-            {price?.cost_basis === "planning" && selectedLot && (
-              <Note tone="warn">Weigh the garment to see its real price.</Note>
+            {price?.cost_basis === "planning" && (
+              <Note tone="warn">No standard cost set for this sub-category yet — ask a manager to set it under Pricing.</Note>
             )}
 
             {price?.grade_prices && !needsManual && !rejected && (
@@ -636,12 +618,6 @@ export function TagForm() {
 
             {price && !price.restricted && (
               <dl className="space-y-1 border-t pt-3 text-sm">
-                {price.weight_kg != null && (
-                  <div className="flex justify-between">
-                    <dt className="text-muted-foreground">Weight</dt>
-                    <dd className="tabular-nums">{price.weight_kg.toFixed(3)} kg</dd>
-                  </div>
-                )}
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Landed cost</dt>
                   <dd className="tabular-nums">{pkr(price.landed_cost ?? 0)}</dd>

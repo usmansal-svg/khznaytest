@@ -8,7 +8,7 @@
  * settings.blendedRate and the sub-category's default weight.
  */
 
-import { REJECTED, type Adjustment, type GradeCode, type LotBasis } from "./constants";
+import { REJECTED, type Adjustment, type CostBasis, type GradeCode } from "./constants";
 import { computePrice, expectedRevenue } from "./engine";
 import type { BrandResolution, DbLot, DbSubCategory, PricingContext } from "./repo";
 
@@ -31,8 +31,8 @@ export type QuoteInput = {
 
 export type Quote = {
   sub_category: { id: string; code: string; name: string; measure_type: string };
-  cost_basis: "lot" | "planning";
-  lot: { id: number; code: string; basis: LotBasis; effective_rate: number; yield: number; status: string } | null;
+  cost_basis: "standard" | "lot" | "planning";
+  lot: { id: number; code: string; basis: CostBasis; effective_rate: number; yield: number; status: string } | null;
   weight_kg: number | null;
   landed_cost: number;
   price: number | null;
@@ -60,11 +60,17 @@ export function quote(input: QuoteInput, ctx: PricingContext): Quote {
   const { subCategory, brand, grade, adjustment, isRare, lot } = input;
   const warnings = [brand.warning, ctx.warning].filter((w): w is string => Boolean(w));
 
-  // Cost inputs: the lot decides the basis and rate; the scale decides the weight.
-  let basis: LotBasis = "kg";
+  // Cost inputs. The standard cost per garment wins — one shelf price for a
+  // Nike sports shirt whichever vendor it came from. Lot weight pricing
+  // remains for sub-categories with no standard cost yet.
+  let basis: CostBasis = "kg";
   let effRate: number | undefined;
   let weightKg: number | null;
-  if (lot) {
+  if (subCategory.standardCost) {
+    basis = "standard";
+    effRate = subCategory.standardCost;
+    weightKg = null;
+  } else if (lot) {
     if (lot.effectiveRate == null) {
       return { ...empty(subCategory, brand, grade, adjustment, ctx), lot: lotSummary(lot), error: `Lot ${lot.code} has no rate yet — set it before tagging from it.` };
     }
@@ -76,7 +82,7 @@ export function quote(input: QuoteInput, ctx: PricingContext): Quote {
     }
   } else {
     weightKg = subCategory.weightKg;
-    warnings.push("Planning quote at the blended rate and default weight — pick a lot and weigh the garment for the real price.");
+    warnings.push("No standard cost set for this sub-category — planning quote at the blended rate and default weight. Set one under Pricing.");
   }
 
   const baseInputs = {
@@ -109,7 +115,7 @@ export function quote(input: QuoteInput, ctx: PricingContext): Quote {
   const priced = !blockReason;
   return {
     sub_category: { id: subCategory.slug, code: subCategory.code, name: subCategory.name, measure_type: subCategory.measureType },
-    cost_basis: lot ? "lot" : "planning",
+    cost_basis: basis === "standard" ? "standard" : lot ? "lot" : "planning",
     lot: lot ? lotSummary(lot) : null,
     weight_kg: weightKg,
     landed_cost: round2(result.landedCost),

@@ -211,6 +211,8 @@ export const ADJUSTMENT_CAP = 0.15;
 
 /** kg: vendor sells a bundle by weight. pc: vendor sells a category by the piece. */
 export type LotBasis = "kg" | "pc";
+/** How a garment's cost is arrived at when pricing. */
+export type CostBasis = LotBasis | "standard";
 
 export type LotCost = {
   basis: LotBasis;

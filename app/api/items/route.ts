@@ -63,6 +63,7 @@ export async function POST(request: Request) {
   if (body.weight_kg != null && !(typeof body.weight_kg === "number" && body.weight_kg > 0 && body.weight_kg < 50)) {
     return bad("weight_kg must be a positive number of kilograms.");
   }
+  // Weighing is no longer part of tagging; a weight is accepted only for lots priced by kg with no standard cost.
   if (body.price_manual != null && (!Number.isInteger(body.price_manual) || body.price_manual <= 0)) {
     return bad("Manual price must be a whole, positive rupee amount.");
   }
