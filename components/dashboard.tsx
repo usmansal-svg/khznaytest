@@ -33,6 +33,8 @@ const COLOUR: Record<string, string> = { red: "bg-red-500", blue: "bg-blue-500",
 
 export function Dashboard() {
   const [days, setDays] = useState(30);
+  const [range, setRange] = useState<{ from: string; to: string } | null>(null);
+  const [rangeDraft, setRangeDraft] = useState({ from: "", to: "" });
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openTransfer, setOpenTransfer] = useState<number | null>(null);
@@ -46,8 +48,9 @@ export function Dashboard() {
   }, []);
   useEffect(() => {
     setData(null);
-    fetch(`/api/dashboard?days=${days}`).then(async (r) => { const j = await r.json(); if (!r.ok) throw new Error(j.error); setData(j); }).catch((e) => setError(e.message));
-  }, [days]);
+    const qs = range ? `from=${range.from}&to=${range.to}` : `days=${days}`;
+    fetch(`/api/dashboard?${qs}`).then(async (r) => { const j = await r.json(); if (!r.ok) throw new Error(j.error); setData(j); }).catch((e) => setError(e.message));
+  }, [days, range]);
 
   if (error) return <p className="text-destructive">{error}</p>;
   if (!data) return <p className="text-muted-foreground">Loading…</p>;
@@ -67,13 +70,22 @@ export function Dashboard() {
     <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div><h1 className="text-2xl font-bold">Dashboard</h1><p className="text-sm text-muted-foreground">How much, how fast, who, what it&apos;s worth, where it is, and what needs you.</p></div>
-        <div className="flex gap-1 rounded-md border p-1 text-sm">{[7, 30, 90].map((d) => <button key={d} onClick={() => setDays(d)} className={cn("rounded px-3 py-1", days === d ? "bg-foreground text-background" : "hover:bg-muted")}>{d} days</button>)}</div>
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <div className="flex gap-1 rounded-md border p-1">{[7, 30, 90].map((d) => <button key={d} onClick={() => { setRange(null); setDays(d); }} className={cn("rounded px-3 py-1", !range && days === d ? "bg-foreground text-background" : "hover:bg-muted")}>{d} days</button>)}</div>
+          <form className="flex items-center gap-1 rounded-md border p-1" onSubmit={(e) => { e.preventDefault(); if (rangeDraft.from && rangeDraft.to) setRange(rangeDraft.from <= rangeDraft.to ? { ...rangeDraft } : { from: rangeDraft.to, to: rangeDraft.from }); }}>
+            <input type="date" value={rangeDraft.from} onChange={(e) => setRangeDraft({ ...rangeDraft, from: e.target.value })} className="h-8 rounded bg-transparent px-1 text-sm" aria-label="From" />
+            <span className="text-muted-foreground">→</span>
+            <input type="date" value={rangeDraft.to} onChange={(e) => setRangeDraft({ ...rangeDraft, to: e.target.value })} className="h-8 rounded bg-transparent px-1 text-sm" aria-label="To" />
+            <button type="submit" disabled={!rangeDraft.from || !rangeDraft.to} className={cn("rounded px-3 py-1", range ? "bg-foreground text-background" : "hover:bg-muted disabled:opacity-50")}>Apply</button>
+          </form>
+        </div>
       </div>
+      {range && <p className="text-xs text-muted-foreground">Showing {range.from} → {range.to} inclusive ({data.days} day{data.days === 1 ? "" : "s"}). &quot;Today&quot; and &quot;this week&quot; still mean the actual calendar.</p>}
 
       {/* ------------------------------------------------------- KPIs */}
       <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <Stat label="Tagged today" value={String(k.today)} sub={`${k.active_taggers_today} tagger${k.active_taggers_today === 1 ? "" : "s"} active`} />
-        <Stat label="This week" value={String(k.week)} sub={`${k.period} in ${days} days`} />
+        <Stat label="This week" value={String(k.week)} sub={range ? `${k.period} in the range` : `${k.period} in ${days} days`} />
         <Stat label="Pieces per hour today" value={k.per_hour_today != null ? String(k.per_hour_today) : "—"} sub="of active tagging time" />
         <Stat label="List value" value={rs(k.value)} sub={`cost ${rs(k.cost)}`} />
         <Stat label="Expected gross profit" value={rs(k.expected_gp)} sub={`${pct(k.gp_pct)} of ex-tax revenue`} />
@@ -92,7 +104,7 @@ export function Dashboard() {
 
       {/* ------------------------------------------------ tagger table */}
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-base">Tagger performance · {days} days</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-base">Tagger performance · {range ? `${range.from} → ${range.to}` : `${days} days`}</CardTitle></CardHeader>
         <CardContent>
           {data.taggers.length === 0 ? <p className="text-sm text-muted-foreground">Nothing tagged in this period.</p> : (
             <div className="overflow-x-auto"><table className="w-full text-sm">

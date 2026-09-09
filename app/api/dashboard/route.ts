@@ -18,17 +18,24 @@ export async function GET(request: Request) {
   const gate = await requireManager();
   if ("response" in gate) return gate.response;
   const db = gate.db;
-  const days = Math.min(365, Math.max(1, Number(new URL(request.url).searchParams.get("days")) || 30));
-  const now = Date.now();
-  const since = new Date(now - days * DAY).toISOString();
+  const url = new URL(request.url);
+  const fromParam = url.searchParams.get("from"), toParam = url.searchParams.get("to");
+  const custom = /^\d{4}-\d{2}-\d{2}$/.test(fromParam ?? "") && /^\d{4}-\d{2}-\d{2}$/.test(toParam ?? "");
+  // A custom range is inclusive of both days, in Pakistan time.
+  const rangeStart = custom ? new Date(`${fromParam}T00:00:00+05:00`).getTime() : null;
+  const rangeEnd = custom ? new Date(`${toParam}T23:59:59.999+05:00`).getTime() : null;
+  const now = custom ? Math.min(Date.now(), rangeEnd!) : Date.now();
+  const days = custom ? Math.max(1, Math.round((rangeEnd! - rangeStart!) / DAY)) : Math.min(365, Math.max(1, Number(url.searchParams.get("days")) || 30));
+  const since = custom ? new Date(rangeStart!).toISOString() : new Date(now - days * DAY).toISOString();
+  const until = custom ? new Date(rangeEnd!).toISOString() : new Date().toISOString();
 
   const [itemsRes, transfersRes, staffRes, outletsRes, lotsRes, alertsRes, brandsRes] = await Promise.all([
-    db.from("items").select("id, sku, tagged_at, tagged_by, outlet_id, grade_code, adjustment, adjust_pct, status, channel, online_status, price, price_manual, standard_price, landed_cost, colour_tag, floored_on, photos, shopify_product_id, shopify_error, shopify_synced_at, received_at, lot_id, weight_kg, sub_categories(name, gender, categories(name))").gte("tagged_at", since).order("tagged_at", { ascending: false }),
+    db.from("items").select("id, sku, tagged_at, tagged_by, outlet_id, grade_code, adjustment, adjust_pct, status, channel, online_status, price, price_manual, standard_price, landed_cost, colour_tag, floored_on, photos, shopify_product_id, shopify_error, shopify_synced_at, received_at, lot_id, weight_kg, sub_categories(name, gender, categories(name))").gte("tagged_at", since).lte("tagged_at", until).order("tagged_at", { ascending: false }),
     db.from("transfers").select("id, code, to_outlet_id, status, created_at, sent_at, received_at, note, created_by, transfer_items(item_id, items(sku))").order("created_at", { ascending: false }).limit(50),
     db.from("staff").select("id, name, role, active"),
     db.from("outlets").select("id, name, is_online"),
     db.from("lots").select("id, code, supplier, basis, status, kg, kg_tagged, pieces, description"),
-    db.from("price_alerts").select("id, sku, tagged_by, standard_price, final_price, pct_below, kind, reason, created_at").gte("created_at", since).order("created_at", { ascending: false }).limit(200),
+    db.from("price_alerts").select("id, sku, tagged_by, standard_price, final_price, pct_below, kind, reason, created_at").gte("created_at", since).lte("created_at", until).order("created_at", { ascending: false }).limit(200),
     db.from("brands").select("id, name, added_at, staff:added_by(name)").eq("source", "tagger").eq("tier", "regular").eq("active", true).order("added_at", { ascending: false }).limit(50),
   ]);
   const err = itemsRes.error ?? transfersRes.error ?? staffRes.error ?? outletsRes.error ?? lotsRes.error ?? alertsRes.error ?? brandsRes.error;
@@ -63,7 +70,7 @@ export async function GET(request: Request) {
 
   /* --------------------------------------------------------- by day */
   const byDay = new Map<string, { n: number; value: number }>();
-  for (let d = days - 1; d >= 0; d--) byDay.set(dayOf(new Date(now - d * DAY).toISOString()), { n: 0, value: 0 });
+  for (let d = days - 1; d >= 0; d--) byDay.set(dayOf(new Date((custom ? rangeEnd! : now) - d * DAY).toISOString()), { n: 0, value: 0 });
   for (const i of items) { const k = dayOf(i.tagged_at); const e = byDay.get(k); if (e) { e.n += 1; e.value += listPrice(i); } }
 
   /* ------------------------------------------------------- taggers */
@@ -150,6 +157,7 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     days,
+    range: custom ? { from: fromParam, to: toParam } : null,
     kpis: {
       today: todayItems.length, week: weekItems.length, period: items.length,
       per_hour_today: activeSecondsToday > 0 ? Math.round((todayItems.length / (activeSecondsToday / 3600)) * 10) / 10 : null,
