@@ -67,7 +67,8 @@ export function quote(input: QuoteInput, ctx: PricingContext): Quote {
   let effRate: number | undefined;
   let weightKg: number | null;
   if (subCategory.standardCost) {
-    basis = "standard";
+    // The sheet's cost per piece is the purchase cost; landed applies the constants.
+    basis = "pc";
     effRate = subCategory.standardCost;
     weightKg = null;
   } else if (lot) {
@@ -89,7 +90,8 @@ export function quote(input: QuoteInput, ctx: PricingContext): Quote {
     weightKg: weightKg ?? 0,
     basis,
     effectiveRate: effRate,
-    imported: lot ? lot.imported : true,
+    imported: basis === "pc" && subCategory.standardCost ? true : lot ? lot.imported : true,
+    premiumOverride: subCategory.marketPrice,
     profileCode: subCategory.profileCode,
     valueIndex: subCategory.valueIndex,
     gradeCode: grade,
@@ -115,7 +117,7 @@ export function quote(input: QuoteInput, ctx: PricingContext): Quote {
   const priced = !blockReason;
   return {
     sub_category: { id: subCategory.slug, code: subCategory.code, name: subCategory.name, measure_type: subCategory.measureType },
-    cost_basis: basis === "standard" ? "standard" : lot ? "lot" : "planning",
+    cost_basis: subCategory.standardCost ? "standard" : lot ? "lot" : "planning",
     lot: lot ? lotSummary(lot) : null,
     weight_kg: weightKg,
     landed_cost: round2(result.landedCost),

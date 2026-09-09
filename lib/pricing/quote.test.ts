@@ -39,7 +39,8 @@ describe("price quote", () => {
     const cheap = quote({ subCategory: sc, brand: { id: null, ...resolveBrand("Nike") }, grade: "premium", adjustment: "standard", isRare: false, lot: { ...lotS, rate: 5 }, weightKg: 0.2 }, std);
     const dear = quote({ subCategory: sc, brand: { id: null, ...resolveBrand("Nike") }, grade: "premium", adjustment: "standard", isRare: false, lot: { ...lotS, rate: 10 }, weightKg: 0.2 }, std);
     assert.equal(cheap.cost_basis, "standard");
-    assert.equal(cheap.landed_cost, 550);
+    // The sheet's cost per piece is the purchase cost; landed applies the recoverable input-tax credit.
+    assert.equal(cheap.landed_cost, Math.round(550 * (1 - DEFAULT_SETTINGS.inputTaxRate * DEFAULT_SETTINGS.inputTaxRecover) * 100) / 100);
     assert.equal(cheap.price, dear.price);
     assert.equal(cheap.weight_kg, null);
   });

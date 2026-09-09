@@ -213,6 +213,8 @@ export type PriceInputs = CostInputs & {
   adjustment?: Adjustment;
   /** Per-item adjustment in 5% steps (+5, -10, …). Overrides `adjustment` when given. */
   adjustPct?: number;
+  /** A set Premium price (the sheet's market price): replaces the calculated one; other grades derive from it. */
+  premiumOverride?: number | null;
 };
 
 export type PriceResult = {
@@ -257,7 +259,13 @@ export function computePrice(inputs: PriceInputs, settings: Settings = DEFAULT_S
 
   const brandMultiplier = tierInfo.multiplier ?? 1;
   const adjustmentMultiplier = inputs.adjustPct != null ? 1 + inputs.adjustPct / 100 : ADJUSTMENT_MULTIPLIERS[adjustment];
-  const premiumPrice = charm(cost * multiple * inputs.valueIndex * brandMultiplier * adjustmentMultiplier, settings);
+  // A set Premium price replaces the calculation; brand tier and per-item adjustment still apply on top.
+  const premiumPrice = charm(
+    inputs.premiumOverride && inputs.premiumOverride > 0
+      ? inputs.premiumOverride * brandMultiplier * adjustmentMultiplier
+      : cost * multiple * inputs.valueIndex * brandMultiplier * adjustmentMultiplier,
+    settings,
+  );
 
   const baseMultiplier = findGrade(refs, BASE_GRADE).multiplier;
   const gradePrices = Object.fromEntries(

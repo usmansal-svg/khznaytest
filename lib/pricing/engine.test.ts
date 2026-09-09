@@ -218,6 +218,13 @@ describe("brand tiers and adjustment", () => {
     assert.match(computePrice({ ...base, tier: "ultra_luxury" }).blockReason ?? "", /manually/i);
   });
 
+  it("a set Premium price replaces the calculation and the grades follow it", () => {
+    const r = computePrice({ ...base, premiumOverride: 2500 });
+    assert.equal(r.premiumPrice, 2490);
+    assert.equal(r.gradePrices.excellent, charm(2490 * 0.85));
+    assert.equal(computePrice({ ...base, premiumOverride: 2500, tier: "affordable_luxury" }).premiumPrice, charm(2500 * 2));
+  });
+
   it("adjustPct moves the price in 5% steps and 0 is the standard price", () => {
     const std = computePrice({ ...base, adjustPct: 0 }).premiumPrice;
     assert.equal(std, computePrice(base).premiumPrice);
