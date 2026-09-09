@@ -445,6 +445,7 @@ export function TagForm() {
               </div>
             )}
 
+            {!rejected && (
             <ButtonGroup
               label="Price adjustment"
               hint="Above: sells easily. Below: dated, extreme size, wrong season. Keep each under 15%."
