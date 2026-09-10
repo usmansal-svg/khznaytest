@@ -21,7 +21,7 @@ Sign-in is **name + PIN** on a shared iPad (no email accounts). The first person
 | Role | Sees and does |
 |---|---|
 | **Founder** (Usman) | Everything |
-| **Manager** (supervisor) | Dashboard, lots and costs, splits, transfers, QC, pricing sheet, brands, compare prices, staff, exports |
+| **Manager** (supervisor) | Dashboard, lots and costs, splits, transfers, QC, pricing sheet, brands, staff, exports |
 | **QC senior** | Tag, items, transfers, QC (regrade, price rare pieces) |
 | **Tagger** | Tag item and item lookup only; lands on the tag screen |
 
@@ -46,7 +46,6 @@ Managers add taggers at **Admin → Staff** (name, role, home outlet, PIN, daily
 | Dashboard | `/dashboard` | manager+ | The founder's view (§10) |
 | Pricing | `/admin/pricing` | manager+ | Constants, markdown ladder, selling profiles, grades, sub-categories, history (§4) |
 | Brands | `/admin/brands` | manager+ | Three tier columns; new-from-tagger tray |
-| Compare prices | `/admin/compare` | manager+ | "New in store" reference prices (§9) |
 | Staff | `/admin/staff` | manager+ | Names, roles, PINs, targets |
 
 Removed from this platform's sidebar (code kept for the POS): the Till (`/pos`) and the Floor screen (drop day / monthly sweep). The public pricing demo at `/price` remains open and should be closed before real stock.
@@ -94,7 +93,7 @@ Defaults give **Fast 3.3947 · Standard 3.9640 · Slow 4.5766**. Recomputed live
 
 | Pricing tab | Fields |
 |---|---|
-| Constants | fx, planning rate, default provisional yield, duty/kg, sorting/piece, input tax rate and recoverable share, sales tax, target GP, rejected share, bulk recovery, rounding step/ending/minimum, high-value threshold, daily target, QC hold-back rate, compare-at factors |
+| Constants | fx, planning rate, default provisional yield, duty/kg, sorting/piece, input tax rate and recoverable share, sales tax, target GP, rejected share, bulk recovery, rounding step/ending/minimum, high-value threshold, daily target, QC hold-back rate |
 | Markdown ladder | Markdown 1 / 2 / Final depths (validated ascending) |
 | Selling profiles | Never sells, full, 25%, 50%, 75% shares per profile (must sum to 100%) — multiples shown |
 | Grades | Multiplier and intake share per grade (Premium fixed at 1.00, Rejected at 0) |
@@ -175,7 +174,7 @@ The tagger ticks **Rare find** (two or more triggers: special fabric, handwork, 
 
 ## 9. "New in store" comparison prices
 
-Built, seeded, and currently **not printed on the tag** (removed 10 Sep at Usman's request; one line to switch back on).
+Built and seeded, then **retired on 10 Sep**: Usman will not print comparison prices, so the tag line, the Compare prices menu entry and the compare-at constants were all removed from view. The route `/admin/compare`, the `reference_prices` table and the lookup code remain in the repo; nothing reads them now.
 
 Lookup order: brand × sub-category → brand × category → tier × sub-category → tier × category (the `reference_prices` table, managed at **Admin → Compare prices**) → the sub-category's market price → a **formula** (Premium × 3.0 high street, × 3.5 affordable luxury; switchable in Pricing → Control). Printed figures round down; a saving under 10% is never printed. 303 research estimates were seeded (lower-typical UK prices at Rs 376/£), all marked *estimate* until confirmed. A *needs a price* list is ordered by how often each brand × sub-category is tagged.
 

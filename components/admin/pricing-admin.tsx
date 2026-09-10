@@ -147,12 +147,6 @@ export function PricingAdmin() {
                       <p className="text-xs text-muted-foreground">{f.help}</p>
                     </div>
                   ))}
-                  {g === "Compare at" && (
-                    <label className="flex items-start gap-2 text-sm sm:col-span-2">
-                      <Checkbox checked={draft.compareFormulaEnabled} onCheckedChange={(v) => setDraft({ ...draft, compareFormulaEnabled: v === true })} className="mt-0.5" />
-                      <span><span className="font-medium">Use the formula when no reference price exists</span><span className="block text-xs text-muted-foreground">Off: tags print a New in store price only from the Compare prices table or the sheet&apos;s market price.</span></span>
-                    </label>
-                  )}
                   {g === "Margin" && (
                     <label className="flex items-start gap-2 text-sm sm:col-span-2">
                       <Checkbox checked={draft.brandFeedbackEnabled} onCheckedChange={(v) => setDraft({ ...draft, brandFeedbackEnabled: v === true })} className="mt-0.5" />

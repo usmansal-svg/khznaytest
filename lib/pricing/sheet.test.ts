@@ -52,7 +52,7 @@ describe("pricing workbook", () => {
     const cs = wb.getWorksheet("Constants")!;
     assert.equal(find(cs, 1, "targetGP").getCell(3).value, DEFAULT_SETTINGS.targetGP * 100);
     assert.equal(find(cs, 1, "ladder2").getCell(3).value, 50);
-    assert.equal(find(cs, 1, "compareFormulaEnabled").getCell(3).value, "yes");
+    assert.equal(find(cs, 1, "brandFeedbackEnabled").getCell(3).value, "no");
   });
 
   it("an unedited workbook imports as no change", async () => {
@@ -70,7 +70,7 @@ describe("pricing workbook", () => {
       find(cs, 1, "targetGP").getCell(3).value = 55; // 55%
       find(cs, 1, "fx").getCell(3).value = 290;
       find(cs, 1, "ladder1").getCell(3).value = 30;
-      find(cs, 1, "compareFormulaEnabled").getCell(3).value = "no";
+      find(cs, 1, "brandFeedbackEnabled").getCell(3).value = "yes";
       const ps = wb.getWorksheet("Selling profiles")!;
       const fast = find(ps, 1, "fast");
       fast.getCell(4).value = 60; fast.getCell(5).value = 26; // full 60, 25%-off 26 (was 62.5 / 23.5) — still 100
@@ -90,7 +90,7 @@ describe("pricing workbook", () => {
     assert.equal(r.settings!.targetGP, 0.55);
     assert.equal(r.settings!.fx, 290);
     assert.deepEqual(r.settings!.ladderDepths, [0.3, 0.5, 0.75]);
-    assert.equal(r.settings!.compareFormulaEnabled, false);
+    assert.equal(r.settings!.brandFeedbackEnabled, true);
     assert.equal(r.settings!.salesTax, DEFAULT_SETTINGS.salesTax, "untouched constants stay as they were");
     assert.deepEqual(r.profileRows, [{ code: "fast", pulled_share: 0.02, vol_full: 0.6, vol_md1: 0.26, vol_md2: 0.1, vol_md3: 0.04 }]);
     assert.equal(r.gradeRows.length, GRADES.length, "grades are sent whole so shares can be re-validated");

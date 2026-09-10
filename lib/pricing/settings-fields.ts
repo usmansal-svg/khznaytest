@@ -18,7 +18,6 @@ export const SETTINGS_FIELDS: { key: keyof Settings; label: string; unit?: strin
   { key: "minPrice", label: "Minimum price", unit: "PKR", step: 10, group: "Rounding", help: "Floor for any grade at any markdown." },
   { key: "highValueThreshold", label: "High-value threshold", unit: "PKR", step: 100, group: "Control", help: "Items above this go to the QC review queue." },
   { key: "defaultDailyTarget", label: "Daily tagging target", unit: "garments per tagger", step: 5, group: "Control", help: "Shown to each tagger on the tag form; a personal target on the Staff page overrides it." },
-  { key: "compareFactorRegular", label: "Compare-at factor · high street", unit: "× Premium price", step: 0.1, group: "Compare at", help: "Formula fallback for the tag's New in store price when no reference price exists: Premium shelf price × this. Thrift usually sells at 25–35% of new, so 3 ≈ 67% saving." },
-  { key: "compareFactorAffordable", label: "Compare-at factor · affordable luxury", unit: "× Premium price", step: 0.1, group: "Compare at", help: "Same, for affordable-luxury brands." },
+  // Compare-at factors (compareFactorRegular / compareFactorAffordable) are kept in Settings but off the screen and the sheet: comparison prices left the tag and the menu on 10 Sep.
   { key: "qcSampleRate", label: "QC hold-back rate", unit: "0–1 (0.10 = one in ten)", step: 0.01, group: "Control", help: "Share of saved garments randomly held for a blind regrade. The tagger is told to set them aside; they cannot ship until a senior releases them." },
 ];

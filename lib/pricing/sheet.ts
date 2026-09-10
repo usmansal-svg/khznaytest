@@ -32,7 +32,6 @@ const CONSTANT_ROWS: ConstRow[] = [
   { key: "ladder1", label: "Markdown 1 depth", unit: "%", pct: true, kind: "number" },
   { key: "ladder2", label: "Markdown 2 depth", unit: "%", pct: true, kind: "number" },
   { key: "ladder3", label: "Final markdown depth", unit: "%", pct: true, kind: "number" },
-  { key: "compareFormulaEnabled", label: "Compare-at formula fallback on", unit: "yes/no", kind: "yesno" },
   { key: "brandFeedbackEnabled", label: "Brand feedback in the multiple (not in spec v2)", unit: "yes/no", kind: "yesno" },
 ];
 
