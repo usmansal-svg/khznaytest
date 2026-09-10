@@ -34,7 +34,17 @@ export function AppShell({ auth, children }: { auth: React.ReactNode; children: 
   const pathname = usePathname();
   const [role, setRole] = useState<Role | null>(null);
   useEffect(() => {
-    fetch("/api/auth/me").then((r) => r.json()).then((j) => setRole(j.staff?.role ?? null)).catch(() => {});
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((j) => {
+        const next = j.staff?.role ?? null;
+        setRole(next);
+        // A lapsed session (12 hours) used to leave the page up with a
+        // tagger-sized menu. Send the person to sign in again instead.
+        const isPublic = ["/price", "/pos", "/health", "/login"].some((p) => pathname.startsWith(p));
+        if (!next && !isPublic) window.location.href = `/login?next=${encodeURIComponent(pathname)}`;
+      })
+      .catch(() => {});
   }, [pathname]);
   const rank = role ? RANK[role] : 0;
   const can = (item: NavItem) => !item.min || rank >= RANK[item.min];
