@@ -368,7 +368,7 @@ function SubCategoryEditor() {
                 <th className="pb-2"><HeaderFilter label="Gender" values={genderValues} selected={filters.gender} onChange={(v) => setFilters((f) => ({ ...f, gender: v }))} format={(g) => GENDER_OPTIONS.find((o) => o.code === g)?.name ?? g} /></th>
                 <th className="pb-2"><HeaderFilter label="Category" values={categoryValues} selected={filters.category} onChange={(v) => setFilters((f) => ({ ...f, category: v }))} /></th>
                 <th className="pb-2"><HeaderFilter label="Sub-category" values={nameValues} selected={filters.name} onChange={(v) => setFilters((f) => ({ ...f, name: v }))} /></th>
-                <th className="pb-2">Code</th><th className="pb-2">Cost per piece Rs</th><th className="pb-2">Profile</th><th className="pb-2">Value index</th><th className="pb-2">Market price → Premium</th><th className="pb-2 text-right">Landed</th><th className="pb-2 text-right" title="Landed cost with markdowns, grade mix, never-sells, rejects and bulk recovery spread onto the garment that sells at Premium. Premium ex tax = loaded ÷ (1 − target GP).">Loaded</th><th className="pb-2 text-right">BNWT</th><th className="pb-2 text-right">Premium</th><th className="pb-2 text-right">Excellent</th><th className="pb-2 text-right">Very Good</th><th className="pb-2 text-right" title="Real margin per garment bought: revenue after markdowns, grade mix, never-sells and rejects, plus bulk recovery, ex tax, against landed cost.">Effective GP %</th><th className="pb-2">Active</th></tr>
+                <th className="pb-2">Code</th><th className="pb-2">Cost per piece Rs</th><th className="pb-2">Profile</th><th className="pb-2">Value index</th><th className="pb-2">Market price → Premium</th><th className="pb-2 text-right" title="Real margin per garment bought: revenue after markdowns, grade mix, never-sells and rejects, plus bulk recovery, ex tax, against landed cost.">Effective GP %</th><th className="pb-2 text-right">Landed</th><th className="pb-2 text-right" title="Landed cost with markdowns, grade mix, never-sells, rejects and bulk recovery spread onto the garment that sells at Premium. Premium ex tax = loaded ÷ (1 − target GP).">Loaded</th><th className="pb-2 text-right">BNWT</th><th className="pb-2 text-right">Premium</th><th className="pb-2 text-right">Excellent</th><th className="pb-2 text-right">Very Good</th><th className="pb-2">Active</th></tr>
             </thead>
             <tbody className="divide-y">
               {visible.map((r) => {
@@ -393,13 +393,13 @@ function SubCategoryEditor() {
                     </td>
                     <td className="py-1.5 pr-2"><Input type="number" step="0.05" min="0.05" value={v.value_index} onChange={(ev) => edit(r.slug, { value_index: Number(ev.target.value) })} className={cn("h-8 w-24", changed("value_index") && "border-amber-500")} /></td>
                     <td className="py-1.5 pr-2"><Input type="number" step="100" min="0" value={v.market_price ?? ""} onChange={(ev) => edit(r.slug, { market_price: ev.target.value === "" ? null : Number(ev.target.value) })} className={cn("h-8 w-28", changed("market_price") && "border-amber-500")} placeholder="—" /></td>
+                    <td className={cn(num, "font-semibold", est && targetGp != null && (est.effective_gp_pct + 1e-9 < targetGp ? "text-red-600 dark:text-red-400" : "text-green-700 dark:text-green-400"))} title={est ? `${targetGp != null ? `Target ${(targetGp * 100).toFixed(0)}%. ` : ""}Full-price margin on this one garment: ${pct(est.gp_pct)}` : undefined}>{est ? pct(est.effective_gp_pct) : "—"}</td>
                     <td className={cn(num, !previewing && "text-muted-foreground")}>{est ? rs(est.landed_cost) : "—"}</td>
                     <td className={cn(num, !previewing && "text-muted-foreground")}>{est ? rs(est.loaded_cost) : "—"}</td>
                     <td className={num}>{est ? rs(est.bnwt) : "—"}</td>
                     <td className={cn(num, "font-semibold")}>{est ? rs(est.premium) : "—"}</td>
                     <td className={num}>{est ? rs(est.excellent) : "—"}</td>
                     <td className={num}>{est ? rs(est.very_good) : "—"}</td>
-                    <td className={cn(num, "font-semibold", est && targetGp != null && (est.effective_gp_pct + 1e-9 < targetGp ? "text-red-600 dark:text-red-400" : "text-green-700 dark:text-green-400"))} title={est ? `${targetGp != null ? `Target ${(targetGp * 100).toFixed(0)}%. ` : ""}Full-price margin on this one garment: ${pct(est.gp_pct)}` : undefined}>{est ? pct(est.effective_gp_pct) : "—"}</td>
                     <td className="py-1.5"><Checkbox checked={v.active} onCheckedChange={(c) => edit(r.slug, { active: c === true })} /></td>
                   </tr>
                 );
