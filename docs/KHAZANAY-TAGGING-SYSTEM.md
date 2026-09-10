@@ -101,6 +101,8 @@ Defaults give **Fast 3.3947 · Standard 3.9640 · Slow 4.5766**. Recomputed live
 | Sub-categories | Cost per piece (before sales tax, duty included), profile, value index → landed, **loaded**, BNWT/Premium/Excellent/Very Good, **effective GP%** (live while typing); market ceiling; market price → Premium; add categories and sub-categories |
 | History | Settings versions with who saved them; every audited change (who, when, before → after) |
 
+**Excel round trip (10 Sep).** *Export Excel* at the top of the Pricing screen downloads one workbook with four sheets — Constants, Selling profiles, Grades, Sub-categories — editable cells in yellow, calc columns for reference, and a How-to sheet. Edit in bulk, then *Import Excel*: the server lists every difference (sheet, row, field, now → after) and refuses the file with readable problems if a value is out of range or the shares do not add to 100%. *Apply* writes through the same endpoints as the screen, so constants become a new settings version noted with the file name and every other edit is audited. Keys, codes and slugs are the row match; unknown rows are ignored.
+
 Every settings save is a new **version**; items keep the version they were priced under. Every edit writes an audit row with the staff name.
 
 ### 4.4 Grades
@@ -213,12 +215,13 @@ Garment page: channel switch, photos (camera capture, on-device background remov
 - `lib/pricing/engine.ts` — the pure pricing chain; `engine.test.ts` pins both spec verification tables
 - `lib/pricing/quote.ts` — the price quote used by `/api/price` and item save
 - `lib/pricing/repo.ts` — loads settings, grades, profiles, sub-categories, lots from the database
+- `lib/pricing/sheet.ts` — the Pricing tab as an Excel workbook and back (`sheet.test.ts` round-trips it)
 - `lib/pricing/compare.ts` — comparison price lookup · `lib/pricing/lot-pnl.ts` · `lib/pricing/floor.ts` (POS later)
 - `lib/brands/normalise.ts` — brand cleanup and fuzzy match · `lib/barcode/code128.ts` — barcode SVG · `lib/shopify/*`
 - `lib/auth/*` — PIN hashing, signed sessions, `requireStaff` / `requireManager`
 - `lib/supabase/proxy.ts` — route gating by session and role
 
-**API (all under `/api`):** `price`, `items`, `items/[sku]`, `reference`, `brands`, `lots`, `transfers`, `qc`, `photos`, `tags/[sku]/barcode`, `export`, `dashboard`, `auth/*`, `admin/{settings,profiles,grades,sub-categories,categories,brands,staff,reference-prices}`, `shopify/push`.
+**API (all under `/api`):** `price`, `items`, `items/[sku]`, `reference`, `brands`, `lots`, `transfers`, `qc`, `photos`, `tags/[sku]/barcode`, `export`, `dashboard`, `auth/*`, `admin/{settings,profiles,grades,sub-categories,categories,brands,staff,reference-prices,pricing/sheet}`, `shopify/push`.
 
 **Migrations (25, all applied):** `pricing_schema` · `pricing_seed` (generated from code by `test/gen-seed.ts`) · `sub_category_codes` · `tagging_support` · `lots_and_weights` · `channels_photos_shopify` · `staff_pins_transfers` · `transfer_seq` · `lot_split` · `lot_description_pieces` · `lot_imported_sequence` · `settings_changed_by` · `categories_flat_gender` · `categories_two_level` · `subcategory_planning_rates` · `price_steps_alerts` · `brands_source` · `qc_and_targets` · `qc_hold` · `standard_cost` · `reference_prices` · `rare_handoff` — plus the health check and two POS migrations from a parallel session.
 
