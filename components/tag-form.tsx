@@ -636,7 +636,7 @@ export function TagForm() {
                 )}
                 {price.gp_pct != null && !needsManual && (
                   <div className="flex justify-between">
-                    <dt className="text-muted-foreground">Gross margin</dt>
+                    <dt className="text-muted-foreground">Margin after markdowns</dt>
                     <dd className="tabular-nums">{(price.gp_pct * 100).toFixed(1)}%</dd>
                   </div>
                 )}

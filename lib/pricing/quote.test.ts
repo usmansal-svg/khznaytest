@@ -39,8 +39,8 @@ describe("price quote", () => {
     const cheap = quote({ subCategory: sc, brand: { id: null, ...resolveBrand("Nike") }, grade: "premium", adjustment: "standard", isRare: false, lot: { ...lotS, rate: 5 }, weightKg: 0.2 }, std);
     const dear = quote({ subCategory: sc, brand: { id: null, ...resolveBrand("Nike") }, grade: "premium", adjustment: "standard", isRare: false, lot: { ...lotS, rate: 10 }, weightKg: 0.2 }, std);
     assert.equal(cheap.cost_basis, "standard");
-    // The sheet's cost per piece is the purchase cost; landed applies the recoverable input-tax credit.
-    assert.equal(cheap.landed_cost, Math.round(550 * (1 - DEFAULT_SETTINGS.inputTaxRate * DEFAULT_SETTINGS.inputTaxRecover) * 100) / 100);
+    // The sheet's cost per piece is the purchase cost before sales tax; landed adds the non-recoverable input tax.
+    assert.equal(cheap.landed_cost, Math.round(550 * (1 + DEFAULT_SETTINGS.inputTaxRate * (1 - DEFAULT_SETTINGS.inputTaxRecover)) * 100) / 100);
     assert.equal(cheap.price, dear.price);
     assert.equal(cheap.weight_kg, null);
   });
@@ -49,18 +49,18 @@ describe("price quote", () => {
     const r = q("smt-men-button-down-shirt", { brand: "Zara", lot: lotS, weight: 0.31 });
     assert.equal(r.cost_basis, "lot");
     assert.equal(r.lot?.effective_rate, 6.48);
-    assert.equal(r.landed_cost, 519.26);
-    assert.equal(r.price, 1790);
-    assert.deepEqual(r.markdowns.map((m) => m.price), [1390, 890, 490]);
-    assert.equal(r.grade_prices!.very_good, 1090);
+    assert.equal(r.landed_cost, 624.04);
+    assert.equal(r.price, 2090);
+    assert.deepEqual(r.markdowns.map((m) => m.price), [1590, 1090, 490]);
+    assert.equal(r.grade_prices!.very_good, 1290);
     assert.ok(r.expected_revenue! > r.landed_cost);
     assert.equal(r.sub_category.code, "MBD");
   });
 
   it("per-piece lots ignore weight", () => {
     const r = q("sms-sports-t-shirt", { lot: lotPc, weight: null });
-    assert.equal(r.landed_cost, 535.2);
-    assert.equal(r.price, 1990);
+    assert.equal(r.landed_cost, 643.2);
+    assert.equal(r.price, 2390);
     assert.equal(r.weight_kg, null);
   });
 
@@ -78,22 +78,22 @@ describe("price quote", () => {
   it("rejected prices 0 and still reports the landed cost", () => {
     const r = q("smt-men-t-shirt", { lot: lotS, weight: 0.2, grade: "rejected" });
     assert.equal(r.price, 0);
-    assert.equal(Math.round(r.landed_cost), 335);
+    assert.equal(Math.round(r.landed_cost), 403);
     assert.deepEqual(r.markdowns, []);
-    assert.equal(r.expected_revenue, Math.round(335.01 * DEFAULT_SETTINGS.bulkRecovery * 100) / 100);
+    assert.equal(r.expected_revenue, Math.round(r.landed_cost * DEFAULT_SETTINGS.bulkRecovery * 100) / 100);
   });
 
   it("with no lot it is a planning quote at the default weight, and says so", () => {
     const r = q("smt-men-button-down-shirt", { brand: "Zara" });
     assert.equal(r.cost_basis, "planning");
-    assert.equal(r.price, 1790);
+    assert.equal(r.price, 2090);
     assert.ok(r.warnings!.some((w) => /planning quote/i.test(w)));
   });
 
   it("affordable luxury resolves from the brand, never from the tagger", () => {
     const r = q("smt-men-button-down-shirt", { brand: "nike" });
     assert.equal(r.brand_tier, "affordable_luxury");
-    assert.equal(r.price, 3490);
+    assert.equal(r.price, 4290);
   });
 
   it("ultra luxury blocks with a reason and no price", () => {

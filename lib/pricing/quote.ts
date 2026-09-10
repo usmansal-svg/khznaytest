@@ -35,6 +35,8 @@ export type Quote = {
   lot: { id: number; code: string; basis: CostBasis; effective_rate: number; yield: number; status: string } | null;
   weight_kg: number | null;
   landed_cost: number;
+  /** Landed with every constant and profile loss spread onto it; premium ex tax = loaded / (1 - target GP). */
+  loaded_cost: number;
   price: number | null;
   /** The pricing-sheet price at this grade with no adjustment */
   standard_price: number | null;
@@ -42,7 +44,10 @@ export type Quote = {
   premium_price: number | null;
   grade_prices: Record<GradeCode, number> | null;
   markdowns: { stage: string; discount: number; price: number }[];
+  /** This garment's margin after its own markdown ladder and never-sells share (expected revenue vs landed). */
   gp_pct: number | null;
+  /** Margin per garment bought of this sub-category at its Premium price, after markdowns, grade mix, rejects and bulk recovery. */
+  effective_gp_pct: number | null;
   expected_revenue: number | null;
   brand: { id: number | null; name: string; tier: string; matched: boolean; corrected_from?: string; is_new?: boolean };
   brand_tier: string;
@@ -67,7 +72,7 @@ export function quote(input: QuoteInput, ctx: PricingContext): Quote {
   let effRate: number | undefined;
   let weightKg: number | null;
   if (subCategory.standardCost) {
-    // The sheet's cost per piece is the purchase cost; landed applies the constants.
+    // The sheet's cost per piece is the purchase cost before sales tax; landed applies the constants.
     basis = "pc";
     effRate = subCategory.standardCost;
     weightKg = null;
@@ -115,22 +120,23 @@ export function quote(input: QuoteInput, ctx: PricingContext): Quote {
   }
 
   const priced = !blockReason;
+  const expected = priced ? expectedRevenue({ price: result.price, landedCost: result.landedCost, gradeCode: grade, profileCode: subCategory.profileCode }, ctx.settings, ctx.refs) : 0;
   return {
     sub_category: { id: subCategory.slug, code: subCategory.code, name: subCategory.name, measure_type: subCategory.measureType },
     cost_basis: subCategory.standardCost ? "standard" : lot ? "lot" : "planning",
     lot: lot ? lotSummary(lot) : null,
     weight_kg: weightKg,
     landed_cost: round2(result.landedCost),
+    loaded_cost: round2(result.loadedCost),
     price: priced ? result.price : null,
     standard_price: priced ? standard.price : null,
     adjust_pct: adjustPct,
     premium_price: priced ? result.premiumPrice : null,
     grade_prices: priced ? result.gradePrices : null,
     markdowns: priced ? result.markdowns : [],
-    gp_pct: priced ? round4(result.gpPct) : null,
-    expected_revenue: priced
-      ? round2(expectedRevenue({ price: result.price, landedCost: result.landedCost, gradeCode: grade, profileCode: subCategory.profileCode }, ctx.settings, ctx.refs))
-      : null,
+    gp_pct: priced && expected > 0 ? round4((expected - result.landedCost) / expected) : null,
+    effective_gp_pct: priced ? round4(result.effectiveGpPct) : null,
+    expected_revenue: priced ? round2(expected) : null,
     brand: { id: brand.id, name: brand.name, tier: brand.tier, matched: brand.matched, ...(brand.corrected_from ? { corrected_from: brand.corrected_from } : {}), ...(brand.is_new ? { is_new: true } : {}) },
     brand_tier: brand.tier,
     grade,
@@ -154,6 +160,7 @@ function empty(subCategory: DbSubCategory, brand: BrandResolution, grade: GradeC
     lot: null,
     weight_kg: null,
     landed_cost: 0,
+    loaded_cost: 0,
     price: null,
     standard_price: null,
     adjust_pct: 0,
@@ -161,6 +168,7 @@ function empty(subCategory: DbSubCategory, brand: BrandResolution, grade: GradeC
     grade_prices: null,
     markdowns: [],
     gp_pct: null,
+    effective_gp_pct: null,
     expected_revenue: null,
     brand: { id: brand.id, name: brand.name, tier: brand.tier, matched: brand.matched },
     brand_tier: brand.tier,

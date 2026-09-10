@@ -116,11 +116,14 @@ export type CostInputs = {
 
 /**
  * gross  = basis == 'pc' ? rate : weight * effective_rate * fx + weight * duty_per_kg
- * landed = gross * (1 - input_tax_rate * input_tax_recover) + sorting_per_piece
+ * landed = gross * (1 + input_tax_rate * (1 - input_tax_recover)) + sorting_per_piece
  *
- * Freight is already inside the vendor rate. Duty is added on kg lots;
- * a per-piece cost is entered with duty already in it (Usman's rule),
- * so none is added there. Recoverable input tax is subtracted. Output sales tax is added later, in the multiple.
+ * Costs are entered BEFORE sales tax (Usman's rule, 10 Sep): input tax is
+ * charged on top at the rate, the recoverable share washes out against
+ * output tax, and only the non-recoverable share is a cost. Local-market
+ * purchases pay no tax and no duty. Freight is already inside the vendor
+ * rate; a per-piece cost is entered with duty already in it, so none is
+ * added there. Output sales tax is added later, in the multiple.
  */
 export function grossCost(inputs: CostInputs, settings: Settings = DEFAULT_SETTINGS): number {
   const basis = inputs.basis ?? "kg";
@@ -135,8 +138,8 @@ export function landedCost(inputs: CostInputs, settings: Settings = DEFAULT_SETT
   // A standard cost is already landed: no duty, no tax credit, no sorting.
   if (inputs.basis === "standard") return inputs.effectiveRate ?? 0;
   const imported = inputs.imported ?? true;
-  const taxCredit = imported ? 1 - settings.inputTaxRate * settings.inputTaxRecover : 1;
-  return grossCost(inputs, settings) * taxCredit + settings.sortingPerPiece;
+  const taxLoad = imported ? 1 + settings.inputTaxRate * (1 - settings.inputTaxRecover) : 1;
+  return grossCost(inputs, settings) * taxLoad + settings.sortingPerPiece;
 }
 
 /* --------------------------------------------------------------- multiple */
@@ -191,6 +194,53 @@ export function profileMultiple(profileCode: ProfileCode, settings: Settings = D
   return multiple;
 }
 
+/* ------------------------------------------------------------ loaded cost */
+
+/**
+ * Sell-through factor k = (1 - D) * gsum * full_share: the share of the
+ * Premium price the average garment bought actually brings in, once
+ * markdowns, the grade mix, never-sells and rejects are counted.
+ */
+export function sellThroughFactor(profileCode: ProfileCode, settings: Settings = DEFAULT_SETTINGS, refs: PricingRefs = DEFAULT_REFS): number {
+  const p = findProfile(refs, profileCode);
+  return (1 - blendedDiscount(profileCode, refs, settings)) * gradeSum(settings, refs) * (1 - settings.rejectedShare - p.pulledShare);
+}
+
+/** Bulk recovery credit b = (pulled + rejected) * bulk_recovery, as a share of landed cost. */
+export function bulkCredit(profileCode: ProfileCode, settings: Settings = DEFAULT_SETTINGS, refs: PricingRefs = DEFAULT_REFS): number {
+  const p = findProfile(refs, profileCode);
+  return (p.pulledShare + settings.rejectedShare) * settings.bulkRecovery;
+}
+
+/**
+ * Loaded cost: the landed cost with every constant and profile loss spread
+ * onto the one garment that sells at the Premium price —
+ *
+ *   loaded = landed * (1 - b * (1 - target_gp)) / k
+ *
+ * so that   premium_ex_tax = loaded / (1 - target_gp)   and the effective
+ * margin over the whole intake is exactly the target. It is the multiple,
+ * shown as a cost instead of a factor.
+ */
+export function loadedCost(landed: number, profileCode: ProfileCode, settings: Settings = DEFAULT_SETTINGS, refs: PricingRefs = DEFAULT_REFS): number {
+  const k = sellThroughFactor(profileCode, settings, refs);
+  const b = bulkCredit(profileCode, settings, refs);
+  return (landed * (1 - b * (1 - settings.targetGP))) / k;
+}
+
+/**
+ * Effective gross profit per garment bought, at a given Premium tag price:
+ * revenue after markdowns, grade mix, never-sells and rejects, plus bulk
+ * recovery, all ex tax, against the landed cost. Equals target_gp when the
+ * price is exactly landed * multiple; rounding, value index and brand tier
+ * move it.
+ */
+export function effectiveGrossProfitPct(premiumPrice: number, landed: number, profileCode: ProfileCode, settings: Settings = DEFAULT_SETTINGS, refs: PricingRefs = DEFAULT_REFS): number {
+  const revenue = (premiumPrice / (1 + settings.salesTax)) * sellThroughFactor(profileCode, settings, refs) + landed * bulkCredit(profileCode, settings, refs);
+  if (revenue <= 0) return 0;
+  return (revenue - landed) / revenue;
+}
+
 /* --------------------------------------------------------------- rounding */
 
 /**
@@ -220,6 +270,8 @@ export type PriceInputs = CostInputs & {
 
 export type PriceResult = {
   landedCost: number;
+  /** Landed with every constant and profile loss spread onto it: premium ex tax = loaded / (1 - target GP) */
+  loadedCost: number;
   /** The rounded Premium price. Every other grade derives from this. */
   premiumPrice: number;
   /** Price at the requested grade; 0 for Rejected */
@@ -233,6 +285,8 @@ export type PriceResult = {
   markdowns: { stage: LadderStage; discount: number; price: number }[];
   /** Gross profit on this piece, against ex-tax revenue; 0 for Rejected */
   gpPct: number;
+  /** Effective margin per garment bought of this kind at the Premium price, after markdowns, grade mix, rejects and bulk recovery */
+  effectiveGpPct: number;
   /** Set when the piece cannot be priced automatically */
   blockReason?: string;
 };
@@ -278,6 +332,7 @@ export function computePrice(inputs: PriceInputs, settings: Settings = DEFAULT_S
 
   return {
     landedCost: cost,
+    loadedCost: loadedCost(cost, inputs.profileCode, settings, refs),
     premiumPrice,
     price,
     gradeCode,
@@ -287,6 +342,7 @@ export function computePrice(inputs: PriceInputs, settings: Settings = DEFAULT_S
     gradePrices,
     markdowns: rejected ? [] : markdownLadder(price, settings),
     gpPct: rejected ? 0 : grossProfitPct(price, cost, settings),
+    effectiveGpPct: effectiveGrossProfitPct(premiumPrice, cost, inputs.profileCode, settings, refs),
     ...(blockReason ? { blockReason } : {}),
   };
 }

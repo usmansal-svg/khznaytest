@@ -16,8 +16,10 @@ import {
   charm,
   colourForMonth,
   computePrice,
+  effectiveGrossProfitPct,
   effectiveRate,
   expectedRevenue,
+  loadedCost,
   gradeSum,
   landedCost,
   lotYield,
@@ -78,9 +80,10 @@ describe("lots", () => {
     assert.equal(effectiveRate(LOT_A_01), 600);
   });
 
-  it("a local purchase pays no duty and gets no tax credit — cost is what was paid", () => {
+  it("costs are entered before sales tax: taxed purchases carry the non-recoverable input tax, local ones nothing", () => {
     assert.equal(landedCost({ basis: "pc", effectiveRate: 600, weightKg: 0, imported: false }), 600);
-    assert.equal(Number(landedCost({ basis: "pc", effectiveRate: 600, weightKg: 0 }).toFixed(2)), 535.2);
+    // 600 × (1 + 0.18 × 0.4) = 643.2
+    assert.equal(Number(landedCost({ basis: "pc", effectiveRate: 600, weightKg: 0 }).toFixed(2)), 643.2);
     const localKg = landedCost({ weightKg: 0.31, effectiveRate: 6.48, imported: false });
     assert.equal(Number(localKg.toFixed(2)), Number((0.31 * 6.48 * 283).toFixed(2)));
   });
@@ -95,13 +98,15 @@ describe("lots", () => {
 
 describe("section 9 verification table", () => {
   type Row = [string, LotCost, string, number | null, GradeCode, "standard" | "above", number, number];
-  // lot, sub-category, weight, grade, adjustment, expected landed (rounded), expected price
+  // lot, sub-category, weight, grade, adjustment, expected landed (rounded), expected price.
+  // Re-pinned 10 Sep when costs became ex-tax (landed = gross × 1.072, was × 0.892):
+  // the spec's 519 / 1790 row is now 624 / 2090.
   const table: Row[] = [
-    ["LOT-B-01-S", LOT_B_01_S, "smt-men-button-down-shirt", 0.31, "premium", "standard", 519, 1790],
-    ["LOT-B-01-S", LOT_B_01_S, "smt-men-t-shirt", 0.21, "excellent", "standard", 352, 1090],
-    ["LOT-B-01-W", LOT_B_01_W, "wmf-heavy-hoodie", 0.78, "premium", "above", 1343, 5190],
-    ["LOT-A-01", LOT_A_01, "sms-sports-t-shirt", null, "premium", "standard", 535, 1990],
-    ["LOT-B-01-S", LOT_B_01_S, "smt-men-t-shirt", 0.2, "rejected", "standard", 335, 0],
+    ["LOT-B-01-S", LOT_B_01_S, "smt-men-button-down-shirt", 0.31, "premium", "standard", 624, 2090],
+    ["LOT-B-01-S", LOT_B_01_S, "smt-men-t-shirt", 0.21, "excellent", "standard", 423, 1390],
+    ["LOT-B-01-W", LOT_B_01_W, "wmf-heavy-hoodie", 0.78, "premium", "above", 1614, 6290],
+    ["LOT-A-01", LOT_A_01, "sms-sports-t-shirt", null, "premium", "standard", 643, 2390],
+    ["LOT-B-01-S", LOT_B_01_S, "smt-men-t-shirt", 0.2, "rejected", "standard", 403, 0],
   ];
 
   for (const [lotName, lot, slug, weight, grade, adjustment, landed, price] of table) {
@@ -121,16 +126,18 @@ describe("section 9 verification table", () => {
     });
   }
 
-  it("worked example: button-down at 0.31 kg lands at 519.2 and prices 1790", () => {
+  it("worked example: button-down at 0.31 kg lands at 624.0 and prices 2090", () => {
     const cost = landedCost({ weightKg: 0.31, effectiveRate: effectiveRate(LOT_B_01_S) });
-    assert.ok(Math.abs(cost - 519.26) < 0.1, `landed ${cost}`);
+    assert.ok(Math.abs(cost - 624.04) < 0.1, `landed ${cost}`);
     const r = computePrice({ weightKg: 0.31, effectiveRate: effectiveRate(LOT_B_01_S), profileCode: "fast", valueIndex: 1 });
-    assert.equal(r.premiumPrice, 1790);
+    assert.equal(r.premiumPrice, 2090);
   });
 
-  it("worked example: markdown ladder rounds to 1390 / 890 / 490", () => {
+  it("worked example: markdown ladder rounds to 1590 / 1090 / 490", () => {
     const r = computePrice({ weightKg: 0.31, effectiveRate: effectiveRate(LOT_B_01_S), profileCode: "fast", valueIndex: 1 });
-    assert.deepEqual(r.markdowns.map((m) => m.price), [1390, 890, 490]);
+    assert.deepEqual(r.markdowns.map((m) => m.price), [1590, 1090, 490]);
+    // The spec's own example, at its tax-inclusive cost of 519.26 → 1790: the ladder rounds, never floors.
+    assert.deepEqual([0.25, 0.5, 0.75].map((d) => charm(1790 * (1 - d))), [1390, 890, 490]);
   });
 
   it("markdown depths come from settings — a 30/50/70 ladder reprices the rungs and the multiple", () => {
@@ -141,11 +148,11 @@ describe("section 9 verification table", () => {
     assert.notEqual(profileMultiple("fast", custom).toFixed(4), profileMultiple("fast").toFixed(4));
   });
 
-  it("grade variants derive from the rounded premium: 3190 / 1490 / 1090", () => {
+  it("grade variants derive from the rounded premium: 3790 / 1790 / 1290", () => {
     const r = computePrice({ weightKg: 0.31, effectiveRate: effectiveRate(LOT_B_01_S), profileCode: "fast", valueIndex: 1 });
-    assert.equal(r.gradePrices.bnwt, 3190);
-    assert.equal(r.gradePrices.excellent, 1490);
-    assert.equal(r.gradePrices.very_good, 1090);
+    assert.equal(r.gradePrices.bnwt, 3790);
+    assert.equal(r.gradePrices.excellent, 1790);
+    assert.equal(r.gradePrices.very_good, 1290);
     assert.equal(r.gradePrices.rejected, 0);
   });
 
@@ -165,12 +172,12 @@ describe("planning quotes at the old blended rate still reproduce the earlier ta
   // default weight — exactly the earlier cost model.
   type Row = [string, number, ProfileCode, number, number, number, number, number];
   const table: Row[] = [
-    ["Men T-shirt", 0.2, "fast", 1.1, 2290, 1290, 1090, 790],
-    ["Men Button-down shirt", 0.3, "fast", 1.0, 3190, 1790, 1490, 1090],
-    ["Women Jeans", 0.55, "fast", 1.05, 6090, 3390, 2890, 1990],
-    ["Heavy zip-up", 0.8, "standard", 0.9, 8990, 4990, 4290, 2990],
-    ["Sports Bra", 0.1, "fast", 1.6, 1790, 990, 890, 590],
-    ["Leather jacket", 1.8, "slow", 0.85, 21790, 12090, 10290, 7290],
+    ["Men T-shirt", 0.2, "fast", 1.1, 2890, 1590, 1390, 990],
+    ["Men Button-down shirt", 0.3, "fast", 1.0, 3790, 2090, 1790, 1290],
+    ["Women Jeans", 0.55, "fast", 1.05, 7390, 4090, 3490, 2490],
+    ["Heavy zip-up", 0.8, "standard", 0.9, 10790, 5990, 5090, 3590],
+    ["Sports Bra", 0.1, "fast", 1.6, 1990, 1090, 890, 690],
+    ["Leather jacket", 1.8, "slow", 0.85, 26290, 14590, 12390, 8790],
   ];
   for (const [name, weightKg, profileCode, valueIndex, bnwt, premium, excellent, veryGood] of table) {
     it(`${name} -> ${bnwt}/${premium}/${excellent}/${veryGood}`, () => {
@@ -211,7 +218,7 @@ describe("brand tiers and adjustment", () => {
   });
 
   it("affordable luxury doubles before rounding", () => {
-    assert.equal(computePrice({ ...base, tier: "affordable_luxury" }).premiumPrice, 3490);
+    assert.equal(computePrice({ ...base, tier: "affordable_luxury" }).premiumPrice, 4290);
   });
 
   it("ultra luxury blocks automatic pricing", () => {
@@ -228,7 +235,7 @@ describe("brand tiers and adjustment", () => {
   it("adjustPct moves the price in 5% steps and 0 is the standard price", () => {
     const std = computePrice({ ...base, adjustPct: 0 }).premiumPrice;
     assert.equal(std, computePrice(base).premiumPrice);
-    assert.equal(computePrice({ ...base, adjustPct: 10 }).premiumPrice, charm(1790 / 1 * 0 + 519.93 * profileMultiple("fast") * 1.1));
+    assert.equal(computePrice({ ...base, adjustPct: 10 }).premiumPrice, charm(landedCost(base) * profileMultiple("fast") * 1.1));
     assert.ok(computePrice({ ...base, adjustPct: -15 }).premiumPrice < std);
   });
 
@@ -244,6 +251,33 @@ describe("brand tiers and adjustment", () => {
 });
 
 /* ------------------------------------------------- section 7 — expected revenue */
+
+describe("loaded cost and effective margin", () => {
+  it("loaded cost is the multiple as a cost: premium ex tax = loaded / (1 - target GP)", () => {
+    for (const profile of ["fast", "standard", "slow"] as ProfileCode[]) {
+      const landed = 630.5;
+      const premiumExTax = (landed * profileMultiple(profile)) / (1 + DEFAULT_SETTINGS.salesTax);
+      const loaded = loadedCost(landed, profile);
+      assert.ok(loaded > landed, `${profile}: loaded ${loaded} must exceed landed`);
+      assert.equal(Number((loaded / (1 - DEFAULT_SETTINGS.targetGP)).toFixed(6)), Number(premiumExTax.toFixed(6)));
+    }
+  });
+
+  it("at the unrounded engine price the effective margin is exactly the target GP", () => {
+    for (const profile of ["fast", "standard", "slow"] as ProfileCode[]) {
+      const landed = 519.26;
+      const premium = landed * profileMultiple(profile);
+      assert.equal(Number(effectiveGrossProfitPct(premium, landed, profile).toFixed(6)), DEFAULT_SETTINGS.targetGP);
+    }
+  });
+
+  it("the effective margin sits below the single-garment full-price margin", () => {
+    const r = computePrice({ weightKg: 0, basis: "pc", effectiveRate: 650, profileCode: "fast", valueIndex: 1.1 });
+    assert.ok(r.effectiveGpPct < r.gpPct);
+    assert.ok(r.effectiveGpPct > DEFAULT_SETTINGS.targetGP - 0.05 && r.effectiveGpPct < DEFAULT_SETTINGS.targetGP + 0.15);
+    assert.ok(r.loadedCost > r.landedCost);
+  });
+});
 
 describe("expected revenue", () => {
   it("a rejected piece returns only bulk recovery on its cost", () => {

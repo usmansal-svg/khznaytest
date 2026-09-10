@@ -60,9 +60,10 @@ export function lotPnl(lot: DbLot, items: LotItem[], subCategories: DbSubCategor
     }
   }
 
-  // Landed cost of everything bought, for kg lots: kg × rate × fx + duty,
-  // less recoverable input tax. Per-piece lots have no fixed quantity.
-  const taxCredit = lot.imported ? 1 - settings.inputTaxRate * settings.inputTaxRecover : 1;
+  // Landed cost of everything bought: kg × rate × fx + duty (kg lots) or
+  // pieces × rate, plus the non-recoverable share of input tax on taxed
+  // purchases. Rates are entered before sales tax.
+  const taxCredit = lot.imported ? 1 + settings.inputTaxRate * (1 - settings.inputTaxRecover) : 1;
   const lotCost =
     lot.basis === "kg" && lot.kgBought && lot.rate
       ? (lot.kgBought * lot.rate * settings.fx + (lot.imported ? lot.kgBought * settings.dutyPerKg : 0)) * taxCredit

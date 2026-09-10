@@ -115,7 +115,7 @@ export function LotsAdmin() {
                 <Button type="button" size="sm" variant={f.imported ? "default" : "outline"} onClick={() => set("imported", true)}>Imported</Button>
                 <Button type="button" size="sm" variant={!f.imported ? "default" : "outline"} onClick={() => set("imported", false)}>Local market</Button>
               </div>
-              <p className="text-xs text-muted-foreground">{f.imported ? "Pays duty on weight; 10.8% input tax is reclaimable and comes off the cost." : "No duty, no tax credit — cost is exactly what you paid."}</p>
+              <p className="text-xs text-muted-foreground">{f.imported ? "Enter the rate before sales tax. Duty is added on weight for kg lots, and the non-recoverable part of input tax goes on the cost." : "No sales tax, no duty — cost is exactly what you paid."}</p>
             </div>
             <div className="grid gap-1.5"><Label htmlFor="rate">{f.basis === "kg" ? "Rate · USD per kg" : "Rate · PKR per piece"}</Label><Input id="rate" type="number" step={f.basis === "kg" ? "0.01" : "1"} min="0" value={f.rate} onChange={(e) => set("rate", e.target.value)} placeholder={f.basis === "kg" ? "6.00" : "600"} /></div>
             {f.basis === "kg" ? (

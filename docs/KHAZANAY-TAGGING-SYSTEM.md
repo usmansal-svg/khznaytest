@@ -57,11 +57,16 @@ Removed from this platform's sidebar (code kept for the POS): the Till (`/pos`) 
 
 ### 4.1 Where a price comes from
 
-Every sub-category on the pricing sheet carries a **cost per piece (Rs)** — what one garment costs **with import duty already included** (entered that way; the engine adds no duty to it). From it:
+Every sub-category on the pricing sheet carries a **cost per piece (Rs)** — what one garment costs **before sales tax, with import duty already included**. The engine adds the non-recoverable share of input tax; it adds no duty. From it:
 
 ```
-landed   = cost_per_piece × (1 − input_tax_rate × input_tax_recover) + sorting_per_piece
-premium  = charm( landed × profile_multiple × value_index × brand_multiplier × (1 + adjust_pct/100) )
+landed   = cost_per_piece × (1 + input_tax_rate × (1 − input_tax_recover)) + sorting_per_piece
+           (cost entered before sales tax; local-market lots add no tax)
+loaded   = landed × (1 − b × (1 − target_gp)) / k        ← every constant and profile loss, as a cost
+           k = (1 − D) × grade_sum × (1 − rejected − pulled)   the sell-through factor
+           b = (pulled + rejected) × bulk_recovery
+premium  = charm( loaded / (1 − target_gp) × (1 + sales_tax) × value_index × brand_multiplier × (1 + adjust_pct/100) )
+           (identical to landed × profile_multiple × …; the sheet shows both Landed and Loaded)
 grade    = charm( premium × grade_multiplier )          (from the rounded premium)
 markdown = charm( price × (1 − depth) )                 (25 / 50 / 75 %, from the rounded price)
 charm(x) = max(190, round((x − 90) / 100) × 100 + 90)  → every price ends in 90
@@ -70,6 +75,8 @@ charm(x) = max(190, round((x − 90) / 100) × 100 + 90)  → every price ends i
 **A market price on the sheet replaces the calculated Premium** (rounded); the other grades follow it. Brand tier and the tagger's ± steps still apply on top.
 
 **Why cost per piece, not weight:** vendors charge from $5/kg to $10/kg for the same garment, and the customer must see one shelf price for a Nike sports shirt. So the *shelf price* comes from a standard cost per sub-category; what was *actually* paid lives on the lot and shows up as margin in the lot P&L. Weighing was removed from the tag form on 10 Sep.
+
+**Two margins.** *Effective GP* (the sheet's column, and the tag form's "margin after markdowns") is the real margin per garment bought: revenue after markdowns, grade mix, never-sells and rejects plus bulk recovery, ex tax, against landed cost. At the unrounded engine price it equals the target GP exactly; rounding, the value index and brand tier move it. The single-garment full-price margin is shown only as a tooltip, because it always reads far above target and misleads.
 
 ### 4.2 The multiple (per selling profile)
 
@@ -91,7 +98,7 @@ Defaults give **Fast 3.3947 · Standard 3.9640 · Slow 4.5766**. Recomputed live
 | Markdown ladder | Markdown 1 / 2 / Final depths (validated ascending) |
 | Selling profiles | Never sells, full, 25%, 50%, 75% shares per profile (must sum to 100%) — multiples shown |
 | Grades | Multiplier and intake share per grade (Premium fixed at 1.00, Rejected at 0) |
-| Sub-categories | Cost per piece, profile, value index → landed, BNWT/Premium/Excellent/Very Good, GP% (live while typing); market ceiling; market price → Premium; add categories and sub-categories |
+| Sub-categories | Cost per piece (before sales tax, duty included), profile, value index → landed, **loaded**, BNWT/Premium/Excellent/Very Good, **effective GP%** (live while typing); market ceiling; market price → Premium; add categories and sub-categories |
 | History | Settings versions with who saved them; every audited change (who, when, before → after) |
 
 Every settings save is a new **version**; items keep the version they were priced under. Every edit writes an audit row with the staff name.
@@ -225,7 +232,7 @@ Garment page: channel switch, photos (camera capture, on-device background remov
 
 - **Markdowns round** (25/50/75 → 1,390 / 890 / 490 on a 1,790 shirt); the original spec's floor example was an error, corrected by spec v2.
 - **Standard cost per sub-category, not scale weight**, sets the shelf price (10 Sep). Weight-based pricing remains in the engine for lot P&L.
-- **Cost per piece is entered duty-inclusive.** Duty per kg applies only to kg lots; adding it to per-piece costs was tried and reverted the same day.
+- **Costs are entered before sales tax, duty included.** Some vendors charge tax and local-market ones do not, so the engine adds the non-recoverable input tax itself (never on local lots). Duty per kg applies only to kg lots; adding it to per-piece costs was tried and reverted the same day.
 - **Lot numbers never reuse** a deleted number (tried and reverted the same day).
 - **Two-level catalogue per gender** (Category → Sub-category) with type-to-find, after trying flat.
 - **QC by random hold-back at tagging**, not at the outlet or by shipment sample.

@@ -43,7 +43,7 @@ export async function GET() {
 }
 
 type EstimateInput = { weight_kg: number; profile_code: string; value_index: number; planning_rate_usd_per_kg: number | null; per_piece_cost: number | null; standard_cost_pkr: number | null; market_price: number | null };
-type Estimate = { landed_cost: number; bnwt: number; premium: number; excellent: number; very_good: number; gp_pct: number };
+type Estimate = { landed_cost: number; loaded_cost: number; bnwt: number; premium: number; excellent: number; very_good: number; gp_pct: number; effective_gp_pct: number };
 
 /**
  * Planning estimates for both buying bases. Per kg uses the sub-category's
@@ -55,7 +55,7 @@ type Estimate = { landed_cost: number; bnwt: number; premium: number; excellent:
 function estimates(r: EstimateInput, ctx: Awaited<ReturnType<typeof loadPricingContext>>): { estimate: Estimate | null } {
   if (!r.standard_cost_pkr) return { estimate: null };
   const e = computePrice({ weightKg: 0, basis: "pc", effectiveRate: r.standard_cost_pkr, imported: true, profileCode: r.profile_code as "fast", valueIndex: r.value_index, premiumOverride: r.market_price }, ctx.settings, ctx.refs);
-  return { estimate: { landed_cost: Math.round(e.landedCost), bnwt: e.gradePrices.bnwt, premium: e.gradePrices.premium, excellent: e.gradePrices.excellent, very_good: e.gradePrices.very_good, gp_pct: e.gpPct } };
+  return { estimate: { landed_cost: Math.round(e.landedCost), loaded_cost: Math.round(e.loadedCost), effective_gp_pct: e.effectiveGpPct, bnwt: e.gradePrices.bnwt, premium: e.gradePrices.premium, excellent: e.gradePrices.excellent, very_good: e.gradePrices.very_good, gp_pct: e.gpPct } };
 }
 
 /**

@@ -13,7 +13,7 @@ import type { Settings } from "@/lib/pricing/constants";
 
 type SettingsResponse = { settings: Settings; version: number; source: string; history: { version: number; note: string | null; created_at: string; by: string | null }[]; audits: { id: number; table: string; key: string; at: string; by: string; note: string | null; changes: { field: string; from: string; to: string }[] }[]; warning?: string };
 type Preview = { rows: { slug: string; name: string; profile: string; weight_kg: number; current: number; proposed: number; change_pct: number }[]; multiples: { profile: string; current: number; proposed: number }[] };
-type Est = { landed_cost: number; bnwt: number; premium: number; excellent: number; very_good: number; gp_pct: number };
+type Est = { landed_cost: number; loaded_cost: number; bnwt: number; premium: number; excellent: number; very_good: number; gp_pct: number; effective_gp_pct: number };
 type SubRow = { slug: string; code: string; name: string; gender: string; category_slug: string; category: string; weight_kg: number; profile_code: string; value_index: number; market_ceiling: number | null; market_price: number | null; standard_cost_pkr: number | null; active: boolean; estimate?: Est | null };
 
 const rs = (n: number) => `Rs ${Math.round(n).toLocaleString("en-PK")}`;
@@ -26,8 +26,8 @@ const FIELDS: { key: keyof Settings; label: string; unit?: string; step: number;
   { key: "defaultProvisionalYield", label: "Default provisional yield", unit: "0–1", step: 0.01, group: "Cost", help: "Share of bought kg assumed to reach a tag while a lot is open. 0.90 until three or four closed lots give a real number." },
   { key: "dutyPerKg", label: "Import duty", unit: "PKR per kg", step: 1, group: "Cost", help: "Charged on weight, so heavier garments carry more." },
   { key: "sortingPerPiece", label: "Sorting per piece", unit: "PKR", step: 1, group: "Cost", help: "Deliberately zero — sorting labour sits in overheads." },
-  { key: "inputTaxRate", label: "Input sales tax", unit: "0–1", step: 0.01, group: "Tax", help: "Paid at import. Open item: confirm with the accountant." },
-  { key: "inputTaxRecover", label: "Input tax recoverable", unit: "0–1", step: 0.01, group: "Tax", help: "Share recoverable against output tax." },
+  { key: "inputTaxRate", label: "Input sales tax", unit: "0–1", step: 0.01, group: "Tax", help: "Charged on top of the cost you enter (costs are entered before tax). Not charged on local-market lots." },
+  { key: "inputTaxRecover", label: "Input tax recoverable", unit: "0–1", step: 0.01, group: "Tax", help: "Share you claim back against output tax; only the rest is a cost." },
   { key: "salesTax", label: "Sales tax on shelf price", unit: "0–1", step: 0.01, group: "Tax", help: "Shelf prices are tax inclusive." },
   { key: "targetGP", label: "Target gross profit", unit: "0–1 of ex-tax revenue", step: 0.01, group: "Margin", help: "The whole book aims here after markdowns, pulls and the grade mix." },
   { key: "rejectedShare", label: "Rejected at sorting", unit: "0–1", step: 0.01, group: "Margin", help: "Graded out before the floor." },
@@ -362,11 +362,11 @@ function SubCategoryEditor() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="mb-3 text-xs text-muted-foreground"><strong>Cost per piece</strong> is what a garment costs you with import duty already in it — enter it that way, no duty is added. The engine takes off the recoverable input tax and adds sorting to get <strong>landed</strong>, then the selling profile, value index and grades to get the four shelf prices and GP%. A <strong>market price</strong> sets the Premium price directly (the other grades follow it); clear it to return to the calculation. Everything updates as you type, in amber until you press Save. Weights are the spec&apos;s open item #1 — weigh 20 pieces per category and replace the estimates. Market ceiling warns the tagger when cost-led pricing runs above the market; market price is the &quot;new in store&quot; anchor printed on the tag.</p>
+        <p className="mb-3 text-xs text-muted-foreground"><strong>Cost per piece</strong> is what a garment costs you <strong>before sales tax</strong>, duty included — enter it that way whether the vendor charged tax or not. <strong>Landed</strong> adds the non-recoverable part of input tax and the sorting cost. <strong>Loaded</strong> then spreads every constant and the selling profile onto the one garment that sells at Premium — markdowns, grade mix, never-sells, rejects, bulk recovery and the target GP — so Premium ex tax is loaded ÷ (1 − target GP). The value index and grades give the four shelf prices, and <strong>Effective GP</strong> is the real margin per garment bought after all of that (it sits at the target, moved only by rounding and the value index). A <strong>market price</strong> sets the Premium price directly (the other grades follow it); clear it to return to the calculation. Everything updates as you type, in amber until you press Save. Weights are the spec&apos;s open item #1 — weigh 20 pieces per category and replace the estimates. Market ceiling warns the tagger when cost-led pricing runs above the market; market price is the &quot;new in store&quot; anchor printed on the tag.</p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-left text-xs uppercase text-muted-foreground">
-              <tr><th className="pb-2">Gender</th><th className="pb-2">Category</th><th className="pb-2">Sub-category</th><th className="pb-2">Code</th><th className="pb-2">Cost per piece Rs</th><th className="pb-2">Profile</th><th className="pb-2">Value index</th><th className="pb-2 text-right">Landed</th><th className="pb-2 text-right">BNWT</th><th className="pb-2 text-right">Premium</th><th className="pb-2 text-right">Excellent</th><th className="pb-2 text-right">Very Good</th><th className="pb-2 text-right">GP %</th><th className="pb-2">Market ceiling</th><th className="pb-2">Market price → Premium</th><th className="pb-2">Active</th></tr>
+              <tr><th className="pb-2">Gender</th><th className="pb-2">Category</th><th className="pb-2">Sub-category</th><th className="pb-2">Code</th><th className="pb-2">Cost per piece Rs</th><th className="pb-2">Profile</th><th className="pb-2">Value index</th><th className="pb-2 text-right">Landed</th><th className="pb-2 text-right" title="Landed cost with markdowns, grade mix, never-sells, rejects and bulk recovery spread onto the garment that sells at Premium. Premium ex tax = loaded ÷ (1 − target GP).">Loaded</th><th className="pb-2 text-right">BNWT</th><th className="pb-2 text-right">Premium</th><th className="pb-2 text-right">Excellent</th><th className="pb-2 text-right">Very Good</th><th className="pb-2 text-right" title="Real margin per garment bought: revenue after markdowns, grade mix, never-sells and rejects, plus bulk recovery, ex tax, against landed cost.">Effective GP %</th><th className="pb-2">Market ceiling</th><th className="pb-2">Market price → Premium</th><th className="pb-2">Active</th></tr>
             </thead>
             <tbody className="divide-y">
               {rows.map((r) => {
@@ -398,11 +398,12 @@ function SubCategoryEditor() {
                     <td className="py-1.5 pr-2"><Input type="number" step="0.05" min="0.05" value={v.value_index} onChange={(ev) => edit(r.slug, { value_index: Number(ev.target.value) })} className={cn("h-8 w-24", changed("value_index") && "border-amber-500")} /></td>
 
                     <td className={cn(num, !previewing && "text-muted-foreground")}>{est ? rs(est.landed_cost) : "—"}</td>
+                    <td className={cn(num, !previewing && "text-muted-foreground")}>{est ? rs(est.loaded_cost) : "—"}</td>
                     <td className={num}>{est ? rs(est.bnwt) : "—"}</td>
                     <td className={cn(num, "font-semibold")}>{est ? rs(est.premium) : "—"}</td>
                     <td className={num}>{est ? rs(est.excellent) : "—"}</td>
                     <td className={num}>{est ? rs(est.very_good) : "—"}</td>
-                    <td className={num}>{est ? pct(est.gp_pct) : "—"}</td>
+                    <td className={cn(num, "font-semibold")} title={est ? `Full-price margin on this one garment: ${pct(est.gp_pct)}` : undefined}>{est ? pct(est.effective_gp_pct) : "—"}</td>
                     <td className="py-1.5 pr-2"><Input type="number" step="100" min="0" value={v.market_ceiling ?? ""} onChange={(ev) => edit(r.slug, { market_ceiling: ev.target.value === "" ? null : Number(ev.target.value) })} className={cn("h-8 w-28", changed("market_ceiling") && "border-amber-500")} placeholder="—" /></td>
                     <td className="py-1.5 pr-2"><Input type="number" step="100" min="0" value={v.market_price ?? ""} onChange={(ev) => edit(r.slug, { market_price: ev.target.value === "" ? null : Number(ev.target.value) })} className={cn("h-8 w-28", changed("market_price") && "border-amber-500")} placeholder="—" /></td>
                     <td className="py-1.5"><Checkbox checked={v.active} onCheckedChange={(c) => edit(r.slug, { active: c === true })} /></td>
