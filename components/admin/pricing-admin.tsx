@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Filter } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -277,6 +278,7 @@ export function PricingAdmin() {
 
 function SubCategoryEditor() {
   const [rows, setRows] = useState<SubRow[] | null>(null);
+  const [targetGp, setTargetGp] = useState<number | null>(null);
   const [cats, setCats] = useState<{ slug: string; name: string; gender: string }[]>([]);
   const [edits, setEdits] = useState<Record<string, Partial<SubRow>>>({});
   const [live, setLive] = useState<Record<string, { estimate: Est | null }>>({});
@@ -284,7 +286,7 @@ function SubCategoryEditor() {
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
 
   useEffect(() => {
-    fetch("/api/admin/sub-categories").then((r) => r.json()).then((j) => setRows(j.rows));
+    fetch("/api/admin/sub-categories").then((r) => r.json()).then((j) => { setRows(j.rows); setTargetGp(j.basis?.target_gp ?? null); });
     fetch("/api/admin/categories").then((r) => r.json()).then((j) => setCats((j.categories ?? []).filter((c: { active: boolean }) => c.active)));
   }, []);
 
@@ -327,8 +329,21 @@ function SubCategoryEditor() {
     setBusy(false);
   }
 
+  // Excel-style column filters on gender, category and sub-category.
+  const [filters, setFilters] = useState<{ gender: Set<string>; category: Set<string>; name: Set<string> }>({ gender: new Set(), category: new Set(), name: new Set() });
+
   if (!rows) return <p className="text-muted-foreground">Loading…</p>;
   const dirty = Object.keys(edits).length;
+  const pass = (r: SubRow, skip?: "gender" | "category" | "name") =>
+    (skip === "gender" || !filters.gender.size || filters.gender.has(r.gender)) &&
+    (skip === "category" || !filters.category.size || filters.category.has(r.category)) &&
+    (skip === "name" || !filters.name.size || filters.name.has(r.name));
+  const visible = rows.filter((r) => pass(r));
+  // Each list offers the values still reachable under the other two filters, as Excel does.
+  const genderValues = [...new Set(rows.filter((r) => pass(r, "gender")).map((r) => r.gender))].sort((a, b) => GENDER_OPTIONS.findIndex((g) => g.code === a) - GENDER_OPTIONS.findIndex((g) => g.code === b));
+  const categoryValues = [...new Set(rows.filter((r) => pass(r, "category")).map((r) => r.category))].sort();
+  const nameValues = [...new Set(rows.filter((r) => pass(r, "name")).map((r) => r.name))].sort();
+  const filtering = filters.gender.size + filters.category.size + filters.name.size > 0;
 
   return (
     <div className="space-y-6">
@@ -344,14 +359,19 @@ function SubCategoryEditor() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="mb-3 text-xs text-muted-foreground"><strong>Cost per piece</strong> is what a garment costs you <strong>before sales tax</strong>, duty included — enter it that way whether the vendor charged tax or not. <strong>Landed</strong> adds the non-recoverable part of input tax and the sorting cost. <strong>Loaded</strong> then spreads every constant and the selling profile onto the one garment that sells at Premium — markdowns, grade mix, never-sells, rejects, bulk recovery and the target GP — so Premium ex tax is loaded ÷ (1 − target GP). The value index and grades give the four shelf prices, and <strong>Effective GP</strong> is the real margin per garment bought after all of that (it sits at the target, moved only by rounding and the value index). A <strong>market price</strong> sets the Premium price directly (the other grades follow it); clear it to return to the calculation. Everything updates as you type, in amber until you press Save. Weights are the spec&apos;s open item #1 — weigh 20 pieces per category and replace the estimates. Market ceiling warns the tagger when cost-led pricing runs above the market; market price is the &quot;new in store&quot; anchor printed on the tag.</p>
+        <p className="mb-3 text-xs text-muted-foreground"><strong>Cost per piece</strong> is what a garment costs you <strong>before sales tax</strong>, duty included — enter it that way whether the vendor charged tax or not. <strong>Landed</strong> adds the non-recoverable part of input tax and the sorting cost. <strong>Loaded</strong> then spreads every constant and the selling profile onto the one garment that sells at Premium — markdowns, grade mix, never-sells, rejects, bulk recovery and the target GP — so Premium ex tax is loaded ÷ (1 − target GP). The value index and grades give the four shelf prices, and <strong>Effective GP</strong> is the real margin per garment bought after all of that (it sits at the target, moved only by rounding and the value index). A <strong>market price</strong> sets the Premium price directly (the other grades follow it); clear it to return to the calculation. Everything updates as you type, in amber until you press Save. Weights are the spec&apos;s open item #1 — weigh 20 pieces per category and replace the estimates. Click a column heading to filter the list the way Excel does. <strong>Effective GP</strong> is green at or above your target gross profit and red below it.</p>
+        {filtering && <p className="mb-2 text-xs"><span className="text-muted-foreground">Showing {visible.length} of {rows.length} sub-categories.</span> <button type="button" className="ml-2 underline" onClick={() => setFilters({ gender: new Set(), category: new Set(), name: new Set() })}>Clear filters</button></p>}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-left text-xs uppercase text-muted-foreground">
-              <tr><th className="pb-2">Gender</th><th className="pb-2">Category</th><th className="pb-2">Sub-category</th><th className="pb-2">Code</th><th className="pb-2">Cost per piece Rs</th><th className="pb-2">Profile</th><th className="pb-2">Value index</th><th className="pb-2 text-right">Landed</th><th className="pb-2 text-right" title="Landed cost with markdowns, grade mix, never-sells, rejects and bulk recovery spread onto the garment that sells at Premium. Premium ex tax = loaded ÷ (1 − target GP).">Loaded</th><th className="pb-2 text-right">BNWT</th><th className="pb-2 text-right">Premium</th><th className="pb-2 text-right">Excellent</th><th className="pb-2 text-right">Very Good</th><th className="pb-2 text-right" title="Real margin per garment bought: revenue after markdowns, grade mix, never-sells and rejects, plus bulk recovery, ex tax, against landed cost.">Effective GP %</th><th className="pb-2">Market ceiling</th><th className="pb-2">Market price → Premium</th><th className="pb-2">Active</th></tr>
+              <tr>
+                <th className="pb-2"><HeaderFilter label="Gender" values={genderValues} selected={filters.gender} onChange={(v) => setFilters((f) => ({ ...f, gender: v }))} format={(g) => GENDER_OPTIONS.find((o) => o.code === g)?.name ?? g} /></th>
+                <th className="pb-2"><HeaderFilter label="Category" values={categoryValues} selected={filters.category} onChange={(v) => setFilters((f) => ({ ...f, category: v }))} /></th>
+                <th className="pb-2"><HeaderFilter label="Sub-category" values={nameValues} selected={filters.name} onChange={(v) => setFilters((f) => ({ ...f, name: v }))} /></th>
+                <th className="pb-2">Code</th><th className="pb-2">Cost per piece Rs</th><th className="pb-2">Profile</th><th className="pb-2">Value index</th><th className="pb-2">Market price → Premium</th><th className="pb-2 text-right">Landed</th><th className="pb-2 text-right" title="Landed cost with markdowns, grade mix, never-sells, rejects and bulk recovery spread onto the garment that sells at Premium. Premium ex tax = loaded ÷ (1 − target GP).">Loaded</th><th className="pb-2 text-right">BNWT</th><th className="pb-2 text-right">Premium</th><th className="pb-2 text-right">Excellent</th><th className="pb-2 text-right">Very Good</th><th className="pb-2 text-right" title="Real margin per garment bought: revenue after markdowns, grade mix, never-sells and rejects, plus bulk recovery, ex tax, against landed cost.">Effective GP %</th><th className="pb-2">Active</th></tr>
             </thead>
             <tbody className="divide-y">
-              {rows.map((r) => {
+              {visible.map((r) => {
                 const e = edits[r.slug] ?? {};
                 const v = { ...r, ...e };
                 const changed = (k: keyof SubRow) => k in e;
@@ -362,13 +382,7 @@ function SubCategoryEditor() {
                 return (
                   <tr key={r.slug} className={cn(!v.active && "opacity-50")}>
                     <td className="py-1.5 pr-2 text-xs capitalize text-muted-foreground">{r.gender}</td>
-                    <td className="py-1.5 pr-2">
-                      <select value={v.category_slug} onChange={(ev) => edit(r.slug, { category_slug: ev.target.value })} className={cn("h-8 max-w-[11rem] rounded-md border border-input bg-transparent px-2 text-sm", changed("category_slug") && "border-amber-500")}>
-                        {GENDER_OPTIONS.filter((g) => cats.some((c) => c.gender === g.code)).map((g) => (
-                          <optgroup key={g.code} label={g.name}>{cats.filter((c) => c.gender === g.code).map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}</optgroup>
-                        ))}
-                      </select>
-                    </td>
+                    <td className="py-1.5 pr-2 text-sm">{r.category}</td>
                     <td className="py-1.5 pr-2"><Input value={v.name} onChange={(ev) => edit(r.slug, { name: ev.target.value })} className={cn("h-8 w-44", changed("name") && "border-amber-500")} /></td>
                     <td className="py-1.5 pr-2 font-mono text-xs">{r.code}</td>
                     <td className="py-1.5 pr-2"><Input type="number" step="10" min="1" value={v.standard_cost_pkr ?? ""} placeholder="set me" onChange={(ev) => edit(r.slug, { standard_cost_pkr: ev.target.value === "" ? null : Number(ev.target.value) })} className={cn("h-8 w-28", changed("standard_cost_pkr") && "border-amber-500", !v.standard_cost_pkr && "border-amber-500")} /></td>
@@ -378,16 +392,14 @@ function SubCategoryEditor() {
                       </select>
                     </td>
                     <td className="py-1.5 pr-2"><Input type="number" step="0.05" min="0.05" value={v.value_index} onChange={(ev) => edit(r.slug, { value_index: Number(ev.target.value) })} className={cn("h-8 w-24", changed("value_index") && "border-amber-500")} /></td>
-
+                    <td className="py-1.5 pr-2"><Input type="number" step="100" min="0" value={v.market_price ?? ""} onChange={(ev) => edit(r.slug, { market_price: ev.target.value === "" ? null : Number(ev.target.value) })} className={cn("h-8 w-28", changed("market_price") && "border-amber-500")} placeholder="—" /></td>
                     <td className={cn(num, !previewing && "text-muted-foreground")}>{est ? rs(est.landed_cost) : "—"}</td>
                     <td className={cn(num, !previewing && "text-muted-foreground")}>{est ? rs(est.loaded_cost) : "—"}</td>
                     <td className={num}>{est ? rs(est.bnwt) : "—"}</td>
                     <td className={cn(num, "font-semibold")}>{est ? rs(est.premium) : "—"}</td>
                     <td className={num}>{est ? rs(est.excellent) : "—"}</td>
                     <td className={num}>{est ? rs(est.very_good) : "—"}</td>
-                    <td className={cn(num, "font-semibold")} title={est ? `Full-price margin on this one garment: ${pct(est.gp_pct)}` : undefined}>{est ? pct(est.effective_gp_pct) : "—"}</td>
-                    <td className="py-1.5 pr-2"><Input type="number" step="100" min="0" value={v.market_ceiling ?? ""} onChange={(ev) => edit(r.slug, { market_ceiling: ev.target.value === "" ? null : Number(ev.target.value) })} className={cn("h-8 w-28", changed("market_ceiling") && "border-amber-500")} placeholder="—" /></td>
-                    <td className="py-1.5 pr-2"><Input type="number" step="100" min="0" value={v.market_price ?? ""} onChange={(ev) => edit(r.slug, { market_price: ev.target.value === "" ? null : Number(ev.target.value) })} className={cn("h-8 w-28", changed("market_price") && "border-amber-500")} placeholder="—" /></td>
+                    <td className={cn(num, "font-semibold", est && targetGp != null && (est.effective_gp_pct + 1e-9 < targetGp ? "text-red-600 dark:text-red-400" : "text-green-700 dark:text-green-400"))} title={est ? `${targetGp != null ? `Target ${(targetGp * 100).toFixed(0)}%. ` : ""}Full-price margin on this one garment: ${pct(est.gp_pct)}` : undefined}>{est ? pct(est.effective_gp_pct) : "—"}</td>
                     <td className="py-1.5"><Checkbox checked={v.active} onCheckedChange={(c) => edit(r.slug, { active: c === true })} /></td>
                   </tr>
                 );
@@ -397,6 +409,53 @@ function SubCategoryEditor() {
         </div>
       </CardContent>
     </Card>
+    </div>
+  );
+}
+
+/* ------------------------------------------------- excel-style header filter */
+
+function HeaderFilter({ label, values, selected, onChange, format }: { label: string; values: string[]; selected: Set<string>; onChange: (v: Set<string>) => void; format?: (v: string) => string }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (ev: MouseEvent) => { if (ref.current && !ref.current.contains(ev.target as Node)) setOpen(false); };
+    const onKey = (ev: KeyboardEvent) => { if (ev.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
+  }, [open]);
+  const show = (v: string) => (format ? format(v) : v);
+  const shown = values.filter((v) => show(v).toLowerCase().includes(q.trim().toLowerCase()));
+  const active = selected.size > 0;
+  const toggle = (v: string) => { const n = new Set(selected); if (n.has(v)) n.delete(v); else n.add(v); onChange(n); };
+  return (
+    <div ref={ref} className="relative inline-block normal-case">
+      <button type="button" onClick={() => setOpen((o) => !o)} className={cn("inline-flex items-center gap-1 rounded px-1 uppercase hover:bg-muted", active && "text-foreground")} title={active ? `Filtered: ${[...selected].map(show).join(", ")}` : `Filter ${label.toLowerCase()}`}>
+        {label}
+        <Filter className={cn("h-3 w-3", active ? "fill-current" : "opacity-50")} />
+        {active && <span className="rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">{selected.size}</span>}
+      </button>
+      {open && (
+        <div className="absolute left-0 z-20 mt-1 w-60 rounded-md border bg-background p-2 text-sm shadow-lg">
+          <Input autoFocus value={q} onChange={(ev) => setQ(ev.target.value)} placeholder="Search…" className="mb-2 h-8" />
+          <div className="mb-2 flex gap-3 text-xs">
+            <button type="button" className="underline" onClick={() => onChange(new Set(shown))}>Select all{q ? " shown" : ""}</button>
+            <button type="button" className="underline" onClick={() => onChange(new Set())}>Clear</button>
+          </div>
+          <div className="max-h-64 overflow-auto">
+            {shown.length === 0 && <p className="px-1 py-2 text-xs text-muted-foreground">Nothing matches.</p>}
+            {shown.map((v) => (
+              <label key={v} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-muted">
+                <Checkbox checked={selected.has(v)} onCheckedChange={() => toggle(v)} />
+                <span className="truncate">{show(v)}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
