@@ -109,3 +109,36 @@ export async function cutoutOnWhite(png: Blob, side = 2048, quality = 0.88): Pro
   ctx.drawImage(bmp, x, y, w, h);
   return new Promise((res) => c.toBlob((b) => res(b!), "image/jpeg", quality));
 }
+
+export type Adjust = { brightness: number; contrast: number; rotate: 0 | 90 | 180 | 270 };
+export const NO_ADJUST: Adjust = { brightness: 1, contrast: 1, rotate: 0 };
+
+/**
+ * Brightness, contrast and rotation baked into the pixels (no reliance on
+ * canvas filters, which older Safari lacks). brightness/contrast are
+ * multipliers around 1; contrast pivots on mid-grey.
+ */
+export async function applyAdjust(file: Blob, a: Adjust): Promise<Blob> {
+  if (a.brightness === 1 && a.contrast === 1 && a.rotate === 0) return file;
+  const bmp = await createImageBitmap(file);
+  const rot = a.rotate === 90 || a.rotate === 270;
+  const c = document.createElement("canvas");
+  c.width = rot ? bmp.height : bmp.width;
+  c.height = rot ? bmp.width : bmp.height;
+  const ctx = c.getContext("2d")!;
+  ctx.translate(c.width / 2, c.height / 2);
+  ctx.rotate((a.rotate * Math.PI) / 180);
+  ctx.drawImage(bmp, -bmp.width / 2, -bmp.height / 2);
+  if (a.brightness !== 1 || a.contrast !== 1) {
+    const img = ctx.getImageData(0, 0, c.width, c.height);
+    const d = img.data;
+    const b = a.brightness;
+    const k = a.contrast;
+    const lut = new Uint8ClampedArray(256);
+    for (let i = 0; i < 256; i++) lut[i] = Math.max(0, Math.min(255, Math.round(((i * b) - 128) * k + 128)));
+    for (let i = 0; i < d.length; i += 4) { d[i] = lut[d[i]]; d[i + 1] = lut[d[i + 1]]; d[i + 2] = lut[d[i + 2]]; }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.putImageData(img, 0, 0);
+  }
+  return new Promise((res) => c.toBlob((b) => res(b!), "image/jpeg", 0.95));
+}
