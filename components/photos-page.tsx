@@ -28,8 +28,8 @@ import { cn } from "@/lib/utils";
 
 type Row = { sku: string; brand: string | null; size: string | null; grade: string; tagged_at: string; online_status: string | null; sub_category: string; photos: number; cutouts: number; photographed_at: string | null; photographer: string | null };
 type Me = { name: string; role: string; today: number; target: number; pct: number };
-type Garment = { sku: string; brand: string | null; sub_category: string; size_label: string | null; grade: string; channel: string; photos: number; paths: string[] };
-type Shot = { id: number; blob: Blob; url: string; keep: boolean; adjust: Adjust };
+type Garment = { sku: string; brand: string | null; sub_category: string; size_label: string | null; grade: string; channel: string; photos: number; cutoutPaths: string[] };
+type Shot = { id: number; blob: Blob | null; url: string; keep: boolean; adjust: Adjust; existing?: { path: string } };
 type Job = { sku: string; total: number; done: number; cutout: "pending" | "working" | "done" | "skipped" | "failed"; error?: string; cutoutUrl?: string };
 const GRADE: Record<string, string> = { bnwt: "BNWT", premium: "Premium", excellent: "Excellent", very_good: "Very Good", rejected: "Rejected" };
 const MAX_SHOTS = 6;
@@ -39,13 +39,16 @@ export function PhotosPage() {
   const [data, setData] = useState<{ waiting: Row[]; done: Row[]; total_online: number; me: Me; sees_names?: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"home" | "scan" | "shoot" | "review">("home");
+  const [retaking, setRetaking] = useState(false);
   const [garment, setGarment] = useState<Garment | null>(null);
   const [shots, setShots] = useState<Shot[]>([]);
   const [reviewIdx, setReviewIdx] = useState(0);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [search, setSearch] = useState("");
   const [listFilter, setListFilter] = useState<"none" | "done" | "all">("none");
-  const [replaceOld, setReplaceOld] = useState(false);
+  const [coverId, setCoverId] = useState<number | null>(null);
+  const [askCover, setAskCover] = useState(false);
+  const touchX = useRef<number | null>(null);
   const [camInfo, setCamInfo] = useState<string | null>(null);
   const [autoCut, setAutoCut] = useState(true);
   const [flash, setFlash] = useState(false);
@@ -100,7 +103,7 @@ export function PhotosPage() {
   }
   useEffect(() => () => closeCamera(), []);
 
-  function discardShots() { shots.forEach((s) => URL.revokeObjectURL(s.url)); setShots([]); }
+  function discardShots() { shots.forEach((s) => { if (s.blob) URL.revokeObjectURL(s.url); }); setShots([]); setCoverId(null); setAskCover(false); }
 
   async function startScan() {
     setError(null);
@@ -130,16 +133,21 @@ export function PhotosPage() {
     const j = await r.json();
     if (!r.ok) { setError(j.error ?? `No garment ${sku}.`); if (mode === "scan") await startScan(); return; }
     const it = j.item ?? j;
-    const paths = ((it.photos ?? []) as { path: string }[]).map((p) => p.path);
-    setGarment({ sku: it.sku, brand: it.brand ?? null, sub_category: it.sub_category ?? "", size_label: it.size_label, grade: it.grade ?? it.grade_code, channel: it.channel, photos: paths.length, paths });
-    setReplaceOld(retake && paths.length > 0);
+    const photos = (it.photos ?? []) as { path: string; url: string; kind: string }[];
+    const originals = photos.filter((p) => p.kind !== "cutout");
+    setGarment({ sku: it.sku, brand: it.brand ?? null, sub_category: it.sub_category ?? "", size_label: it.size_label, grade: it.grade ?? it.grade_code, channel: it.channel, photos: originals.length, cutoutPaths: photos.filter((p) => p.kind === "cutout").map((p) => p.path) });
     discardShots();
+    setRetaking(retake || originals.length > 0);
+    // A reshoot starts from what is already there: every earlier picture can be kept, adjusted, discarded or joined by new ones.
+    if (originals.length) setShots(originals.map((p) => ({ id: ++shotId.current, blob: null, url: p.url, keep: true, adjust: NO_ADJUST, existing: { path: p.path } })));
     try { await openCamera(); setMode("shoot"); } catch (e) { setError(e instanceof Error ? e.message : "Camera unavailable."); setMode("home"); }
   }
 
+  const keptCount = shots.filter((s) => s.keep).length;
+  const removeShot = (id: number) => setShots((all) => { const s = all.find((x) => x.id === id); if (s?.blob) URL.revokeObjectURL(s.url); return all.filter((x) => x.id !== id); });
   function snap() {
     const v = videoRef.current;
-    if (!v || !v.videoWidth || shots.length >= MAX_SHOTS) return;
+    if (!v || !v.videoWidth || keptCount >= MAX_SHOTS) return;
     const c = document.createElement("canvas");
     c.width = v.videoWidth; c.height = v.videoHeight;
     c.getContext("2d")!.drawImage(v, 0, 0);
@@ -149,14 +157,13 @@ export function PhotosPage() {
   function onNative(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     e.target.value = "";
-    for (const f of files.slice(0, MAX_SHOTS - shots.length)) { const id = ++shotId.current; setShots((s) => [...s, { id, blob: f, url: URL.createObjectURL(f), keep: true, adjust: NO_ADJUST }]); }
+    for (const f of files.slice(0, Math.max(0, MAX_SHOTS - keptCount))) { const id = ++shotId.current; setShots((s) => [...s, { id, blob: f, url: URL.createObjectURL(f), keep: true, adjust: NO_ADJUST }]); }
   }
 
   /* ------------------------------------------------------------ review */
 
   const setShot = (id: number, patch: Partial<Shot> | ((s: Shot) => Partial<Shot>)) => setShots((all) => all.map((s) => (s.id === id ? { ...s, ...(typeof patch === "function" ? patch(s) : patch) } : s)));
   const applyToAll = (a: Adjust) => setShots((all) => all.map((s) => ({ ...s, adjust: { ...a, rotate: s.adjust.rotate } })));
-  const makeCover = (id: number) => setShots((all) => { const i = all.findIndex((s) => s.id === id); if (i <= 0) return all; const c = [...all]; const [s] = c.splice(i, 1); return [s, ...c]; });
 
   /* ------------------------------------------------------- background save */
 
@@ -169,28 +176,53 @@ export function PhotosPage() {
     return j.photo;
   }
 
-  function save() {
+  /** Save asks for the cover first when there is a choice to make. */
+  function requestSave() {
+    const kept = shots.filter((s) => s.keep);
+    if (!kept.length) return;
+    if (kept.length > 1 && (coverId == null || !kept.some((s) => s.id === coverId))) { setAskCover(true); return; }
+    save(coverId ?? kept[0].id);
+  }
+
+  function save(chosenCover: number) {
     if (!garment) return;
     const kept = shots.filter((s) => s.keep);
     if (!kept.length) return;
     const sku = garment.sku;
     const wantCut = autoCut;
-    const oldPaths = replaceOld ? garment.paths : [];
-    const job: Job = { sku, total: kept.length, done: 0, cutout: wantCut ? "pending" : "skipped" };
+    const discarded = shots.filter((s) => !s.keep && s.existing).map((s) => s.existing!.path);
+    const changed = kept.filter((s) => s.existing && (s.adjust.brightness !== 1 || s.adjust.contrast !== 1 || s.adjust.rotate !== 0));
+    const fresh = kept.filter((s) => !s.existing);
+    const total = fresh.length + changed.length;
+    const job: Job = { sku, total, done: 0, cutout: wantCut ? "pending" : "skipped" };
     setJobs((j) => [job, ...j.filter((x) => x.sku !== sku)].slice(0, 12));
-    const work = kept.map((s) => ({ blob: s.blob, adjust: s.adjust }));
+    const coverShot = kept.find((s) => s.id === chosenCover) ?? kept[0];
+    const oldCutouts = garment.cutoutPaths;
+    const work = kept.map((s) => ({ id: s.id, blob: s.blob, url: s.url, adjust: s.adjust, existing: s.existing, isCover: s.id === coverShot.id }));
+    setAskCover(false);
     void (async () => {
       const update = (patch: Partial<Job>) => setJobs((j) => j.map((x) => (x.sku === sku ? { ...x, ...patch } : x)));
+      const del = (path: string) => fetch("/api/photos", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ sku, path }) });
       let cover: Blob | null = null;
+      let done = 0;
       try {
-        for (const path of oldPaths) await fetch("/api/photos", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ sku, path }) });
-        for (let i = 0; i < work.length; i++) {
-          const square = await squareForShopify(await applyAdjust(work[i].blob, work[i].adjust), 2048, 1024 * 1024);
-          if (!cover) cover = square;
+        for (const path of discarded) await del(path);
+        for (const w of work) {
+          const edited = w.adjust.brightness !== 1 || w.adjust.contrast !== 1 || w.adjust.rotate !== 0;
+          if (w.existing && !edited) {
+            if (w.isCover) cover = await (await fetch(w.url)).blob();
+            continue; // untouched earlier picture stays as it is
+          }
+          const source = w.blob ?? (await (await fetch(w.url)).blob());
+          const square = await squareForShopify(await applyAdjust(source, w.adjust), 2048, 1024 * 1024);
+          if (w.isCover) cover = square;
           await upload(sku, square, "original");
-          update({ done: i + 1 });
+          if (w.existing) await del(w.existing.path); // the edited version replaces it
+          update({ done: ++done });
         }
       } catch (e) { update({ error: e instanceof Error ? e.message : "Upload failed.", cutout: "failed" }); return; }
+      // A new cover means a new cut-out; the old cut-outs go.
+      if (wantCut && cover) for (const path of oldCutouts) await del(path);
       if (wantCut && cover) {
         update({ cutout: "working" });
         try {
@@ -206,6 +238,7 @@ export function PhotosPage() {
     })();
     discardShots();
     setGarment(null);
+    setRetaking(false);
     void startScan();
   }
 
@@ -253,12 +286,25 @@ export function PhotosPage() {
       <div className="fixed inset-0 z-50 flex flex-col bg-black text-white">
         <div className="flex items-center justify-between px-3 py-2 text-sm">
           <button type="button" onClick={() => setMode("shoot")} className="flex items-center gap-1"><ChevronLeft className="size-5" /> Back</button>
-          <span>Picture {reviewIdx + 1} of {shots.length}{reviewIdx === 0 && current.keep ? " · cover" : ""}{!current.keep ? " · discarded" : ""}</span>
-          <button type="button" onClick={save} disabled={!kept.length} className="rounded bg-white px-3 py-1 font-semibold text-black disabled:opacity-40">Save {kept.length}</button>
+          <span>Picture {reviewIdx + 1} of {shots.length}{!current.keep ? " · discarded" : ""}</span>
+          <button type="button" onClick={requestSave} disabled={!kept.length} className="rounded bg-white px-3 py-1 font-semibold text-black disabled:opacity-40">Save {kept.length}</button>
         </div>
-        <div className="relative flex-1 overflow-hidden">
+        <div
+          className="relative flex-1 overflow-hidden"
+          onTouchStart={(e) => { touchX.current = e.touches[0]?.clientX ?? null; }}
+          onTouchEnd={(e) => {
+            const x0 = touchX.current; touchX.current = null;
+            const x1 = e.changedTouches[0]?.clientX;
+            if (x0 == null || x1 == null) return;
+            const dx = x1 - x0;
+            if (dx < -40) setReviewIdx((i) => Math.min(shots.length - 1, i + 1));
+            if (dx > 40) setReviewIdx((i) => Math.max(0, i - 1));
+          }}
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={current.url} alt="" className={cn("h-full w-full object-contain transition-[filter]", !current.keep && "opacity-30")} style={{ filter: cssFilter(a), transform: `rotate(${a.rotate}deg)` }} />
+          {current.id === coverId && <span className="absolute left-3 top-3 rounded bg-white/90 px-2 py-0.5 text-xs font-semibold text-black">★ Cover</span>}
+          {current.existing && <span className="absolute right-3 top-3 rounded bg-white/20 px-2 py-0.5 text-xs">taken earlier</span>}
           <button type="button" onClick={() => setReviewIdx((i) => Math.max(0, i - 1))} disabled={reviewIdx === 0} className="absolute left-0 top-0 h-full w-1/5 disabled:opacity-0" aria-label="Previous" />
           <button type="button" onClick={() => setReviewIdx((i) => Math.min(shots.length - 1, i + 1))} disabled={reviewIdx === shots.length - 1} className="absolute right-0 top-0 h-full w-1/5 disabled:opacity-0" aria-label="Next" />
           {reviewIdx > 0 && <ChevronLeft className="pointer-events-none absolute left-2 top-1/2 size-8 -translate-y-1/2 opacity-70" />}
@@ -271,24 +317,49 @@ export function PhotosPage() {
             <button type="button" onClick={() => setShot(current.id, (s) => ({ adjust: { ...s.adjust, rotate: ((s.adjust.rotate + 90) % 360) as Adjust["rotate"] } }))} className="flex items-center gap-1 rounded border border-white/40 px-3 py-2"><RotateCw className="size-4" /> Rotate</button>
             <button type="button" onClick={() => setShot(current.id, { adjust: { ...NO_ADJUST, rotate: a.rotate } })} className="rounded border border-white/40 px-3 py-2">Reset</button>
             <button type="button" onClick={() => applyToAll(a)} className="rounded border border-white/40 px-3 py-2">Apply to all pictures</button>
-            {reviewIdx > 0 && current.keep && <button type="button" onClick={() => { makeCover(current.id); setReviewIdx(0); }} className="flex items-center gap-1 rounded border border-white/40 px-3 py-2"><Star className="size-4" /> Make cover</button>}
+            {current.keep && current.id !== coverId && <button type="button" onClick={() => setCoverId(current.id)} className="flex items-center gap-1 rounded border border-white/40 px-3 py-2"><Star className="size-4" /> Make cover</button>}
+            <button type="button" onClick={() => { setShot(current.id, { keep: false }); setMode("shoot"); }} className="flex items-center gap-1 rounded border border-white/40 px-3 py-2"><Camera className="size-4" /> Retake this one</button>
             <button type="button" onClick={() => setShot(current.id, (s) => ({ keep: !s.keep }))} className={cn("ml-auto flex items-center gap-1 rounded px-3 py-2", current.keep ? "border border-red-400 text-red-300" : "bg-white text-black")}>{current.keep ? <><Trash2 className="size-4" /> Discard</> : <><Check className="size-4" /> Keep</>}</button>
           </div>
+          <p className="text-[11px] text-neutral-400">Swipe left or right, or use the arrows, to move between pictures.</p>
           <div className="flex gap-1 overflow-x-auto">
             {shots.map((s, i) => (
               /* eslint-disable-next-line @next/next/no-img-element */
               <img key={s.id} src={s.url} alt="" onClick={() => setReviewIdx(i)} className={cn("h-12 w-12 shrink-0 cursor-pointer rounded object-cover", i === reviewIdx ? "ring-2 ring-white" : "opacity-60", !s.keep && "opacity-20")} style={{ filter: cssFilter(s.adjust) }} />
             ))}
           </div>
-          <p className="text-[11px] text-neutral-400">The cover is picture 1: it gets the background removed. Brightness and contrast are baked in on save; every picture is cropped square and sized for Shopify.</p>
+          <p className="text-[11px] text-neutral-400">The cover is the picture that gets its background removed — you are asked to choose it on Save. Brightness and contrast are baked in on save; every picture is cropped square and sized for Shopify.</p>
         </div>
       </div>
     );
   })();
 
+  const CoverAsk = askCover && (
+    <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/70" onClick={() => setAskCover(false)}>
+      <div className="rounded-t-2xl bg-background p-4" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-bold">Which picture is the cover?</h2>
+        <p className="mb-3 text-sm text-muted-foreground">The cover gets its background removed and goes first on Shopify. Tap one.</p>
+        <div className="grid grid-cols-3 gap-2">
+          {kept.map((s, i) => (
+            <button key={s.id} type="button" onClick={() => setCoverId(s.id)} className={cn("relative aspect-square overflow-hidden rounded-md border-4", s.id === coverId ? "border-amber-500" : "border-transparent")}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={s.url} alt={`Picture ${i + 1}`} className="h-full w-full object-cover" style={{ filter: cssFilter(s.adjust), transform: `rotate(${s.adjust.rotate}deg)` }} />
+              {s.id === coverId && <span className="absolute left-1 top-1 rounded bg-amber-500 px-1.5 text-xs font-semibold text-black">★</span>}
+            </button>
+          ))}
+        </div>
+        <div className="mt-4 flex gap-2">
+          <Button type="button" variant="outline" className="h-12" onClick={() => setAskCover(false)}>Back</Button>
+          <Button type="button" className="h-12 flex-1" disabled={coverId == null || !kept.some((s) => s.id === coverId)} onClick={() => save(coverId!)}>Save {kept.length} &amp; next garment</Button>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       {Review}
+      {CoverAsk}
       {Progress}
       {Jobs}
       {error && <p className="text-sm text-destructive">{error}</p>}
@@ -378,28 +449,30 @@ export function PhotosPage() {
               <div className="rounded-md border px-3 py-2">
                 <div className="font-mono text-xs text-muted-foreground">{garment.sku}{garment.channel !== "online" ? " · outlet stock" : ""}</div>
                 <div className="text-sm font-semibold">{garment.brand ?? "—"} · {garment.sub_category}{garment.size_label ? ` · ${garment.size_label}` : ""} · {GRADE[garment.grade] ?? garment.grade}</div>
-                {garment.photos > 0 && (
-                  <label className="mt-1 flex items-center gap-2 text-xs text-amber-700 dark:text-amber-300"><Checkbox checked={replaceOld} onCheckedChange={(v) => setReplaceOld(v === true)} /> Already has {garment.photos} picture{garment.photos === 1 ? "" : "s"} — {replaceOld ? "replace them with the new ones" : "keep them and add the new ones"}</label>
-                )}
+                {garment.photos > 0 && <div className="mt-1 text-xs text-amber-700 dark:text-amber-300">{garment.photos} picture{garment.photos === 1 ? "" : "s"} taken earlier — shown below; keep, adjust, discard, or add more.</div>}
               </div>
             )}
             {mode === "shoot" && (
               <>
                 <div className="flex items-center gap-2">
-                  <Button type="button" size="lg" className="h-16 flex-1 text-lg" onClick={snap} disabled={shots.length >= MAX_SHOTS}><Camera className="size-6" /> {shots.length >= MAX_SHOTS ? `${MAX_SHOTS} is the limit` : `Take picture ${shots.length + 1}`}</Button>
+                  <Button type="button" size="lg" className="h-16 flex-1 text-lg" onClick={snap} disabled={keptCount >= MAX_SHOTS}><Camera className="size-6" /> {keptCount >= MAX_SHOTS ? `${MAX_SHOTS} is the limit — discard one first` : `Take picture ${keptCount + 1}`}</Button>
                   <Button type="button" variant="outline" className="h-16" onClick={() => fileRef.current?.click()} title="Use the phone's own camera app for one shot"><Camera className="size-4" /> App</Button>
                   <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={onNative} />
                 </div>
                 {camInfo && <p className="text-[11px] text-muted-foreground">Camera {camInfo} · saved square at 2048 px for Shopify, under 1 MB</p>}
-                {shots.length > 0 && <p className="text-xs text-muted-foreground">Tap a picture to see it full screen and adjust brightness, contrast or rotation.</p>}
+                {shots.length > 0 && <p className="text-xs text-muted-foreground">{retaking ? "Earlier pictures are marked; keep, adjust or discard any of them and add new ones. " : ""}Tap a picture to see it full screen and adjust brightness, contrast or rotation; × discards it.</p>}
                 {shots.length > 0 && (
                   <div className="grid grid-cols-3 gap-2">
                     {shots.map((s, i) => (
-                      <button key={s.id} type="button" onClick={() => { setReviewIdx(i); setMode("review"); }} className={cn("relative aspect-square overflow-hidden rounded-md border-2", s.keep ? "border-green-600" : "border-transparent opacity-40")}>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={s.url} alt={`Shot ${i + 1}`} className="h-full w-full object-cover" style={{ filter: cssFilter(s.adjust), transform: `rotate(${s.adjust.rotate}deg)` }} />
-                        <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1 text-[10px] text-white">{i + 1}{i === 0 && s.keep ? " · cover" : ""}</span>
-                      </button>
+                      <div key={s.id} className={cn("relative aspect-square overflow-hidden rounded-md border-2", s.keep ? (s.id === coverId ? "border-amber-500" : "border-green-600") : "border-transparent opacity-40")}>
+                        <button type="button" onClick={() => { setReviewIdx(i); setMode("review"); }} className="h-full w-full">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={s.url} alt={`Shot ${i + 1}`} className="h-full w-full object-cover" style={{ filter: cssFilter(s.adjust), transform: `rotate(${s.adjust.rotate}deg)` }} />
+                        </button>
+                        <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1 text-[10px] text-white">{i + 1}{s.existing ? " · earlier" : ""}{s.id === coverId ? " · ★ cover" : ""}</span>
+                        <button type="button" onClick={() => (s.keep ? setShot(s.id, { keep: false }) : removeShot(s.id))} className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white" aria-label={s.keep ? "Discard" : "Remove"}><X className="size-3.5" /></button>
+                        {!s.keep && <button type="button" onClick={() => setShot(s.id, { keep: true })} className="absolute inset-x-1 bottom-1 rounded bg-white/90 py-0.5 text-[10px] font-semibold text-black">Keep</button>}
+                      </div>
                     ))}
                   </div>
                 )}
@@ -407,7 +480,7 @@ export function PhotosPage() {
                 <div className="flex gap-2">
                   <Button type="button" variant="outline" className="h-12" onClick={startScan}><RefreshCw className="size-4" /> Rescan</Button>
                   <Button type="button" variant="outline" className="h-12" disabled={!shots.length} onClick={() => { setReviewIdx(0); setMode("review"); }}>Review &amp; adjust</Button>
-                  <Button type="button" className="h-12 flex-1 text-base" disabled={!kept.length} onClick={save}><Check className="size-5" /> Save {kept.length || ""} &amp; next</Button>
+                  <Button type="button" className="h-12 flex-1 text-base" disabled={!kept.length} onClick={requestSave}><Check className="size-5" /> Save {kept.length || ""} &amp; next</Button>
                 </div>
               </>
             )}
