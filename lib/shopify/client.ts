@@ -95,6 +95,8 @@ export type ProductInput = {
   status: "ACTIVE" | "DRAFT";
   /** Where the single unit of stock sits; the outlet's Shopify location for outlet stock, else the first active location. */
   locationId?: string | null;
+  /** Untracked: no stock count at any location, so any outlet's POS can sell it; the sale then takes it off Shopify. */
+  untracked?: boolean;
 };
 
 export type PushResult = { productId: string; handle: string; variantId: string; inventoryItemId: string; adminUrl: string };
@@ -126,8 +128,8 @@ export async function createProduct(cfg: ShopifyConfig, input: ProductInput): Pr
   userErrors(data.productCreate.userErrors, "productCreate");
   const product = data.productCreate.product!;
   const variant = product.variants.nodes[0];
-  await setVariant(cfg, product.id, variant.id, input.sku, input.price);
-  await setQuantity(cfg, variant.inventoryItem.id, 1, input.locationId ?? undefined);
+  await setVariant(cfg, product.id, variant.id, input.sku, input.price, !input.untracked);
+  if (!input.untracked) await setQuantity(cfg, variant.inventoryItem.id, 1, input.locationId ?? undefined);
   return { productId: product.id, handle: product.handle, variantId: variant.id, inventoryItemId: variant.inventoryItem.id, adminUrl: adminUrl(cfg, product.id) };
 }
 
@@ -147,8 +149,8 @@ export async function updateProduct(cfg: ShopifyConfig, productId: string, input
   userErrors(data.productUpdate.userErrors, "productUpdate");
   const product = data.productUpdate.product!;
   const variant = product.variants.nodes[0];
-  await setVariant(cfg, product.id, variant.id, input.sku, input.price);
-  if (input.status === "ACTIVE") await setQuantity(cfg, variant.inventoryItem.id, 1, input.locationId ?? undefined);
+  await setVariant(cfg, product.id, variant.id, input.sku, input.price, !input.untracked);
+  if (input.status === "ACTIVE" && !input.untracked) await setQuantity(cfg, variant.inventoryItem.id, 1, input.locationId ?? undefined);
   if (input.imageUrls.length) await addMedia(cfg, product.id, input.imageUrls, input.title);
   return { productId: product.id, handle: product.handle, variantId: variant.id, inventoryItemId: variant.inventoryItem.id, adminUrl: adminUrl(cfg, product.id) };
 }
@@ -211,16 +213,16 @@ export async function unlistProduct(cfg: ShopifyConfig, productId: string): Prom
   );
   userErrors(data.productUpdate.userErrors, "productUpdate");
   const inv = data.productUpdate.product?.variants.nodes[0]?.inventoryItem.id;
-  if (inv) await setQuantity(cfg, inv, 0);
+  if (inv) { try { await setQuantity(cfg, inv, 0); } catch { /* untracked stock has no quantity to zero; DRAFT already hides it */ } }
 }
 
-async function setVariant(cfg: ShopifyConfig, productId: string, variantId: string, sku: string, price: number) {
+async function setVariant(cfg: ShopifyConfig, productId: string, variantId: string, sku: string, price: number, tracked = true) {
   const data = await gql<{ productVariantsBulkUpdate: { userErrors: GqlError[] } }>(
     cfg,
     `mutation variant($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
        productVariantsBulkUpdate(productId: $productId, variants: $variants) { userErrors { field message } }
      }`,
-    { productId, variants: [{ id: variantId, price: price.toFixed(2), inventoryItem: { sku, tracked: true }, inventoryPolicy: "DENY" }] },
+    { productId, variants: [{ id: variantId, price: price.toFixed(2), inventoryItem: { sku, tracked }, inventoryPolicy: tracked ? "DENY" : "CONTINUE" }] },
   );
   userErrors(data.productVariantsBulkUpdate.userErrors, "productVariantsBulkUpdate");
 }

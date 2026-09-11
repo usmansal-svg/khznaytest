@@ -48,6 +48,8 @@ export async function pushItem(db: SupabaseClient, sku: string, visibility: Visi
       descriptionHtml: describe(item.description, item.measurements as Record<string, unknown>, item.grade_code, item.size_label, item.is_rare ? rareWebParagraphs((item as { rare_reasons?: string[] | null }).rare_reasons ?? [], (item as { rare_note?: string | null }).rare_note, await loadRareReasons(db)) : null),
       vendor: item.brand_text ?? "Khazanay", productType: subCategory, tags, sku, price, imageUrls,
       status: (visibility === "draft" ? "DRAFT" : "ACTIVE") as "DRAFT" | "ACTIVE", locationId,
+      // No outlet location mapped: leave stock untracked so any outlet's Shopify POS can sell it; the sale takes it off Shopify.
+      untracked: (visibility === "pos" || visibility === "both") && !locationId,
     };
     // Reuse a product that already exists for this SKU (a half-finished earlier upload) rather than making a second one.
     let productId = item.shopify_product_id as string | null;
