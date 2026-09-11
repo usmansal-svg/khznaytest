@@ -501,19 +501,6 @@ export function TagForm() {
             {!outlet && (
               <p className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">No photo here. Once the tag is printed the garment goes to the photography station, where its pictures are taken against the SKU (Photos in the menu).</p>
             )}
-            {outlet && (
-            <div className="flex items-center gap-4">
-              <button type="button" onClick={() => photoRef.current?.click()} className={cn("flex size-24 shrink-0 items-center justify-center overflow-hidden rounded-md border-2 border-dashed", photo ? "border-transparent" : "border-amber-500")}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                {photo ? <img src={photo.url} alt="garment" className="size-full object-cover" /> : <Camera className="size-8 text-muted-foreground" />}
-              </button>
-              <div className="grid gap-1">
-                <Label>Photo <span className="font-normal text-muted-foreground">· required, one is enough</span></Label>
-                <Button type="button" variant={photo ? "outline" : "default"} className="h-11 w-fit" onClick={() => photoRef.current?.click()}><Camera className="size-4" /> {photo ? "Retake" : "Take photo"}</Button>
-                <p className="text-xs text-muted-foreground">{photo ? "Saved with the garment on Save." : "A reference shot on the iPad — not for customers. The garment can't be saved without one."}</p>
-              </div>
-            </div>
-            )}
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field
@@ -741,6 +728,19 @@ export function TagForm() {
               </>
             ) : (
               <>
+            {outlet && (
+            <div className="flex items-center gap-4">
+              <button type="button" onClick={() => photoRef.current?.click()} className={cn("flex size-24 shrink-0 items-center justify-center overflow-hidden rounded-md border-2 border-dashed", photo ? "border-transparent" : "border-amber-500")}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {photo ? <img src={photo.url} alt="garment" className="size-full object-cover" /> : <Camera className="size-8 text-muted-foreground" />}
+              </button>
+              <div className="grid gap-1">
+                <Label>Photo <span className="font-normal text-muted-foreground">· last step, one is enough</span></Label>
+                <Button type="button" variant={photo ? "outline" : "default"} className="h-11 w-fit" onClick={() => photoRef.current?.click()}><Camera className="size-4" /> {photo ? "Retake" : "Take photo"}</Button>
+                <p className="text-xs text-muted-foreground">{photo ? "Saved with the garment on Save." : "A reference shot on the iPad — not for customers. The garment can't be saved without one."}</p>
+              </div>
+            </div>
+            )}
                 {saveError && <Note tone="error">{saveError}</Note>}
                 <Button type="submit" className="h-12 w-full" disabled={!canSave}>
                   <Save className="size-4" /> {saving ? "Saving…" : autoPrint ? "Save & print tag" : "Save & allocate SKU"}
