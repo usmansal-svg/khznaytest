@@ -83,7 +83,7 @@ export function AppShell({ auth, children }: { auth: React.ReactNode; children: 
         <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b bg-background px-4 print:hidden md:hidden">
           <BrandLogo href={home} />
           <nav className="flex gap-3 overflow-x-auto text-sm">
-            {[...work, ...admin].map((item) => (
+            {(role === "photographer" ? [] : [...work, ...admin]).map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
