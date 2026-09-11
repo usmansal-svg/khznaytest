@@ -188,9 +188,10 @@ export function PhotosPage() {
 
   /* ------------------------------------------------------- background save */
 
-  async function upload(sku: string, file: Blob, kind: "original" | "cutout"): Promise<{ url: string; path: string }> {
+  async function upload(sku: string, file: Blob, kind: "original" | "cutout", source?: string): Promise<{ url: string; path: string }> {
     const fd = new FormData();
     fd.append("sku", sku); fd.append("kind", kind); fd.append("file", file, kind === "cutout" ? "cutout.jpg" : "photo.jpg");
+    if (source) fd.append("source", source);
     const res = await fetch("/api/photos", { method: "POST", body: fd });
     const j = await res.json();
     if (!res.ok) throw new Error(j.error ?? "Upload failed.");
@@ -223,6 +224,7 @@ export function PhotosPage() {
       const update = (patch: Partial<Job>) => setJobs((j) => j.map((x) => (x.sku === sku ? { ...x, ...patch } : x)));
       const del = (path: string) => fetch("/api/photos", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ sku, path }) });
       let cover: Blob | null = null;
+      let coverPath: string | undefined;
       let done = 0;
       const uploaded: string[] = [];
       try {
@@ -230,14 +232,14 @@ export function PhotosPage() {
         for (const w of work) {
           const edited = w.adjust.brightness !== 1 || w.adjust.contrast !== 1 || w.adjust.rotate !== 0;
           if (w.existing && !edited) {
-            if (w.isCover) cover = await (await fetch(w.url)).blob();
+            if (w.isCover) { cover = await (await fetch(w.url)).blob(); coverPath = w.existing.path; }
             continue; // untouched earlier picture stays as it is
           }
           const source = w.blob ?? (await (await fetch(w.url)).blob());
           const square = await squareForShopify(await applyAdjust(source, w.adjust), 2048, 1024 * 1024);
-          if (w.isCover) cover = square;
           const ph = await upload(sku, square, "original");
           uploaded.push(ph.path);
+          if (w.isCover) { cover = square; coverPath = ph.path; }
           if (w.existing) await del(w.existing.path); // the edited version replaces it
           update({ done: ++done });
         }
@@ -257,7 +259,7 @@ export function PhotosPage() {
           const png = await removeBackground(cover, { output: { format: "image/png", quality: 0.9 } });
           const shadowed = await cutoutOnWhite(png, 2048);
           const small = shadowed.size > 1024 * 1024 ? await squareForShopify(shadowed, 2048, 1024 * 1024) : shadowed;
-          const photo = await upload(sku, small, "cutout");
+          const photo = await upload(sku, small, "cutout", coverPath);
           update({ cutout: "done", cutoutUrl: photo.url });
         } catch (e) { update({ cutout: "failed", error: e instanceof Error ? e.message : "Background removal failed." }); }
       }

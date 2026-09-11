@@ -10,7 +10,7 @@ import { NextResponse } from "next/server";
 
 import { requireStaff } from "@/lib/auth/staff";
 
-type Photo = { path: string; url: string; kind: "original" | "cutout"; bytes: number; taken_at: string; by?: number };
+type Photo = { path: string; url: string; kind: "original" | "cutout"; bytes: number; taken_at: string; by?: number; source?: string };
 
 export async function POST(request: Request) {
   const gate = await requireStaff();
@@ -20,6 +20,7 @@ export async function POST(request: Request) {
   const form = await request.formData();
   const sku = String(form.get("sku") ?? "").trim().toUpperCase();
   const kind = form.get("kind") === "cutout" ? "cutout" : "original";
+  const source = String(form.get("source") ?? "").trim() || undefined;
   const file = form.get("file");
   if (!sku || !(file instanceof File)) return NextResponse.json({ error: "sku and file are required." }, { status: 400 });
   if (file.size > 15 * 1024 * 1024) return NextResponse.json({ error: "Photo is over 15 MB." }, { status: 413 });
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
   if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
 
   const { data: pub } = supabase.storage.from("garments").getPublicUrl(path);
-  const photo: Photo = { path, url: pub.publicUrl, kind, bytes: file.size, taken_at: new Date().toISOString(), by: gate.staff.id };
+  const photo: Photo = { path, url: pub.publicUrl, kind, bytes: file.size, taken_at: new Date().toISOString(), by: gate.staff.id, ...(kind === "cutout" && source ? { source } : {}) };
   const photos = [...((item.photos ?? []) as Photo[]), photo];
 
   // First original picture stamps the photographer and the time — the daily target counts garments, not shots.

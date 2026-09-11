@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
  * once — the order is the Shopify order), and add more shots.
  */
 
-type Photo = { path: string; url: string; kind: "original" | "cutout"; bytes: number; taken_at: string };
+type Photo = { path: string; url: string; kind: "original" | "cutout"; bytes: number; taken_at: string; source?: string };
 type Item = { sku: string; brand: string | null; sub_category: string; category: string; size_label: string | null; grade_code: string; colour: string | null; channel: string; photos: Photo[] };
 const GRADE: Record<string, string> = { bnwt: "BNWT", premium: "Premium", excellent: "Excellent", very_good: "Very Good", rejected: "Rejected" };
 
@@ -25,6 +25,7 @@ export function PhotoStation({ sku }: { sku: string }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [view, setView] = useState<number | null>(null); // index into originals
+  const [showOriginal, setShowOriginal] = useState(false);
   const touchX = useRef<number | null>(null);
 
 
@@ -49,11 +50,10 @@ export function PhotoStation({ sku }: { sku: string }) {
       const png = await removeBackground(src, { output: { format: "image/png", quality: 0.9 } });
       const shadowed = await cutoutOnWhite(png, 2048);
       const jpg = shadowed.size > 1024 * 1024 ? await squareForShopify(shadowed, 2048, 1024 * 1024) : shadowed;
-      for (const c of item.photos.filter((x) => x.kind === "cutout")) {
-        await fetch("/api/photos", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ sku, path: c.path }) });
-      }
+      const old = cutFor(p);
+      if (old) await fetch("/api/photos", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ sku, path: old.path }) });
       const fd = new FormData();
-      fd.append("sku", sku); fd.append("kind", "cutout"); fd.append("file", jpg, "cutout.jpg");
+      fd.append("sku", sku); fd.append("kind", "cutout"); fd.append("source", p.path); fd.append("file", jpg, "cutout.jpg");
       const res = await fetch("/api/photos", { method: "POST", body: fd });
       if (!res.ok) throw new Error((await res.json()).error ?? "Upload failed.");
       await load(); setNote(null);
@@ -96,7 +96,9 @@ export function PhotoStation({ sku }: { sku: string }) {
 
   const originals = item.photos.filter((p) => p.kind === "original");
   const cutouts = item.photos.filter((p) => p.kind === "cutout");
-  const cutFor = (p: Photo) => cutouts.find((c) => c.taken_at > p.taken_at && !originals.some((o) => o.taken_at > p.taken_at && o.taken_at < c.taken_at));
+  // A cut-out belongs to the picture it was made from (older cut-outs, made before that was recorded, fall back to "the next one taken").
+  const cutFor = (p: Photo) => cutouts.find((c) => c.source === p.path) ?? cutouts.find((c) => !c.source && c.taken_at > p.taken_at && !originals.some((o) => o.taken_at > p.taken_at && o.taken_at < c.taken_at));
+  const shown = (p: Photo) => cutFor(p)?.url ?? p.url;
   const current = view != null ? originals[view] : null;
 
   return (
@@ -105,7 +107,7 @@ export function PhotoStation({ sku }: { sku: string }) {
       {current && (
         <div className="fixed inset-0 z-50 flex flex-col bg-black text-white">
           <div className="flex items-center justify-between px-3 py-2 text-sm">
-            <button type="button" onClick={() => setView(null)} className="flex items-center gap-1"><X className="size-5" /> Close</button>
+            <button type="button" onClick={() => { setView(null); setShowOriginal(false); }} className="flex items-center gap-1"><X className="size-5" /> Close</button>
             <span>Picture {view! + 1} of {originals.length}{view === 0 ? " · cover" : ""}</span>
             <span className="w-12" />
           </div>
@@ -113,20 +115,15 @@ export function PhotoStation({ sku }: { sku: string }) {
             onTouchStart={(e) => { touchX.current = e.touches[0]?.clientX ?? null; }}
             onTouchEnd={(e) => { const x0 = touchX.current; touchX.current = null; const x1 = e.changedTouches[0]?.clientX; if (x0 == null || x1 == null) return; const dx = x1 - x0; if (dx < -40) setView((i) => Math.min(originals.length - 1, (i ?? 0) + 1)); if (dx > 40) setView((i) => Math.max(0, (i ?? 0) - 1)); }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={current.url} alt="" className="h-full w-full object-contain" />
+            <img src={showOriginal ? current.url : shown(current)} alt="" className="h-full w-full object-contain" />
+            {cutFor(current) && <button type="button" onClick={() => setShowOriginal((v) => !v)} className="absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-black">{showOriginal ? "Showing original · tap for cut-out" : "Background removed · tap for original"}</button>}
             {view! > 0 && <button type="button" onClick={() => setView((i) => (i ?? 1) - 1)} className="absolute left-0 top-0 h-full w-1/5" aria-label="Previous"><ChevronLeft className="absolute left-2 top-1/2 size-8 -translate-y-1/2 opacity-70" /></button>}
             {view! < originals.length - 1 && <button type="button" onClick={() => setView((i) => (i ?? 0) + 1)} className="absolute right-0 top-0 h-full w-1/5" aria-label="Next"><ChevronRight className="absolute right-2 top-1/2 size-8 -translate-y-1/2 opacity-70" /></button>}
           </div>
-          {cutFor(current) && (
-            <div className="flex items-center gap-3 bg-neutral-900 px-4 py-2 text-xs">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={cutFor(current)!.url} alt="cut-out" className="h-14 w-14 rounded border border-white/20 bg-white object-contain" />
-              <span>Cover cut-out · background removed</span>
-            </div>
-          )}
           {note && <p className="bg-neutral-900 px-4 pt-2 text-xs text-amber-300">{note}</p>}
           <div className="flex gap-2 bg-neutral-900 px-4 pb-6 pt-3 text-sm">
             <button type="button" disabled={busy != null} onClick={() => cutExisting(current)} className="flex flex-1 items-center justify-center gap-1 rounded border border-white/40 py-3"><Scissors className="size-4" /> {busy === current.path ? "Working…" : cutFor(current) ? "Redo background" : "Remove background"}</button>
+            {cutFor(current) && <button type="button" disabled={busy != null} onClick={() => remove(cutFor(current)!)} className="flex items-center justify-center gap-1 rounded border border-white/40 px-3 py-3" title="Put the original back">Undo</button>}
             <button type="button" disabled={busy != null} onClick={() => remove(current)} className="flex flex-1 items-center justify-center gap-1 rounded border border-red-400 py-3 text-red-300"><Trash2 className="size-4" /> Delete</button>
           </div>
         </div>
@@ -156,14 +153,11 @@ export function PhotoStation({ sku }: { sku: string }) {
                   <div className="relative aspect-square" style={{ touchAction: "none" }} onPointerDown={drag.onPointerDown(p.path, p.url)} onPointerMove={drag.onPointerMove} onPointerUp={drag.onPointerUp} onPointerCancel={drag.onPointerCancel} onContextMenu={(e) => e.preventDefault()}>
                     <button type="button" onClick={() => { if (drag.dragKey == null) setView(i); }} className="h-full w-full">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={p.url} alt={`Picture ${i + 1}`} draggable={false} className="h-full w-full object-cover" />
+                      <img src={shown(p)} alt={`Picture ${i + 1}`} draggable={false} className="h-full w-full object-cover" />
                     </button>
                     {i === 0 && <span className="absolute inset-x-0 top-0 bg-amber-500 py-0.5 text-center text-[10px] font-bold uppercase tracking-wide text-black">★ Cover</span>}
                     <span className="absolute bottom-1 left-1 rounded bg-black/70 px-1.5 text-xs font-semibold text-white">{i + 1}</span>
-                    {cut && (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img src={cut.url} alt="cut-out" className="absolute bottom-1 right-1 h-8 w-8 rounded border bg-white object-contain" title="Background removed" />
-                    )}
+                    {cut && <span className="absolute bottom-1 right-1 rounded bg-white/90 px-1 text-[10px] font-semibold text-black">no bg</span>}
                   </div>
                   <button type="button" disabled={busy != null} onClick={() => remove(p)} className="flex items-center justify-center gap-1 border-t py-1.5 text-[11px] text-red-700 dark:text-red-400"><Trash2 className="size-3.5" /> Delete</button>
                 </div>
