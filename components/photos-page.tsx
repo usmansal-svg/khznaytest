@@ -45,8 +45,7 @@ export function PhotosPage() {
   const [reviewIdx, setReviewIdx] = useState(0);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [search, setSearch] = useState("");
-  const [listFilter, setListFilter] = useState<"none" | "done" | "all">("none");
-  const [coverId, setCoverId] = useState<number | null>(null);
+  const [listFilter, setListFilter] = useState<"none" | "done" | "all">("all");
   const touchX = useRef<number | null>(null);
   const [camInfo, setCamInfo] = useState<string | null>(null);
   const [autoCut, setAutoCut] = useState(true);
@@ -102,7 +101,7 @@ export function PhotosPage() {
   }
   useEffect(() => () => closeCamera(), []);
 
-  function discardShots() { shots.forEach((s) => { if (s.blob) URL.revokeObjectURL(s.url); }); setShots([]); setCoverId(null); }
+  function discardShots() { shots.forEach((s) => { if (s.blob) URL.revokeObjectURL(s.url); }); setShots([]); }
 
   async function startScan() {
     setError(null);
@@ -179,7 +178,7 @@ export function PhotosPage() {
   function requestSave() {
     const kept = shots.filter((s) => s.keep);
     if (!kept.length) return;
-    save(coverId != null && kept.some((s) => s.id === coverId) ? coverId : kept[0].id);
+    save(kept[0].id);
   }
 
   function save(chosenCover: number) {
@@ -240,11 +239,10 @@ export function PhotosPage() {
   }
 
   const kept = shots.filter((s) => s.keep);
-  // The first kept picture is the cover unless the photographer moves it.
-  useEffect(() => {
-    if (!kept.length) { if (coverId != null) setCoverId(null); return; }
-    if (coverId == null || !kept.some((s) => s.id === coverId)) setCoverId(kept[0].id);
-  }, [kept, coverId]);
+  // The order is the order on Shopify, and the first kept picture is the cover.
+  const coverId = kept[0]?.id ?? null;
+  const move = (id: number, dir: -1 | 1) => setShots((all) => { const i = all.findIndex((s) => s.id === id); const j = i + dir; if (i < 0 || j < 0 || j >= all.length) return all; const c = [...all]; [c[i], c[j]] = [c[j], c[i]]; return c; });
+  const toFront = (id: number) => setShots((all) => { const i = all.findIndex((s) => s.id === id); if (i <= 0) return all; const c = [...all]; const [x] = c.splice(i, 1); return [x, ...c]; });
   const me = data?.me;
   const current = shots[reviewIdx];
 
@@ -263,23 +261,6 @@ export function PhotosPage() {
     </div>
   );
 
-  const Jobs = jobs.length > 0 && (
-    <ul className="space-y-1 text-xs">
-      {jobs.slice(0, 4).map((j) => (
-        <li key={j.sku} className={cn("flex flex-wrap items-center gap-2 rounded-md border px-2 py-1", j.error ? "border-red-400" : j.done < j.total || j.cutout === "working" || j.cutout === "pending" ? "border-amber-400" : "border-green-500")}>
-          <span className="font-mono">{j.sku}</span>
-          <span className="text-muted-foreground">{j.done}/{j.total} uploaded</span>
-          {j.cutout === "pending" && <span className="text-muted-foreground">· cut-out queued</span>}
-          {j.cutout === "working" && <span className="text-amber-700 dark:text-amber-400">· removing background…</span>}
-          {j.cutout === "done" && <span className="text-green-700 dark:text-green-400">· cut-out ready</span>}
-          {j.cutout === "failed" && <span className="text-red-700 dark:text-red-400">· {j.error ?? "cut-out failed"}</span>}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          {j.cutoutUrl && <img src={j.cutoutUrl} alt="" className="ml-auto h-8 w-8 rounded border object-contain" />}
-          <Link href={`/photos/${encodeURIComponent(j.sku)}`} className="ml-auto underline">check</Link>
-        </li>
-      ))}
-    </ul>
-  );
 
   // ---- Review: one picture, full screen, layered over the page so the camera stays mounted
   const Review = mode === "review" && current && (() => {
@@ -313,13 +294,26 @@ export function PhotosPage() {
           {reviewIdx < shots.length - 1 && <ChevronRight className="pointer-events-none absolute right-2 top-1/2 size-8 -translate-y-1/2 opacity-70" />}
         </div>
         <div className="space-y-3 bg-neutral-900 px-4 pb-6 pt-3">
-          <label className="grid grid-cols-[6rem_1fr_3rem] items-center gap-2 text-xs">Brightness<input type="range" min="0.6" max="1.4" step="0.02" value={a.brightness} onChange={(e) => setShot(current.id, (s) => ({ adjust: { ...s.adjust, brightness: Number(e.target.value) } }))} className="accent-white" /><span className="text-right tabular-nums">{Math.round((a.brightness - 1) * 100)}</span></label>
-          <label className="grid grid-cols-[6rem_1fr_3rem] items-center gap-2 text-xs">Contrast<input type="range" min="0.6" max="1.4" step="0.02" value={a.contrast} onChange={(e) => setShot(current.id, (s) => ({ adjust: { ...s.adjust, contrast: Number(e.target.value) } }))} className="accent-white" /><span className="text-right tabular-nums">{Math.round((a.contrast - 1) * 100)}</span></label>
+          {(["brightness", "contrast"] as const).map((key) => {
+            const val = a[key];
+            const set = (v: number) => setShot(current.id, (s) => ({ adjust: { ...s.adjust, [key]: Math.round(Math.min(1.4, Math.max(0.6, v)) * 100) / 100 } }));
+            return (
+              <div key={key} className="grid grid-cols-[5.5rem_2.5rem_1fr_2.5rem_3rem] items-center gap-2 text-xs">
+                <span className="capitalize">{key}</span>
+                <button type="button" onClick={() => set(val - 0.05)} className="h-9 rounded border border-white/40 text-lg leading-none" aria-label={`${key} down`}>−</button>
+                <input type="range" min="0.6" max="1.4" step="0.02" value={val} onChange={(e) => set(Number(e.target.value))} className="accent-white" />
+                <button type="button" onClick={() => set(val + 0.05)} className="h-9 rounded border border-white/40 text-lg leading-none" aria-label={`${key} up`}>+</button>
+                <span className="text-right tabular-nums">{val > 1 ? "+" : ""}{Math.round((val - 1) * 100)}</span>
+              </div>
+            );
+          })}
           <div className="flex flex-wrap gap-2 text-xs">
             <button type="button" onClick={() => setShot(current.id, (s) => ({ adjust: { ...s.adjust, rotate: ((s.adjust.rotate + 90) % 360) as Adjust["rotate"] } }))} className="flex items-center gap-1 rounded border border-white/40 px-3 py-2"><RotateCw className="size-4" /> Rotate</button>
             <button type="button" onClick={() => setShot(current.id, { adjust: { ...NO_ADJUST, rotate: a.rotate } })} className="rounded border border-white/40 px-3 py-2">Reset</button>
             <button type="button" onClick={() => applyToAll(a)} className="rounded border border-white/40 px-3 py-2">Apply to all pictures</button>
-            {current.keep && current.id !== coverId && <button type="button" onClick={() => setCoverId(current.id)} className="flex items-center gap-1 rounded border border-white/40 px-3 py-2"><Star className="size-4" /> Make cover</button>}
+            {current.keep && current.id !== coverId && <button type="button" onClick={() => { toFront(current.id); setReviewIdx(0); }} className="flex items-center gap-1 rounded border border-white/40 px-3 py-2"><Star className="size-4" /> Make cover</button>}
+            <button type="button" disabled={reviewIdx === 0} onClick={() => { move(current.id, -1); setReviewIdx((i) => i - 1); }} className="rounded border border-white/40 px-3 py-2 disabled:opacity-30">◀ Move earlier</button>
+            <button type="button" disabled={reviewIdx === shots.length - 1} onClick={() => { move(current.id, 1); setReviewIdx((i) => i + 1); }} className="rounded border border-white/40 px-3 py-2 disabled:opacity-30">Move later ▶</button>
             <button type="button" onClick={() => { setShot(current.id, { keep: false }); setMode("shoot"); }} className="flex items-center gap-1 rounded border border-white/40 px-3 py-2"><Camera className="size-4" /> Retake this one</button>
             <button type="button" onClick={() => setShot(current.id, (s) => ({ keep: !s.keep }))} className={cn("ml-auto flex items-center gap-1 rounded px-3 py-2", current.keep ? "border border-red-400 text-red-300" : "bg-white text-black")}>{current.keep ? <><Trash2 className="size-4" /> Discard</> : <><Check className="size-4" /> Keep</>}</button>
           </div>
@@ -330,7 +324,7 @@ export function PhotosPage() {
               <img key={s.id} src={s.url} alt="" onClick={() => setReviewIdx(i)} className={cn("h-12 w-12 shrink-0 cursor-pointer rounded object-cover", i === reviewIdx ? "ring-2 ring-white" : "opacity-60", !s.keep && "opacity-20")} style={{ filter: cssFilter(s.adjust) }} />
             ))}
           </div>
-          <p className="text-[11px] text-neutral-400">The cover (★) is the picture that gets its background removed — picture 1 unless you move it. Brightness and contrast are baked in on save; every picture is cropped square and sized for Shopify.</p>
+          <p className="text-[11px] text-neutral-400">The order here is the order on Shopify; picture 1 is the cover (★) and gets its background removed. Brightness and contrast are baked in on save; every picture is cropped square and sized for Shopify.</p>
         </div>
       </div>
     );
@@ -340,7 +334,7 @@ export function PhotosPage() {
     <div className="mx-auto max-w-3xl space-y-4">
       {Review}
       {Progress}
-      {Jobs}
+      {jobs.some((j) => j.error) && <p className="text-sm text-destructive">{jobs.filter((j) => j.error).map((j) => `${j.sku}: ${j.error}`).join(" · ")}</p>}
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       {/* ---- Home */}
@@ -364,7 +358,7 @@ export function PhotosPage() {
                   <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-sm">
                     <span>Garments</span>
                     <span className="flex gap-1 rounded-md border p-0.5 text-xs font-normal">
-                      {([["none", `Pending · ${data.waiting.length}`], ["done", `Done · ${data.done.length}`], ["all", `All · ${all.length}`]] as const).map(([k, label]) => (
+                      {([["all", `All · ${all.length}`], ["none", `Pending · ${data.waiting.length}`], ["done", `Done · ${data.done.length}`]] as const).map(([k, label]) => (
                         <button key={k} type="button" onClick={() => setListFilter(k)} className={cn("rounded px-2 py-1", listFilter === k ? "bg-foreground text-background" : "hover:bg-muted")}>{label}</button>
                       ))}
                     </span>
@@ -437,7 +431,7 @@ export function PhotosPage() {
                 <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={onNative} />
                 <button type="button" onClick={() => fileRef.current?.click()} className="text-xs text-muted-foreground underline">Or take one shot with the phone&apos;s own camera app (full resolution)</button>
                 {camInfo && <p className="text-[11px] text-muted-foreground">Camera {camInfo} · saved square at 2048 px for Shopify, under 1 MB</p>}
-                {shots.length > 0 && <p className="text-xs text-muted-foreground">{retaking ? "Earlier pictures are marked; keep, adjust or discard any of them and add new ones. " : ""}Picture 1 is the cover (★) unless you move the star. Tap a picture to review and adjust it; untick the box to leave it out; the bin deletes it.</p>}
+                {shots.length > 0 && <p className="text-xs text-muted-foreground">{retaking ? "Earlier pictures are marked; keep, adjust or discard any of them and add new ones. " : ""}Picture 1 is the cover (★); the star moves a picture to first, ◀ ▶ reorder. Tap a picture to review and adjust it; untick the box to leave it out; the bin deletes it.</p>}
                 {shots.length > 0 && (
                   <div className="grid grid-cols-3 gap-2">
                     {shots.map((s, i) => (
@@ -450,7 +444,11 @@ export function PhotosPage() {
                         <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1 text-[10px] text-white">{i + 1}{s.existing ? " · earlier" : ""}</span>
                         <label className="absolute bottom-1 right-1 flex items-center rounded bg-white/90 p-1" title={s.keep ? "Untick to leave this picture out" : "Tick to keep it"}><Checkbox checked={s.keep} onCheckedChange={(v) => setShot(s.id, { keep: v === true })} /></label>
                         <button type="button" onClick={() => removeShot(s.id)} className="absolute right-1 top-6 rounded-full bg-black/60 p-1 text-white" aria-label="Delete this picture"><Trash2 className="size-3.5" /></button>
-                        {s.keep && s.id !== coverId && <button type="button" onClick={() => setCoverId(s.id)} className="absolute left-1 top-6 rounded-full bg-black/60 p-1 text-white" aria-label="Make this the cover"><Star className="size-3.5" /></button>}
+                        {s.keep && s.id !== coverId && <button type="button" onClick={() => toFront(s.id)} className="absolute left-1 top-6 rounded-full bg-black/60 p-1 text-white" aria-label="Make this the cover"><Star className="size-3.5" /></button>}
+                        <span className="absolute inset-x-1 bottom-8 flex justify-between">
+                          <button type="button" disabled={i === 0} onClick={() => move(s.id, -1)} className="rounded-full bg-black/60 px-1.5 text-xs text-white disabled:opacity-0" aria-label="Move earlier">◀</button>
+                          <button type="button" disabled={i === shots.length - 1} onClick={() => move(s.id, 1)} className="rounded-full bg-black/60 px-1.5 text-xs text-white disabled:opacity-0" aria-label="Move later">▶</button>
+                        </span>
                       </div>
                     ))}
                   </div>
