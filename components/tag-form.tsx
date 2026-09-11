@@ -70,6 +70,12 @@ type Saved = {
   sub_category: string;
 };
 
+/** Outlet tags take the season from the calendar: November to February is winter in Karachi. */
+function seasonForMonth(d: Date): Season {
+  const m = d.getMonth();
+  return m >= 10 || m <= 1 ? "winter" : "summer";
+}
+
 const GRADE_LABELS: Record<GradeCode, string> = { bnwt: "BNWT", premium: "Premium", excellent: "Excellent", very_good: "Very Good", rejected: "Rejected" };
 const SEASON_OPTIONS: { code: Season; label: string }[] = [{ code: "summer", label: "Summer" }, { code: "winter", label: "Winter" }];
 const WEARER_OPTIONS: { code: Wearer; label: string }[] = [{ code: "men", label: "Men" }, { code: "women", label: "Women" }, { code: "boy", label: "Boy" }, { code: "girl", label: "Girl" }, { code: "infant", label: "Infant" }, { code: "unisex", label: "Unisex" }];
@@ -255,9 +261,15 @@ export function TagForm() {
   const below = !rejected && !blocked && standardPrice != null && listPrice > 0 && listPrice < standardPrice;
   const belowPct = below ? Math.round(((standardPrice! - listPrice) / standardPrice!) * 100) : 0;
   const weightOk = true;
-  const sleeveOk = !asksSleeve || Boolean(sleeve);
+  // Outlet: a concise form — the garment type (for the price and SKU), brand,
+  // size, condition, price and a reference photo. Season comes from the month;
+  // colour, measurements and sleeves are online-listing details.
+  // Online: every detail, but no photo here — the photography station takes
+  // proper pictures after the tag is on (see /photos).
+  const outlet = channel === "outlet";
+  const sleeveOk = outlet || !asksSleeve || Boolean(sleeve);
   const reasonOk = !below || belowReason.trim().length >= 3;
-  const photoOk = Boolean(photo) || rejected;
+  const photoOk = !outlet || Boolean(photo) || rejected;
   // Outlets take only the better conditions. Under the outlet channel a
   // garment below the minimum is not tagged at all — it goes on the pile
   // for online tagging. The server refuses the save as well.
@@ -304,12 +316,12 @@ export function TagForm() {
           is_rare: rareFind,
           below_reason: below ? belowReason : null,
           flaw_note: null,
-          season,
+          season: outlet ? seasonForMonth(new Date()) : season,
           wearer,
           size_label: size,
-          colour,
+          colour: outlet ? null : colour,
           fabric: null,
-          measurements: { ...Object.fromEntries(Object.entries(measure).filter(([, v]) => v !== "")), ...(asksSleeve && sleeve ? { Sleeve: sleeve } : {}) },
+          measurements: outlet ? {} : { ...Object.fromEntries(Object.entries(measure).filter(([, v]) => v !== "")), ...(asksSleeve && sleeve ? { Sleeve: sleeve } : {}) },
           outlet_id: null,
           lot_id: Number(lotId),
           channel,
@@ -394,7 +406,7 @@ export function TagForm() {
               )}
             </Field>
 
-            <Field label="Tagging for" hint={channelLocked ? "Locked — untick to change" : channel === "online" ? "Photos and Shopify on the garment page after saving" : "Quick tag and print; the supervisor sends it to an outlet"}>
+            <Field label="Tagging for" hint={channelLocked ? "Locked — untick to change" : channel === "online" ? "Full details; photos are taken at the photography station after the tag is on" : "Short form: type, brand, size, condition, price, reference photo"}>
               <div className="flex items-center gap-2">
                 <Button type="button" size="sm" variant={channel === "outlet" ? "default" : "outline"} disabled={channelLocked} onClick={() => setChannel("outlet")} className="h-11 md:h-8">Outlet</Button>
                 <Button type="button" size="sm" variant={channel === "online" ? "default" : "outline"} disabled={channelLocked} onClick={() => setChannel("online")} className="h-11 md:h-8">Online store</Button>
@@ -430,17 +442,19 @@ export function TagForm() {
               </div>
             </Field>
 
-            <Field label="Season">
-              <select className={selectClass} value={season} onChange={(e) => setSeason(e.target.value as Season)}>
-                {SEASON_OPTIONS.map((s) => <option key={s.code} value={s.code}>{s.label}</option>)}
-              </select>
-            </Field>
+            {!outlet && (
+              <Field label="Season">
+                <select className={selectClass} value={season} onChange={(e) => setSeason(e.target.value as Season)}>
+                  {SEASON_OPTIONS.map((s) => <option key={s.code} value={s.code}>{s.label}</option>)}
+                </select>
+              </Field>
+            )}
             <Field label="Wearer">
               <select className={selectClass} value={wearer} onChange={(e) => setWearer(e.target.value as Wearer)}>
                 {WEARER_OPTIONS.map((w) => <option key={w.code} value={w.code}>{w.label}</option>)}
               </select>
             </Field>
-            <Field label="Find a garment type" hint="Type a few letters — e.g. crop, jeans, hoodie">
+            <Field label={outlet ? "Garment type" : "Find a garment type"} hint={outlet && selectedSub ? `${selectedSub.name} · ${selectedSub.code}` : "Type a few letters — e.g. crop, jeans, hoodie"}>
               <div className="relative">
                 <Input value={find} onChange={(e) => setFind(e.target.value)} placeholder="Search sub-categories…" autoComplete="off" onKeyDown={(e) => { if (e.key === "Enter" && hits[0]) { e.preventDefault(); e.stopPropagation(); pick(hits[0]); } }} />
                 {hits.length > 0 && (
@@ -452,6 +466,7 @@ export function TagForm() {
                 )}
               </div>
             </Field>
+            {!outlet && (<>
             <Field label="Category">
               <select className={selectClass} value={category} onChange={(e) => setCategory(e.target.value)}>
                 {genders.length > 1
@@ -467,6 +482,7 @@ export function TagForm() {
                 {subs.map((s) => <option key={s.slug} value={s.slug}>{s.name}</option>)}
               </select>
             </Field>
+            </>)}
           </CardContent>
         </Card>
 
@@ -477,6 +493,10 @@ export function TagForm() {
           </CardHeader>
           <CardContent className="space-y-5">
             <input ref={photoRef} type="file" accept="image/*" capture="environment" hidden onChange={onPhoto} />
+            {!outlet && (
+              <p className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">No photo here. Once the tag is printed the garment goes to the photography station, where its pictures are taken against the SKU (Photos in the menu).</p>
+            )}
+            {outlet && (
             <div className="flex items-center gap-4">
               <button type="button" onClick={() => photoRef.current?.click()} className={cn("flex size-24 shrink-0 items-center justify-center overflow-hidden rounded-md border-2 border-dashed", photo ? "border-transparent" : "border-amber-500")}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -485,9 +505,10 @@ export function TagForm() {
               <div className="grid gap-1">
                 <Label>Photo <span className="font-normal text-muted-foreground">· required, one is enough</span></Label>
                 <Button type="button" variant={photo ? "outline" : "default"} className="h-11 w-fit" onClick={() => photoRef.current?.click()}><Camera className="size-4" /> {photo ? "Retake" : "Take photo"}</Button>
-                <p className="text-xs text-muted-foreground">{photo ? "Saved with the garment on Save." : "Opens the camera on the iPad. The garment can't be saved without one."}</p>
+                <p className="text-xs text-muted-foreground">{photo ? "Saved with the garment on Save." : "A reference shot on the iPad — not for customers. The garment can't be saved without one."}</p>
               </div>
             </div>
+            )}
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field
@@ -512,10 +533,10 @@ export function TagForm() {
                   {(isKids ? KIDS_SIZES.map((k) => k.label) : ADULT_SIZES).map((s) => <option key={s} value={s} />)}
                 </datalist>
               </Field>
-              <Field label="Colour">
+              {!outlet && (<Field label="Colour">
                 <Input list="colours" value={colour} onChange={(e) => setColour(e.target.value)} placeholder="e.g. Black" autoComplete="off" />
                 <datalist id="colours">{COLOURS.map((c) => <option key={c} value={c} />)}</datalist>
-              </Field>
+              </Field>)}
             </div>
 
 
@@ -567,7 +588,7 @@ export function TagForm() {
             )}
 
 
-            {selectedSub && (
+            {selectedSub && !outlet && (
               <div className="space-y-3">
                 {asksSleeve && (
                   <ButtonGroup label="Sleeves" hint={!sleeve ? "Required before saving" : undefined} options={SLEEVE_TYPES.map((t) => ({ code: t, label: t }))} value={sleeve as (typeof SLEEVE_TYPES)[number]} onChange={(v) => setSleeve(v)} />

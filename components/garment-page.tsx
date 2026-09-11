@@ -194,7 +194,7 @@ export function GarmentPage({ sku }: { sku: string }) {
         </Card>
 
         {/* ------------------------------------------------- photos */}
-        <Card>
+        <Card id="photos">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center justify-between text-base">
               Photos

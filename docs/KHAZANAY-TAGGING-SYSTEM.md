@@ -37,6 +37,7 @@ Managers add taggers at **Admin → Staff** (name, role, home outlet, PIN, daily
 |---|---|---|---|
 | Sign in | `/login` | all | Name grid + keypad; first run sets up the founder |
 | **Tag item** | `/tag` | tagger+ | The one screen that must be fast (§5) |
+| Photos | `/photos` | tagger+ | Photography station: online garments waiting for pictures, scan to open |
 | Items | `/items` | tagger+ | Search by SKU / brand / sub-category; reprint; Excel/CSV export with a date range (managers) |
 | Garment | `/items/[sku]` | tagger+ | Channel, destination outlet, photos, listing preview, Shopify push |
 | Print tag | `/items/[sku]/print` · `/print?skus=…` | tagger+ | One tag, or a whole session's tags in one print job |
@@ -116,7 +117,9 @@ Regular high street ×1.00 · Affordable luxury ×2.00 · Ultra luxury → hande
 
 ## 5. The tag form — how a garment is tagged
 
-Order on screen, all on one iPad page:
+**Two forms, one screen (11 Sep).** *Tagging for* switches the form. **Outlet** is the short form: wearer, garment type (the type-to-find box only — it sets the price and the SKU), reference photo, brand, size, condition, price. Season comes from the calendar (November–February winter), and colour, measurements and sleeves are not asked. **Online** is the full form below, minus the photo: pictures are taken afterwards at the photography station (**Photos** in the menu, `/photos`), which lists every online garment without pictures, oldest first; scan the tag, take the pictures on the garment page, next. Works for a dedicated photographer or a tagger doing a photo session.
+
+Order on the full (online) form:
 
 1. **Tagging for** Outlet / Online, with a **Lock** · **Lot**, with a **Lock** — set once, tag garment after garment
 2. Season (Summer/Winter) · Wearer (Men, Women, Boy, Girl, Infant, Unisex)
