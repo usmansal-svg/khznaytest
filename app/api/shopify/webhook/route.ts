@@ -23,7 +23,11 @@ export async function POST(request: Request) {
   const given = request.headers.get("x-shopify-hmac-sha256") ?? "";
   const expected = createHmac("sha256", secret).update(raw, "utf8").digest("base64");
   const ok = given.length === expected.length && timingSafeEqual(Buffer.from(given), Buffer.from(expected));
-  if (!ok) return NextResponse.json({ error: "Bad signature." }, { status: 401 });
+  if (!ok) {
+    // Recorded so a mis-pasted secret shows up as "refused" in the audit log rather than silence.
+    await createServiceClient().from("admin_audits").insert({ table_name: "shopify_webhook", row_key: "refused", before: null, after: { topic: request.headers.get("x-shopify-topic"), shop: request.headers.get("x-shopify-shop-domain"), has_signature: Boolean(given), body_bytes: raw.length }, changed_by: null, note: "Shopify webhook refused: signature did not match SHOPIFY_WEBHOOK_SECRET" });
+    return NextResponse.json({ error: "Bad signature." }, { status: 401 });
+  }
 
   let order: { id?: number; name?: string; created_at?: string; financial_status?: string; location_id?: number | null; source_name?: string; line_items?: { sku?: string | null; price?: string; quantity?: number }[] };
   try { order = JSON.parse(raw); } catch { return NextResponse.json({ error: "Bad JSON." }, { status: 400 }); }
