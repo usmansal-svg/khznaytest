@@ -64,6 +64,7 @@ export async function GET() {
     tagger,
     colour_tag: colourForMonth(new Date()),
     settings_version: ctx.settingsVersion,
+    outlet_min_grade: ctx.settings.outletMinGrade,
     pricing_source: ctx.source,
     ...(warnings.some(Boolean) ? { warning: warnings.filter(Boolean).join(" ") } : {}),
   });

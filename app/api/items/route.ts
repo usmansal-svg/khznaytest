@@ -10,8 +10,11 @@
 
 import { NextResponse } from "next/server";
 
+import { audit } from "@/lib/admin/auth";
+
+
 import { currentStaff, dbFor, requireStaff } from "@/lib/auth/staff";
-import { REJECTED, type Adjustment, type GradeCode } from "@/lib/pricing/constants";
+import { REJECTED, type Adjustment, type GradeCode, meetsOutletMinimum } from "@/lib/pricing/constants";
 import { ADJUSTMENTS, GRADE_CODES, quote } from "@/lib/pricing/quote";
 import { loadLot, loadPricingContext, resolveBrandDb } from "@/lib/pricing/repo";
 import { SEASONS, WEARERS, buildSku, type Season, type Wearer } from "@/lib/pricing/sku";
@@ -37,6 +40,8 @@ type Body = {
   weight_kg?: number | null;
   price_manual?: number | null;
   channel?: string;
+  /** Deliberate send-to-outlet of a garment below the outlet minimum; confirmed twice on the form and audited. */
+  outlet_override?: boolean;
 };
 
 export async function POST(request: Request) {
@@ -115,6 +120,16 @@ export async function POST(request: Request) {
   }
   const sku = buildSku(season, wearer, subCategory.code, seq);
 
+  // Outlets take only the better conditions. Under the outlet channel a
+  // garment below the minimum is not tagged at all: no SKU, no price, no
+  // tag. It goes on the pile for online tagging later.
+  const channel = body.channel === "online" ? "online" : "outlet";
+  const belowOutletMin = channel === "outlet" && !rejected && !meetsOutletMinimum(grade, ctx.settings.outletMinGrade);
+  const outletOverride = belowOutletMin && body.outlet_override === true;
+  if (belowOutletMin && !outletOverride) {
+    return bad(`${GRADE_NAMES[grade]} does not go to outlets (minimum ${GRADE_NAMES[ctx.settings.outletMinGrade]}). Do not tag it here — put it on the Very Good pile for online tagging.`);
+  }
+
   const { data: item, error: insertError } = await supabase
     .from("items")
     .insert({
@@ -146,13 +161,16 @@ export async function POST(request: Request) {
       price_manual: manual ? body.price_manual : null,
       settings_version: ctx.settingsVersion,
       status: rejected ? "rejected" : handoff ? "set_aside" : "tagged",
-      channel: body.channel === "online" ? "online" : "outlet",
-      online_status: body.channel === "online" ? "draft" : null,
+      channel,
+      outlet_override: outletOverride,
+      online_status: channel === "online" ? "draft" : null,
     })
     .select("id, sku, price, price_manual, status, tagged_at, weight_kg")
     .single();
 
   if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
+
+  if (outletOverride) await audit(supabase, staff.id, "items", item.sku, { outlet_override: false }, { outlet_override: true }, `${GRADE_NAMES[grade]} sent to outlets on purpose (minimum ${GRADE_NAMES[ctx.settings.outletMinGrade]})`);
 
   // Random QC hold-back: the tagger is told to set this one aside for a
   // blind regrade. Decided here, after the save, so it cannot be gamed.
@@ -216,3 +234,4 @@ export async function GET(request: Request) {
 }
 
 const bad = (message: string) => NextResponse.json({ error: message }, { status: 400 });
+const GRADE_NAMES: Record<GradeCode, string> = { bnwt: "Brand New with Tags", premium: "Premium", excellent: "Excellent", very_good: "Very Good", rejected: "Rejected" };

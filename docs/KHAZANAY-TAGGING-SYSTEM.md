@@ -93,7 +93,7 @@ Defaults give **Fast 3.3947 · Standard 3.9640 · Slow 4.5766**. Recomputed live
 
 | Pricing tab | Fields |
 |---|---|
-| Constants | fx, planning rate, default provisional yield, duty/kg, sorting/piece, input tax rate and recoverable share, sales tax, target GP, rejected share, bulk recovery, rounding step/ending/minimum, high-value threshold, daily target, QC hold-back rate |
+| Constants | fx, planning rate, default provisional yield, duty/kg, sorting/piece, input tax rate and recoverable share, sales tax, target GP, rejected share, bulk recovery, rounding step/ending/minimum, high-value threshold, daily target, QC hold-back rate, lowest condition for outlets |
 | Markdown ladder | Markdown 1 / 2 / Final depths (validated ascending) |
 | Selling profiles | Never sells, full, 25%, 50%, 75% shares per profile (must sum to 100%) — multiples shown |
 | Grades | Multiplier and intake share per grade (Premium fixed at 1.00, Rejected at 0) |
@@ -133,6 +133,8 @@ Order on screen, all on one iPad page:
 13. **Save & print tag** — SKU allocated atomically (`KHZ-{season}{wearer}-{3-letter code}-{5 digits}`), photo uploaded, tag printed from the form via a hidden print frame (Auto-print on by default)
 
 **Under-pricing is logged, never silent.** Every save records the sheet's standard price beside the final price. Any price below standard — by steps or by hand — requires a **reason** and writes a `price_alerts` row (tagger, SKU, sheet price, final, % below, reason). The dashboard lists them and counts them per tagger.
+
+**Outlet minimum condition (11 Sep).** Outlets take only the better conditions: *Lowest condition for outlets* on the Constants tab, default **Excellent**. With Outlet selected, choosing a condition below it (Very Good by default) marks the button *Not for outlets*, blocks Save and tells the tagger to put the garment on the Very Good pile for online tagging later — no SKU, no price, no tag. The server refuses the save as well, and transfers refuse any such garment that slips through. A deliberate exception is possible: *Send it to the outlet anyway…* asks "Are you sure?" a second time, then unlocks Save; the override is stored on the garment (`items.outlet_override`) and audited under the tagger's name, and transfers honour it.
 
 **QC hold-back.** After each save, a random share (QC rate, 10% default) is held: a full-screen notice tells the tagger to put it on the QC rail. Held garments cannot ship until a senior regrades and releases them.
 
@@ -222,7 +224,7 @@ Garment page: channel switch, photos (camera capture, on-device background remov
 
 **API (all under `/api`):** `price`, `items`, `items/[sku]`, `reference`, `brands`, `lots`, `transfers`, `qc`, `photos`, `tags/[sku]/barcode`, `export`, `dashboard`, `auth/*`, `admin/{settings,profiles,grades,sub-categories,categories,brands,staff,reference-prices,pricing/sheet}`, `shopify/push`.
 
-**Migrations (25, all applied):** `pricing_schema` · `pricing_seed` (generated from code by `test/gen-seed.ts`) · `sub_category_codes` · `tagging_support` · `lots_and_weights` · `channels_photos_shopify` · `staff_pins_transfers` · `transfer_seq` · `lot_split` · `lot_description_pieces` · `lot_imported_sequence` · `settings_changed_by` · `categories_flat_gender` · `categories_two_level` · `subcategory_planning_rates` · `price_steps_alerts` · `brands_source` · `qc_and_targets` · `qc_hold` · `standard_cost` · `reference_prices` · `rare_handoff` — plus the health check and two POS migrations from a parallel session.
+**Migrations (27, all applied):** `pricing_schema` · `pricing_seed` (generated from code by `test/gen-seed.ts`) · `sub_category_codes` · `tagging_support` · `lots_and_weights` · `channels_photos_shopify` · `staff_pins_transfers` · `transfer_seq` · `lot_split` · `lot_description_pieces` · `lot_imported_sequence` · `settings_changed_by` · `categories_flat_gender` · `categories_two_level` · `subcategory_planning_rates` · `price_steps_alerts` · `brands_source` · `qc_and_targets` · `qc_hold` · `standard_cost` · `reference_prices` · `rare_handoff` · `outlet_min_grade` · `outlet_override` — plus the health check and two POS migrations from a parallel session.
 
 **Environment (Vercel + `.env.local`):** `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (server only; also signs sessions), optional `SESSION_SECRET`, `SHOPIFY_*`.
 

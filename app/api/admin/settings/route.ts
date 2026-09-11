@@ -12,7 +12,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { audit, requireManager } from "@/lib/admin/auth";
 import { repricePreview } from "@/lib/admin/reprice";
-import { DEFAULT_SETTINGS, type Settings } from "@/lib/pricing/constants";
+import { DEFAULT_SETTINGS, type Settings, OUTLET_GRADES, type OutletGrade } from "@/lib/pricing/constants";
 import { loadPricingContext, settingsToRow } from "@/lib/pricing/repo";
 
 export async function GET() {
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
   return NextResponse.json({ version, ...repricePreview(ctx, proposed.settings) });
 }
 
-const RANGES: Record<keyof Omit<Settings, "brandFeedbackEnabled" | "ladderDepths" | "compareFormulaEnabled">, [number, number]> = {
+const RANGES: Record<keyof Omit<Settings, "brandFeedbackEnabled" | "ladderDepths" | "compareFormulaEnabled" | "outletMinGrade">, [number, number]> = {
   fx: [1, 10000],
   blendedRate: [0.01, 1000],
   dutyPerKg: [0, 100000],
@@ -117,6 +117,8 @@ function validate(input: Partial<Settings> | undefined): { settings: Settings } 
     out[key] = v;
   }
   if (typeof input.brandFeedbackEnabled !== "boolean") return { error: "brandFeedbackEnabled must be true or false." };
+  if (!(OUTLET_GRADES as string[]).includes(String(input.outletMinGrade))) return { error: "outletMinGrade must be bnwt, premium, excellent or very_good." };
+  out.outletMinGrade = input.outletMinGrade as OutletGrade;
   out.brandFeedbackEnabled = input.brandFeedbackEnabled;
   out.compareFormulaEnabled = input.compareFormulaEnabled !== false;
   if (out.charmEnd >= out.charmStep) return { error: "charmEnd must be smaller than charmStep." };

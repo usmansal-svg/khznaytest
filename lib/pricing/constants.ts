@@ -25,6 +25,8 @@ export type Settings = {
   defaultDailyTarget: number;
   /** Share of saved garments randomly held for QC (0.10 = one in ten) */
   qcSampleRate: number;
+  /** Lowest condition that may go to an outlet; below it a garment is saved as online stock */
+  outletMinGrade: OutletGrade;
   /** "New in store" formula fallback: Premium shelf price × factor, per tier */
   compareFactorRegular: number;
   compareFactorAffordable: number;
@@ -74,6 +76,7 @@ export const DEFAULT_SETTINGS: Settings = {
   ladderDepths: [0.25, 0.5, 0.75],
   defaultDailyTarget: 60,
   qcSampleRate: 0.1,
+  outletMinGrade: "excellent",
   compareFactorRegular: 3,
   compareFactorAffordable: 3.5,
   compareFormulaEnabled: true,
@@ -82,6 +85,14 @@ export const DEFAULT_SETTINGS: Settings = {
 /* ------------------------------------------------------------------ grades */
 
 export type GradeCode = "bnwt" | "premium" | "excellent" | "very_good" | "rejected";
+export type OutletGrade = Exclude<GradeCode, "rejected">;
+/** Best first. Used to compare conditions ("at least Excellent"). */
+export const GRADE_RANK: Record<GradeCode, number> = { bnwt: 4, premium: 3, excellent: 2, very_good: 1, rejected: 0 };
+export const OUTLET_GRADES: OutletGrade[] = ["bnwt", "premium", "excellent", "very_good"];
+/** True when a garment of this grade may be sent to an outlet under the setting. */
+export function meetsOutletMinimum(grade: GradeCode, min: OutletGrade): boolean {
+  return GRADE_RANK[grade] >= GRADE_RANK[min];
+}
 
 export type Grade = {
   code: GradeCode;

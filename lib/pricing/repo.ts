@@ -26,6 +26,8 @@ import {
   type Profile,
   type ProfileCode,
   type Settings,
+  OUTLET_GRADES,
+  type OutletGrade,
 } from "./constants";
 import { effectiveRate, lotYield, type PricingRefs } from "./engine";
 import { matchBrand, normaliseBrand } from "@/lib/brands/normalise";
@@ -82,6 +84,7 @@ type SettingsRow = {
   ladder_depths?: (number | string)[] | null;
   default_daily_target?: number | null;
   qc_sample_rate?: number | string | null;
+  outlet_min_grade?: string | null;
   compare_factor_regular?: number | string | null;
   compare_factor_affordable?: number | string | null;
   compare_formula_enabled?: boolean | null;
@@ -110,6 +113,7 @@ export function settingsFromRow(row: SettingsRow): Settings {
     ladderDepths: depthsFromRow(row.ladder_depths),
     defaultDailyTarget: num(row.default_daily_target, DEFAULT_SETTINGS.defaultDailyTarget),
     qcSampleRate: num(row.qc_sample_rate, DEFAULT_SETTINGS.qcSampleRate),
+    outletMinGrade: (OUTLET_GRADES as string[]).includes(row.outlet_min_grade ?? "") ? (row.outlet_min_grade as OutletGrade) : DEFAULT_SETTINGS.outletMinGrade,
     compareFactorRegular: num(row.compare_factor_regular, DEFAULT_SETTINGS.compareFactorRegular),
     compareFactorAffordable: num(row.compare_factor_affordable, DEFAULT_SETTINGS.compareFactorAffordable),
     compareFormulaEnabled: row.compare_formula_enabled ?? DEFAULT_SETTINGS.compareFormulaEnabled,
@@ -146,6 +150,7 @@ export function settingsToRow(s: Settings) {
     ladder_months: [1, 1, 1, 1],
     default_daily_target: s.defaultDailyTarget,
     qc_sample_rate: s.qcSampleRate,
+    outlet_min_grade: s.outletMinGrade,
     compare_factor_regular: s.compareFactorRegular,
     compare_factor_affordable: s.compareFactorAffordable,
     compare_formula_enabled: s.compareFormulaEnabled,

@@ -147,6 +147,18 @@ export function PricingAdmin() {
                       <p className="text-xs text-muted-foreground">{f.help}</p>
                     </div>
                   ))}
+                  {g === "Control" && (
+                    <div className="space-y-1 sm:col-span-2">
+                      <Label htmlFor="outletMinGrade">Lowest condition for outlets</Label>
+                      <select id="outletMinGrade" value={draft.outletMinGrade} onChange={(e) => setDraft({ ...draft, outletMinGrade: e.target.value as Settings["outletMinGrade"] })} className={cn("h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm", draft.outletMinGrade !== loaded.settings.outletMinGrade && "border-amber-500")}>
+                        <option value="bnwt">Brand New with Tags only</option>
+                        <option value="premium">Premium and above</option>
+                        <option value="excellent">Excellent and above</option>
+                        <option value="very_good">Very Good and above (everything)</option>
+                      </select>
+                      <p className="text-xs text-muted-foreground">A garment tagged for the outlet channel below this condition is still tagged and priced, but saved as online stock: the tagger is told to put it on the Online rail, and transfers refuse it.</p>
+                    </div>
+                  )}
                   {g === "Margin" && (
                     <label className="flex items-start gap-2 text-sm sm:col-span-2">
                       <Checkbox checked={draft.brandFeedbackEnabled} onCheckedChange={(v) => setDraft({ ...draft, brandFeedbackEnabled: v === true })} className="mt-0.5" />

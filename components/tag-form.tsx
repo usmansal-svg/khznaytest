@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import type { ColourTag, GradeCode } from "@/lib/pricing/constants";
+import { GRADE_RANK, type ColourTag, type GradeCode } from "@/lib/pricing/constants";
 import { ADULT_SIZES, KIDS_SIZES } from "@/lib/pricing/kids-sizes";
 import { GENDER_LABELS, type Gender, type Season, type Wearer } from "@/lib/pricing/sku";
 import { SLEEVE_TYPES } from "@/lib/pricing/sub-categories";
@@ -37,6 +37,7 @@ type Reference = {
   outlets: { id: number; name: string; is_online: boolean }[];
   lots: { id: number; code: string; supplier: string; basis: "kg" | "pc"; rate: number | null; effective_rate: number | null; yield: number; status: string }[];
   grades: { code: GradeCode; name: string }[];
+  outlet_min_grade: GradeCode;
   tagger: { name: string; role: string; outlet_id: number | null; today: number; target: number } | null;
   colour_tag: ColourTag;
   pricing_source: "database" | "defaults";
@@ -118,6 +119,9 @@ export function TagForm() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState<Saved | null>(null);
   const [qcHold, setQcHold] = useState<string | null>(null);
+  // Deliberate send-to-outlet of a garment below the minimum: asked twice, per garment.
+  const [outletOverride, setOutletOverride] = useState(false);
+  const [confirmOverride, setConfirmOverride] = useState(false);
   const [sessionSkus, setSessionSkus] = useState<string[]>([]);
 
 
@@ -254,8 +258,12 @@ export function TagForm() {
   const sleeveOk = !asksSleeve || Boolean(sleeve);
   const reasonOk = !below || belowReason.trim().length >= 3;
   const photoOk = Boolean(photo) || rejected;
+  // Outlets take only the better conditions. Under the outlet channel a
+  // garment below the minimum is not tagged at all — it goes on the pile
+  // for online tagging. The server refuses the save as well.
+  const belowOutletMin = channel === "outlet" && !rejected && ref != null && GRADE_RANK[grade] < GRADE_RANK[ref.outlet_min_grade] && !outletOverride;
   const canSave =
-    Boolean(ref?.tagger) && Boolean(sub) && Boolean(selectedLot) && weightOk && sleeveOk && reasonOk && photoOk && !saving && !price?.error &&
+    Boolean(ref?.tagger) && Boolean(sub) && Boolean(selectedLot) && weightOk && sleeveOk && reasonOk && photoOk && !saving && !price?.error && !belowOutletMin &&
     (rejected ? price?.price === 0 : handoff ? true : needsManual ? listPrice > 0 : Boolean(price?.price));
 
   const resetForNext = useCallback(() => {
@@ -263,6 +271,8 @@ export function TagForm() {
     setSize("");
     setColour("");
     setGrade("premium");
+    setOutletOverride(false);
+    setConfirmOverride(false);
     setMeasure({});
     setSleeve("");
     setAdjustPct(0);
@@ -303,6 +313,7 @@ export function TagForm() {
           outlet_id: null,
           lot_id: Number(lotId),
           channel,
+          outlet_override: outletOverride,
           price_manual: needsManual ? Number(manualPrice) : null,
         }),
       });
@@ -512,10 +523,34 @@ export function TagForm() {
             <ButtonGroup
               label="Condition"
               hint="Tags → BNWT · fabric used → Very Good · stain or repair → Excellent · else Premium. When in doubt, grade up."
-              options={ref.grades.map((g) => ({ code: g.code, label: GRADE_LABELS[g.code] ?? g.name, sub: g.code === "rejected" ? "Rs 0" : price?.grade_prices?.[g.code] != null && !needsManual ? pkr(price.grade_prices[g.code]) : undefined }))}
+              options={ref.grades.map((g) => ({ code: g.code, label: GRADE_LABELS[g.code] ?? g.name, sub: g.code === "rejected" ? "Rs 0" : channel === "outlet" && GRADE_RANK[g.code] < GRADE_RANK[ref.outlet_min_grade] ? "Not for outlets" : price?.grade_prices?.[g.code] != null && !needsManual ? pkr(price.grade_prices[g.code]) : undefined }))}
               value={grade}
               onChange={setGrade}
             />
+            {belowOutletMin && (
+              <div className="rounded-xl border-4 border-sky-500 bg-sky-50 p-4 text-center dark:bg-sky-950/40" role="alert">
+                <div className="text-4xl">🛑</div>
+                <p className="mt-1 text-lg font-bold">{GRADE_LABELS[grade]} does not go to the outlets</p>
+                <p className="mt-1 text-sm text-muted-foreground">Outlets take {GRADE_LABELS[ref.outlet_min_grade]} and above. Do not tag this garment here — put it on the Very Good pile; it is tagged later under the Online store channel. Pick another condition only if you graded it wrong.</p>
+                {confirmOverride ? (
+                  <div className="mt-4 rounded-lg border-2 border-red-500 bg-background p-3">
+                    <p className="text-sm font-semibold">Are you sure? This {GRADE_LABELS[grade]} garment will be tagged for an outlet and can go on a transfer.</p>
+                    <p className="mt-1 text-xs text-muted-foreground">The override is recorded on the garment under your name.</p>
+                    <div className="mt-3 flex justify-center gap-2">
+                      <Button type="button" variant="outline" onClick={() => setConfirmOverride(false)}>No, keep it off the outlets</Button>
+                      <Button type="button" variant="destructive" onClick={() => { setOutletOverride(true); setConfirmOverride(false); }}>Yes, send it to the outlet</Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button type="button" variant="outline" size="sm" className="mt-4" onClick={() => setConfirmOverride(true)}>Send it to the outlet anyway…</Button>
+                )}
+              </div>
+            )}
+            {outletOverride && channel === "outlet" && !rejected && ref != null && GRADE_RANK[grade] < GRADE_RANK[ref.outlet_min_grade] && (
+              <p className="rounded-md border border-red-400 bg-red-50 px-3 py-2 text-sm dark:bg-red-950/40" role="status">
+                <span className="font-semibold">Outlet override on</span> — this {GRADE_LABELS[grade]} garment will be tagged for an outlet. <button type="button" className="underline" onClick={() => setOutletOverride(false)}>Undo</button>
+              </p>
+            )}
 
             {!rejected && (
               <label className={cn("flex items-start gap-3 rounded-md border p-3 text-sm", rareFind && "border-amber-500 bg-amber-50 dark:bg-amber-950/40")}>

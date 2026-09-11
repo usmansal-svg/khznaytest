@@ -6,7 +6,7 @@
 
 import ExcelJS from "exceljs";
 
-import type { Settings } from "@/lib/pricing/constants";
+import { OUTLET_GRADES, type Settings } from "@/lib/pricing/constants";
 import { computePrice, profileMultiple } from "@/lib/pricing/engine";
 import type { loadPricingContext } from "@/lib/pricing/repo";
 import { SETTINGS_FIELDS } from "@/lib/pricing/settings-fields";
@@ -25,21 +25,22 @@ const YELLOW = { type: "pattern" as const, pattern: "solid" as const, fgColor: {
 /* ------------------------------------------------------------ constants */
 
 /** One row per constant. Percent-style settings (0–1) are shown as percentages so 18 means 18%. */
-type ConstRow = { key: string; label: string; unit: string; pct?: boolean; kind: "number" | "yesno" };
+type ConstRow = { key: string; label: string; unit: string; pct?: boolean; kind: "number" | "yesno" | "grade" };
 const PCT_KEYS = new Set<keyof Settings>(["defaultProvisionalYield", "inputTaxRate", "inputTaxRecover", "salesTax", "targetGP", "rejectedShare", "bulkRecovery", "qcSampleRate"]);
 const CONSTANT_ROWS: ConstRow[] = [
   ...SETTINGS_FIELDS.map((f) => ({ key: f.key, label: f.label, unit: PCT_KEYS.has(f.key) ? "%" : (f.unit ?? ""), pct: PCT_KEYS.has(f.key), kind: "number" as const })),
   { key: "ladder1", label: "Markdown 1 depth", unit: "%", pct: true, kind: "number" },
   { key: "ladder2", label: "Markdown 2 depth", unit: "%", pct: true, kind: "number" },
   { key: "ladder3", label: "Final markdown depth", unit: "%", pct: true, kind: "number" },
+  { key: "outletMinGrade", label: "Lowest condition for outlets", unit: "bnwt / premium / excellent / very_good", kind: "grade" },
   { key: "brandFeedbackEnabled", label: "Brand feedback in the multiple (not in spec v2)", unit: "yes/no", kind: "yesno" },
 ];
 
-function constantValue(s: Settings, key: string): number | boolean {
+function constantValue(s: Settings, key: string): number | boolean | string {
   if (key === "ladder1") return s.ladderDepths[0];
   if (key === "ladder2") return s.ladderDepths[1];
   if (key === "ladder3") return s.ladderDepths[2];
-  return s[key as keyof Settings] as number | boolean;
+  return s[key as keyof Settings] as number | boolean | string;
 }
 
 /* ------------------------------------------------------- sub-categories */
@@ -87,7 +88,7 @@ export function buildPricingWorkbook(ctx: PricingCtx, subs: SheetSubRow[]): Exce
   headerRow(cs, 4);
   for (const r of CONSTANT_ROWS) {
     const v = constantValue(ctx.settings, r.key);
-    cs.addRow({ key: r.key, label: r.label, value: r.kind === "yesno" ? (v ? "yes" : "no") : r.pct ? Math.round((v as number) * 10000) / 100 : v, unit: r.unit });
+    cs.addRow({ key: r.key, label: r.label, value: r.kind === "yesno" ? (v ? "yes" : "no") : r.kind === "grade" ? String(v) : r.pct ? Math.round((v as number) * 10000) / 100 : v, unit: r.unit });
   }
   paint(cs, ["value"]);
 
@@ -235,6 +236,12 @@ export function parsePricingWorkbook(wb: ExcelJS.Workbook, ctx: PricingCtx, subs
         const text = (cellText(row, idx.get("value")) ?? "").trim();
         if (text === "") return;
         const was = constantValue(ctx.settings, key);
+        if (def.kind === "grade") {
+          const to = text.toLowerCase().replace(/\s+/g, "_");
+          if (!(OUTLET_GRADES as string[]).includes(to)) { problems.push(`Constants: "${def.label}" must be bnwt, premium, excellent or very_good.`); return; }
+          if (to !== was) { (next as unknown as Record<string, unknown>)[key] = to; touched = true; changes.push({ sheet: "Constants", row: def.label, field: "Value", from: String(was), to }); }
+          return;
+        }
         if (def.kind === "yesno") {
           const to = yesno(text);
           if (to == null) { problems.push(`Constants: "${def.label}" must be yes or no.`); return; }

@@ -9,7 +9,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { DEFAULT_SETTINGS, GRADES, PROFILES, type GradeCode, type LotCost, type ProfileCode } from "./constants";
+import { DEFAULT_SETTINGS, GRADES, PROFILES, meetsOutletMinimum, type GradeCode, type LotCost, type ProfileCode } from "./constants";
 import {
   blendedBrandUplift,
   blendedDiscount,
@@ -276,6 +276,15 @@ describe("loaded cost and effective margin", () => {
     assert.ok(r.effectiveGpPct < r.gpPct);
     assert.ok(r.effectiveGpPct > DEFAULT_SETTINGS.targetGP - 0.05 && r.effectiveGpPct < DEFAULT_SETTINGS.targetGP + 0.15);
     assert.ok(r.loadedCost > r.landedCost);
+  });
+});
+
+describe("outlet minimum condition", () => {
+  it("Excellent and above go to outlets by default; Very Good and Rejected do not", () => {
+    assert.equal(DEFAULT_SETTINGS.outletMinGrade, "excellent");
+    assert.deepEqual((["bnwt", "premium", "excellent", "very_good", "rejected"] as GradeCode[]).map((g) => meetsOutletMinimum(g, "excellent")), [true, true, true, false, false]);
+    assert.equal(meetsOutletMinimum("very_good", "very_good"), true);
+    assert.equal(meetsOutletMinimum("excellent", "premium"), false);
   });
 });
 

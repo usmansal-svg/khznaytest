@@ -13,6 +13,10 @@
 import { NextResponse } from "next/server";
 
 import { currentStaff, dbFor, requireStaff } from "@/lib/auth/staff";
+import { meetsOutletMinimum, type GradeCode } from "@/lib/pricing/constants";
+import { loadPricingContext } from "@/lib/pricing/repo";
+
+const GRADE_NAMES: Record<GradeCode, string> = { bnwt: "Brand New with Tags", premium: "Premium", excellent: "Excellent", very_good: "Very Good", rejected: "Rejected" };
 
 const SELECT = "id, code, to_outlet_id, status, created_at, sent_at, received_at, note, outlets!transfers_to_outlet_id_fkey(name), transfer_items(item_id, qc, items(id, sku, brand_text, grade_code, size_label, price, price_manual, status, sub_categories(name)))";
 
@@ -104,9 +108,12 @@ export async function PATCH(request: Request) {
 
 async function addSku(db: Awaited<ReturnType<typeof dbFor>>, transferId: number, toOutletId: number, raw: string): Promise<{ ok: true; sku: string } | { ok: false; error: string }> {
   const sku = raw.trim().toUpperCase();
-  const { data: item } = await db.from("items").select("id, sku, status, outlet_id, qc_hold").eq("sku", sku).maybeSingle();
+  const { data: item } = await db.from("items").select("id, sku, status, outlet_id, qc_hold, grade_code, channel, outlet_override").eq("sku", sku).maybeSingle();
   if (!item) return { ok: false, error: "no such SKU" };
   if (item.qc_hold) return { ok: false, error: "held for QC — a senior must regrade and release it first" };
+  const { settings } = await loadPricingContext(db);
+  if (!item.outlet_override && !meetsOutletMinimum(item.grade_code as GradeCode, settings.outletMinGrade)) return { ok: false, error: `is ${GRADE_NAMES[item.grade_code as GradeCode] ?? item.grade_code} — outlets take ${GRADE_NAMES[settings.outletMinGrade]} and above` };
+  if (item.channel === "online") return { ok: false, error: "is online stock — switch its channel on the garment page first" };
   if (item.status === "sold" || item.status === "rejected" || item.status === "pulled") return { ok: false, error: `is ${item.status}` };
   const { data: elsewhere } = await db.from("transfer_items").select("transfer_id, transfers(status, code)").eq("item_id", item.id);
   const open = (elsewhere ?? []).find((e) => (Array.isArray(e.transfers) ? e.transfers[0] : e.transfers)?.status !== "received");
