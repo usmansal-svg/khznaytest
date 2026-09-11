@@ -16,6 +16,7 @@ import { audit } from "@/lib/admin/auth";
 import { currentStaff, dbFor, requireStaff } from "@/lib/auth/staff";
 import { REJECTED, type Adjustment, type GradeCode, meetsOutletMinimum } from "@/lib/pricing/constants";
 import { ADJUSTMENTS, GRADE_CODES, quote } from "@/lib/pricing/quote";
+import { rareReason } from "@/lib/pricing/rare-reasons";
 import { loadLot, loadPricingContext, resolveBrandDb } from "@/lib/pricing/repo";
 import { SEASONS, WEARERS, buildSku, type Season, type Wearer } from "@/lib/pricing/sku";
 
@@ -27,7 +28,9 @@ type Body = {
   adjust_pct?: number;
   below_reason?: string | null;
   is_rare?: boolean;
-  /** Why it is rare — printed on the tag and sent to Shopify. Required when is_rare. */
+  /** Reason codes from lib/pricing/rare-reasons.ts — at least one when is_rare. */
+  rare_reasons?: string[];
+  /** Optional free text: what sets it apart, in the tagger's words. */
   rare_note?: string | null;
   is_unsure?: boolean;
   flaw_note?: string | null;
@@ -96,8 +99,9 @@ export async function POST(request: Request) {
   // by hand, when there is one). An ultra-luxury brand cannot be priced by
   // the sheet, so it needs a manual price.
   const isRare = Boolean(body.is_rare);
+  const rareReasons = isRare ? [...new Set((body.rare_reasons ?? []).filter((c) => rareReason(c)))] : [];
   const rareNote = (body.rare_note ?? "").trim().slice(0, 160);
-  if (isRare && !rareNote) return bad("Say why it is a rare find — it prints on the tag.");
+  if (isRare && !rareReasons.length) return bad("Choose why it is a rare find — the reason prints on the tag.");
   const blocked = !rejected && Boolean(q.block_reason);
   if (blocked && body.price_manual == null) return bad(`${q.block_reason} Set the price by hand.`);
 
@@ -151,7 +155,8 @@ export async function POST(request: Request) {
       brand_tier: brand.tier,
       grade_code: grade,
       is_rare: isRare,
-      rare_note: isRare ? rareNote : null,
+      rare_reasons: rareReasons,
+      rare_note: isRare && rareNote ? rareNote : null,
       is_unsure: Boolean(body.is_unsure),
       flaw_note: body.flaw_note?.trim() || null,
       season,

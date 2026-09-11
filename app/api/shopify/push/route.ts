@@ -10,6 +10,7 @@ import { NextResponse } from "next/server";
 
 import { requireStaff } from "@/lib/auth/staff";
 import { createProduct, shopifyConfig, unlistProduct, updateProduct, ShopifyError } from "@/lib/shopify/client";
+import { rareWebParagraphs } from "@/lib/pricing/rare-reasons";
 import { shopifyTags, shopifyTitle } from "@/lib/shopify/tags";
 
 export async function GET() {
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
 
   const { data: item, error } = await supabase
     .from("items")
-    .select("id, sku, brand_text, brand_tier, grade_code, is_rare, rare_note, season, wearer, size_label, colour, fabric, measurements, price, price_manual, status, photos, description, shopify_product_id, sub_categories(name, categories(name))")
+    .select("id, sku, brand_text, brand_tier, grade_code, is_rare, rare_reasons, rare_note, season, wearer, size_label, colour, fabric, measurements, price, price_manual, status, photos, description, shopify_product_id, sub_categories(name, categories(name))")
     .eq("sku", sku)
     .maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -74,7 +75,7 @@ export async function POST(request: Request) {
     const tags = shopifyTags(taggable);
     const input = {
       title: shopifyTitle(taggable),
-      descriptionHtml: describe(item.description, item.measurements as Record<string, unknown>, item.grade_code, item.size_label, item.is_rare ? (item as { rare_note?: string | null }).rare_note ?? null : null),
+      descriptionHtml: describe(item.description, item.measurements as Record<string, unknown>, item.grade_code, item.size_label, item.is_rare ? rareWebParagraphs((item as { rare_reasons?: string[] | null }).rare_reasons ?? [], (item as { rare_note?: string | null }).rare_note) : null),
       vendor: item.brand_text ?? "Khazanay",
       productType: subCategory,
       tags,
@@ -106,9 +107,9 @@ const GRADE_COPY: Record<string, string> = {
   very_good: "Visibly worn-in fabric with plenty of life left.",
 };
 
-function describe(text: string | null, measurements: Record<string, unknown>, grade: string, size: string | null, rareNote: string | null = null): string {
+function describe(text: string | null, measurements: Record<string, unknown>, grade: string, size: string | null, rare: string[] | null = null): string {
   const parts: string[] = [];
-  if (rareNote) parts.push(`<p><strong>★ Rare find:</strong> ${escape(rareNote)}</p>`);
+  if (rare?.length) parts.push(`<p><strong>★ Rare find</strong></p>`, ...rare.map((r) => `<p>${escape(r)}</p>`));
   if (text?.trim()) parts.push(`<p>${escape(text.trim())}</p>`);
   const m = Object.entries(measurements ?? {}).filter(([, v]) => v !== "" && v != null);
   if (size || m.length) {

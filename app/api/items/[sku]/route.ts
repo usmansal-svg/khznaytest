@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 
 import { currentStaff, dbFor, requireStaff } from "@/lib/auth/staff";
 import { markdownLadder } from "@/lib/pricing/engine";
+import { rareTagLine } from "@/lib/pricing/rare-reasons";
 import { loadPricingContext } from "@/lib/pricing/repo";
 import { MEASUREMENT_FIELDS, type MeasureType } from "@/lib/pricing/sub-categories";
 import { shopifyTags, shopifyTitle } from "@/lib/shopify/tags";
@@ -21,7 +22,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ sku
     supabase
       .from("items")
       .select(
-        "id, sku, brand_id, brand_text, brand_tier, grade_code, is_rare, rare_triggers, rare_note, flaw_note, season, wearer, size_label, colour, fabric, measurements, weight_kg, adjustment, colour_tag, floored_on, landed_cost, price, price_manual, status, tagged_at, outlet_id, channel, photos, description, online_status, shopify_product_id, shopify_handle, shopify_tags, shopify_synced_at, shopify_error, sub_category_slug, outlets(name), lots(code), sub_categories(name, code, measure_type, market_price, category_slug, categories(name))",
+        "id, sku, brand_id, brand_text, brand_tier, grade_code, is_rare, rare_triggers, rare_reasons, rare_note, flaw_note, season, wearer, size_label, colour, fabric, measurements, weight_kg, adjustment, colour_tag, floored_on, landed_cost, price, price_manual, status, tagged_at, outlet_id, channel, photos, description, online_status, shopify_product_id, shopify_handle, shopify_tags, shopify_synced_at, shopify_error, sub_category_slug, outlets(name), lots(code), sub_categories(name, code, measure_type, market_price, category_slug, categories(name))",
       )
       .eq("sku", sku)
       .maybeSingle(),
@@ -71,6 +72,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ sku
       is_rare: data.is_rare,
       rare_triggers: (data as { rare_triggers?: string[] | null }).rare_triggers ?? null,
       rare_note: (data as { rare_note?: string | null }).rare_note ?? null,
+      rare_reasons: (data as { rare_reasons?: string[] | null }).rare_reasons ?? [],
+      rare_tag_line: data.is_rare ? rareTagLine((data as { rare_reasons?: string[] | null }).rare_reasons ?? [], (data as { rare_note?: string | null }).rare_note) : null,
       flaw_note: data.flaw_note,
       season: data.season,
       wearer: data.wearer,

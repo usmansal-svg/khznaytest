@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { GRADE_RANK, type ColourTag, type GradeCode } from "@/lib/pricing/constants";
 import { ADULT_SIZES, KIDS_SIZES } from "@/lib/pricing/kids-sizes";
 import { sizeSeriesFor } from "@/lib/pricing/sizes";
+import { RARE_REASONS, rareTagLine } from "@/lib/pricing/rare-reasons";
 import { GENDER_LABELS, type Gender, type Season, type Wearer } from "@/lib/pricing/sku";
 import { SLEEVE_TYPES } from "@/lib/pricing/sub-categories";
 
@@ -74,9 +75,6 @@ type Saved = {
   brand: string;
   sub_category: string;
 };
-
-/** What sets a rare find apart — quick reasons for the note that prints on the tag. */
-const RARE_WHY = ["Brand", "Vintage / year", "Fabric quality", "Design / style", "Handwork", "Limited edition", "Made in Italy / Japan / USA"];
 
 const GRADE_LABELS: Record<GradeCode, string> = { bnwt: "BNWT", premium: "Premium", excellent: "Excellent", very_good: "Very Good", rejected: "Rejected" };
 const SEASON_OPTIONS: { code: Season; label: string }[] = [{ code: "summer", label: "Summer" }, { code: "winter", label: "Winter" }];
@@ -294,8 +292,8 @@ export function TagForm() {
   // No hand-off: an ultra-luxury brand (blocked) must be priced by hand; a
   // rare find prices as normal or by hand at the senior's price.
   const needsManual = !rejected && (manualOn || blocked);
-  const rareNote = [...rareWhy, rareText.trim()].filter(Boolean).join(" · ").slice(0, 160);
-  const rareOk = !rareFind || rareNote.length > 0;
+  const rareOk = !rareFind || rareWhy.length > 0;
+  const rareLine = rareFind ? rareTagLine(rareWhy, rareText) : "";
   const listPrice = rejected ? 0 : needsManual ? Number(manualPrice) || 0 : price?.price ?? 0;
   const standardPrice = price?.standard_price ?? null;
   const below = !rejected && !blocked && standardPrice != null && listPrice > 0 && listPrice < standardPrice;
@@ -356,7 +354,8 @@ export function TagForm() {
           grade,
           adjust_pct: adjustPct,
           is_rare: rareFind,
-          rare_note: rareFind ? rareNote : null,
+          rare_reasons: rareFind ? rareWhy : [],
+          rare_note: rareFind ? rareText.trim() || null : null,
           below_reason: below ? belowReason : null,
           flaw_note: null,
           season,
@@ -587,12 +586,12 @@ export function TagForm() {
                   {rareFind && (
                     <>
                       <div className="flex flex-wrap gap-1.5">
-                        {RARE_WHY.map((w) => (
-                          <Button key={w} type="button" size="sm" variant={rareWhy.includes(w) ? "secondary" : "outline"} className="h-9 px-3 text-sm md:h-7 md:px-2.5 md:text-xs" onClick={() => setRareWhy((x) => (x.includes(w) ? x.filter((y) => y !== w) : [...x, w]))}>{w}</Button>
+                        {RARE_REASONS.map((w) => (
+                          <Button key={w.code} type="button" size="sm" variant={rareWhy.includes(w.code) ? "secondary" : "outline"} title={w.tag} className="h-9 px-3 text-sm md:h-7 md:px-2.5 md:text-xs" onClick={() => setRareWhy((x) => (x.includes(w.code) ? x.filter((y) => y !== w.code) : [...x, w.code]))}>{w.label}</Button>
                         ))}
                       </div>
-                      <Input value={rareText} onChange={(e) => setRareText(e.target.value)} maxLength={120} placeholder="In a few words, what sets it apart — e.g. 1990s Levi's 501, made in USA" className={cn(!rareOk && "border-amber-500")} />
-                      <p className="text-xs text-muted-foreground">{rareNote ? <>On the tag: <span className="font-medium text-foreground">{rareNote}</span></> : "Pick a reason or write one — it prints on the tag so the customer sees why."}</p>
+                      <Input value={rareText} onChange={(e) => setRareText(e.target.value)} maxLength={80} placeholder="Optional detail — e.g. 1990s Levi's 501, made in USA" />
+                      <p className="text-xs text-muted-foreground">{rareLine ? <>On the tag: <span className="font-medium text-foreground">{rareLine}</span> · the web listing gets the full description for each reason.</> : "Choose at least one reason — the first one's short line prints on the tag; the online listing gets the fuller text."}</p>
                     </>
                   )}
                 </div>

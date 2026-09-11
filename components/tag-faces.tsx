@@ -22,6 +22,7 @@ export type TagItem = {
   status?: string;
   is_rare?: boolean;
   rare_note?: string | null;
+  rare_tag_line?: string | null;
   outlet: string | null;
   market_price?: number | null;
   compare?: { new_price: number; saving_pct: number; source: string; confirmed: boolean } | null;
@@ -67,7 +68,7 @@ export function TagFaces({ item }: { item: TagItem }) {
         {rare && (
           <div className="mt-[2mm] rounded-sm border-2 border-black px-[1.5mm] py-[1mm]">
             <div className="text-[8pt] font-black uppercase tracking-wide">★ Rare find</div>
-            {item.rare_note && <div className="line-clamp-2 text-[5.5pt] leading-tight text-neutral-800">{item.rare_note}</div>}
+            {(item.rare_tag_line || item.rare_note) && <div className="line-clamp-2 text-[5.5pt] leading-tight text-neutral-800">{item.rare_tag_line || item.rare_note}</div>}
           </div>
         )}
         <div className={rare ? "mt-[2mm]" : "mt-[4mm]"}>
