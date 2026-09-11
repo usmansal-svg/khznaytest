@@ -15,11 +15,44 @@
 
 export type ShopifyConfig = { domain: string; token: string; version: string };
 
+const cleanDomain = (d: string) => d.replace(/^https?:\/\//, "").replace(/\/$/, "");
+const apiVersion = () => process.env.SHOPIFY_API_VERSION?.trim() || "2025-01";
+
+/**
+ * Two ways to authenticate, in order of preference:
+ *  1. SHOPIFY_CLIENT_ID + SHOPIFY_CLIENT_SECRET — the Dev Dashboard app's
+ *     credentials. Exchanged for an access token (client credentials grant),
+ *     which lasts 24 hours and is refreshed here before it expires.
+ *  2. SHOPIFY_ADMIN_ACCESS_TOKEN — a fixed token from a legacy custom app.
+ * SHOPIFY_STORE_DOMAIN is the store's .myshopify.com address either way.
+ */
 export function shopifyConfig(): ShopifyConfig | null {
   const domain = process.env.SHOPIFY_STORE_DOMAIN?.trim();
   const token = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN?.trim();
-  if (!domain || !token) return null;
-  return { domain: domain.replace(/^https?:\/\//, "").replace(/\/$/, ""), token, version: process.env.SHOPIFY_API_VERSION?.trim() || "2025-01" };
+  if (!domain) return null;
+  if (token) return { domain: cleanDomain(domain), token, version: apiVersion() };
+  if (process.env.SHOPIFY_CLIENT_ID?.trim() && process.env.SHOPIFY_CLIENT_SECRET?.trim()) return { domain: cleanDomain(domain), token: "", version: apiVersion() };
+  return null;
+}
+
+/** Is Shopify configured at all (either way)? */
+export const shopifyConfigured = () => shopifyConfig() != null;
+
+let cached: { token: string; expiresAt: number } | null = null;
+
+/** The access token to use right now: the fixed one, or a fresh client-credentials token (cached until shortly before expiry). */
+async function accessToken(cfg: ShopifyConfig): Promise<string> {
+  if (cfg.token) return cfg.token;
+  if (cached && cached.expiresAt > Date.now() + 60_000) return cached.token;
+  const res = await fetch(`https://${cfg.domain}/admin/oauth/access_token`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ client_id: process.env.SHOPIFY_CLIENT_ID!.trim(), client_secret: process.env.SHOPIFY_CLIENT_SECRET!.trim(), grant_type: "client_credentials" }),
+  });
+  if (!res.ok) throw new ShopifyError(`Shopify would not issue a token (HTTP ${res.status}): ${(await res.text()).slice(0, 200)}. Check SHOPIFY_CLIENT_ID / SHOPIFY_CLIENT_SECRET and that the app is installed on the store.`);
+  const j = (await res.json()) as { access_token: string; expires_in?: number };
+  cached = { token: j.access_token, expiresAt: Date.now() + (j.expires_in ?? 86400) * 1000 };
+  return cached.token;
 }
 
 type GqlError = { message: string; field?: string[] | null };
@@ -31,9 +64,10 @@ export class ShopifyError extends Error {
 }
 
 export async function gql<T>(cfg: ShopifyConfig, query: string, variables: Record<string, unknown>): Promise<T> {
+  const token = await accessToken(cfg);
   const res = await fetch(`https://${cfg.domain}/admin/api/${cfg.version}/graphql.json`, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-shopify-access-token": cfg.token },
+    headers: { "content-type": "application/json", "x-shopify-access-token": token },
     body: JSON.stringify({ query, variables }),
   });
   if (!res.ok) throw new ShopifyError(`Shopify HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);

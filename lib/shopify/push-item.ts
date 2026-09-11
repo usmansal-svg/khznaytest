@@ -22,7 +22,7 @@ export type PushOutcome = { ok: true; sku: string; product_id: string; handle: s
 
 export async function pushItem(db: SupabaseClient, sku: string, visibility: Visibility): Promise<PushOutcome> {
   const cfg = shopifyConfig();
-  if (!cfg) return { ok: false, sku, error: "Shopify is not connected. Set SHOPIFY_STORE_DOMAIN and SHOPIFY_ADMIN_ACCESS_TOKEN in Vercel." };
+  if (!cfg) return { ok: false, sku, error: "Shopify is not connected. Set SHOPIFY_STORE_DOMAIN with SHOPIFY_CLIENT_ID and SHOPIFY_CLIENT_SECRET in Vercel." };
   const { data: item, error } = await db.from("items").select(SELECT).eq("sku", sku).maybeSingle();
   if (error) return { ok: false, sku, error: error.message };
   if (!item) return { ok: false, sku, error: "No such garment." };

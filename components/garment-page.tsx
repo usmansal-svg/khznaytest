@@ -236,7 +236,7 @@ export function GarmentPage({ sku }: { sku: string }) {
           <CardHeader className="pb-3">
             <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
               <span>Online listing {item.online_status && <span className="ml-2 rounded-full border px-2 py-0.5 text-xs font-normal capitalize">{item.online_status}</span>}</span>
-              {shopify && !shopify.configured && <span className="text-xs font-normal text-amber-600 dark:text-amber-400">Shopify not connected — set SHOPIFY_STORE_DOMAIN and SHOPIFY_ADMIN_ACCESS_TOKEN in Vercel</span>}
+              {shopify && !shopify.configured && <span className="text-xs font-normal text-amber-600 dark:text-amber-400">Shopify not connected — set SHOPIFY_STORE_DOMAIN, SHOPIFY_CLIENT_ID and SHOPIFY_CLIENT_SECRET in Vercel</span>}
             </CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-[1fr_320px]">
