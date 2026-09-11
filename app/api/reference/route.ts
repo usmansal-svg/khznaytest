@@ -21,12 +21,13 @@ export async function GET() {
   const supabase = await dbFor(me);
   const ctx = await loadPricingContext(supabase);
   const since = new Date(Date.now() - 90 * 86400_000).toISOString();
-  const [categoriesRes, outletsRes, lots, recentRes, quickRes] = await Promise.all([
+  const [categoriesRes, outletsRes, lots, recentRes, quickRes, byCatRes] = await Promise.all([
     supabase.from("categories").select("slug, name, sort_order, gender").not("gender", "is", null).eq("active", true).order("sort_order"),
     supabase.from("outlets").select("id, name, is_online").eq("active", true).order("id"),
     loadOpenLots(supabase, ctx.settings),
     supabase.from("items").select("brand_text").gte("tagged_at", since).not("brand_text", "is", null).limit(5000),
     supabase.from("brands").select("name, logo_url").eq("active", true).not("quick_pick_order", "is", null).order("quick_pick_order").limit(20),
+    supabase.from("brand_quick_picks").select("category_name, position, brands(name, logo_url, active)").order("position"),
   ]);
 
   // Quick-pick brands: chosen by hand on the Brands page (Usman's call —
@@ -61,6 +62,17 @@ export async function GET() {
   return NextResponse.json({
     genders: GENDERS.map((g) => ({ code: g, name: GENDER_LABELS[g] })),
     top_brands: topBrands.map((name) => ({ name, logo_url: logos.get(name) ?? null })),
+    // Per-category quick picks, keyed by category name; the form uses the
+    // list for the selected category and falls back to top_brands.
+    brand_picks_by_category: (() => {
+      const out: Record<string, { name: string; logo_url: string | null }[]> = {};
+      for (const p of byCatRes.data ?? []) {
+        const b = (Array.isArray(p.brands) ? p.brands[0] : p.brands) as { name: string; logo_url: string | null; active: boolean } | null;
+        if (!b || !b.active) continue;
+        (out[p.category_name] ??= []).push({ name: b.name, logo_url: b.logo_url ?? null });
+      }
+      return out;
+    })(),
     categories: categoriesRes.data ?? [],
     sub_categories: ctx.subCategories
       .filter((s) => s.active)

@@ -22,6 +22,7 @@ import { SLEEVE_TYPES } from "@/lib/pricing/sub-categories";
 type Reference = {
   genders: { code: Gender; name: string }[];
   top_brands: { name: string; logo_url: string | null }[];
+  brand_picks_by_category: Record<string, { name: string; logo_url: string | null }[]>;
   categories: { slug: string; name: string; gender: Gender; sort_order: number }[];
   sub_categories: {
     slug: string;
@@ -209,6 +210,13 @@ export function TagForm() {
     requestAnimationFrame(() => brandRef.current?.focus());
   }
   const isKids = KIDS.has(wearer);
+  // Quick-pick brands follow the category: sports piles want Nike and Puma,
+  // shirt piles want Calvin Klein and Zara. The general list is the fallback.
+  const quickBrands = useMemo(() => {
+    const catName = ref?.categories.find((c) => c.slug === category)?.name;
+    const list = catName ? ref?.brand_picks_by_category[catName] : undefined;
+    return list && list.length ? list : ref?.top_brands ?? [];
+  }, [ref, category]);
   const sizeSeries = useMemo(() => sizeSeriesFor(selectedSub ?? null, KIDS_SIZES.map((k) => k.label), isKids), [selectedSub, isKids]);
   const activeSeries = sizeSeries.find((s) => s.code === sizeSeriesCode) ?? sizeSeries[0];
   // A new garment type resets the switch to that type's own series.
@@ -522,9 +530,9 @@ export function TagForm() {
                 <div className="flex gap-2">
                   <Input ref={brandRef} list="brands" value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Tap a brand below, or type a rarer one" autoComplete="off" autoFocus onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); sizeRef.current?.focus(); } }} />
                 </div>
-                {ref.top_brands.length > 0 && (
+                {quickBrands.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
-                    {ref.top_brands.slice(0, moreBrands ? 20 : 10).map((b) => {
+                    {quickBrands.slice(0, moreBrands ? 20 : 10).map((b) => {
                       const on = brand.trim().toLowerCase() === b.name.toLowerCase();
                       return (
                         <Button key={b.name} type="button" variant={on ? "default" : "outline"} className={cn("h-auto min-w-[4.5rem] flex-col gap-1 px-2 py-1.5", b.logo_url ? "" : "justify-center")} onClick={() => { setBrand(b.name); requestAnimationFrame(() => sizeRef.current?.focus()); }}>
@@ -538,7 +546,7 @@ export function TagForm() {
                         </Button>
                       );
                     })}
-                    {ref.top_brands.length > 10 && (
+                    {quickBrands.length > 10 && (
                       <Button type="button" size="sm" variant="ghost" className="h-9 px-2 text-sm text-muted-foreground md:h-7 md:text-xs" onClick={() => setMoreBrands((m) => !m)}>{moreBrands ? "Fewer brands" : "More brands…"}</Button>
                     )}
                   </div>

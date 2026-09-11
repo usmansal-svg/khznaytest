@@ -54,7 +54,26 @@ export function BrandsAdmin() {
       await load();
     } catch (e) { setMessage({ tone: "error", text: e instanceof Error ? e.message : "Failed." }); } finally { setBusy(false); }
   }
-  const quickNames = quick.map((b) => b.name);
+  // Per-category lists: pick a category, edit its list; "All categories"
+  // edits the general fallback (brands.quick_pick_order).
+  const [picks, setPicks] = useState<{ lists: Record<string, string[]>; categories: string[] } | null>(null);
+  const [scope, setScope] = useState<string>("");
+  const loadPicks = () => fetch("/api/admin/brands/quick-picks").then((r) => r.json()).then((j) => setPicks({ lists: j.lists ?? {}, categories: j.categories ?? [] }));
+  useEffect(() => { void loadPicks(); }, []);
+  const scopedNames = scope ? (picks?.lists[scope] ?? []) : quick.map((b) => b.name);
+  const scopedBrands = scopedNames.map((n) => (brands ?? []).find((b) => b.name === n)).filter((b): b is Brand => Boolean(b));
+  async function saveScoped(names: string[]) {
+    if (!scope) return saveQuick(names);
+    setBusy(true); setMessage(null);
+    try {
+      const res = await fetch("/api/admin/brands/quick-picks", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ category_name: scope, quick_pick: names }) });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error ?? "Failed.");
+      setMessage({ tone: "ok", text: `Quick picks for ${scope} saved: ${j.quick_pick.length} brand${j.quick_pick.length === 1 ? "" : "s"}.` });
+      await loadPicks();
+    } catch (e) { setMessage({ tone: "error", text: e instanceof Error ? e.message : "Failed." }); } finally { setBusy(false); }
+  }
+  const quickNames = scopedNames;
   const [logoFor, setLogoFor] = useState<string | null>(null);
   const logoRef = useRef<HTMLInputElement>(null);
   async function uploadLogo(name: string, file: File) {
@@ -72,8 +91,8 @@ export function BrandsAdmin() {
     setBusy(true);
     try { await fetch("/api/admin/brands/logo", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ name }) }); await load(); } finally { setBusy(false); }
   }
-  const move = (i: number, d: -1 | 1) => { const n = [...quickNames]; const j = i + d; if (j < 0 || j >= n.length) return; [n[i], n[j]] = [n[j], n[i]]; void saveQuick(n); };
-  const addQuick = () => { const name = quickAdd.trim(); if (!name || quickNames.some((q) => q.toLowerCase() === name.toLowerCase())) return; if (quickNames.length >= 20) { setMessage({ tone: "error", text: "Twenty is the most the form shows — remove one first." }); return; } void saveQuick([...quickNames, name]); setQuickAdd(""); };
+  const move = (i: number, d: -1 | 1) => { const n = [...quickNames]; const j = i + d; if (j < 0 || j >= n.length) return; [n[i], n[j]] = [n[j], n[i]]; void saveScoped(n); };
+  const addQuick = () => { const name = quickAdd.trim(); if (!name || quickNames.some((q) => q.toLowerCase() === name.toLowerCase())) return; if (quickNames.length >= 20) { setMessage({ tone: "error", text: "Twenty is the most the form shows — remove one first." }); return; } void saveScoped([...quickNames, name]); setQuickAdd(""); };
   const deactivate = (b: Brand) => window.confirm(`Remove ${b.name} from the list? Garments already tagged keep the name.`) && post({ brands: [{ name: b.name, tier: b.tier, active: false }] });
 
   if (!brands) return <p className="text-muted-foreground">Loading…</p>;
@@ -88,12 +107,18 @@ export function BrandsAdmin() {
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Quick-pick buttons on the tag form <span className="font-normal text-muted-foreground">· {quick.length} of 20</span></CardTitle>
-          <p className="text-xs text-muted-foreground">The first ten show under Brand; the next ten appear under <em>More brands…</em>. Order here is the button order. With none chosen, the form shows the most-tagged brands of the last 90 days.</p>
+          <CardTitle className="flex flex-wrap items-center gap-3 text-base">
+            <span>Quick-pick buttons on the tag form <span className="font-normal text-muted-foreground">· {scopedBrands.length} of 20</span></span>
+            <select value={scope} onChange={(e) => { setScope(e.target.value); setQuickAdd(""); }} className="h-8 rounded-md border border-input bg-transparent px-2 text-sm font-normal">
+              <option value="">All categories (fallback)</option>
+              {(picks?.categories ?? []).map((c) => <option key={c} value={c}>{c}{picks?.lists[c]?.length ? ` · ${picks.lists[c].length}` : ""}</option>)}
+            </select>
+          </CardTitle>
+          <p className="text-xs text-muted-foreground">Each category can have its own list — sports piles get Nike and Puma, shirt piles get Calvin Klein and Zara. A category with no list of its own uses the fallback list. The first ten show under Brand; the next ten appear under <em>More brands…</em>; order here is the button order.</p>
         </CardHeader>
         <CardContent className="space-y-3">
           <ol className="flex flex-wrap gap-2">
-            {quick.map((b, i) => (
+            {scopedBrands.map((b, i) => (
               <li key={b.id} className={cn("flex items-center gap-1 rounded-md border px-2 py-1 text-sm", i >= 10 && "border-dashed text-muted-foreground")}>
                 <span className="mr-1 text-xs tabular-nums text-muted-foreground">{i + 1}</span>
                 <button type="button" disabled={busy} title={b.logo_url ? "Replace the logo" : "Add a logo"} onClick={() => { setLogoFor(b.name); logoRef.current?.click(); }} className="mr-1 flex h-7 w-10 items-center justify-center overflow-hidden rounded border border-dashed bg-white text-[10px] text-muted-foreground hover:border-solid">
@@ -103,17 +128,17 @@ export function BrandsAdmin() {
                 {b.name}
                 {b.logo_url && <button type="button" disabled={busy} onClick={() => removeLogo(b.name)} className="rounded px-1 text-[10px] text-muted-foreground hover:bg-muted" title="Remove the logo">no logo</button>}
                 <button type="button" disabled={busy || i === 0} onClick={() => move(i, -1)} className="rounded px-1 text-xs text-muted-foreground hover:bg-muted disabled:opacity-30" title="Move earlier">‹</button>
-                <button type="button" disabled={busy || i === quick.length - 1} onClick={() => move(i, 1)} className="rounded px-1 text-xs text-muted-foreground hover:bg-muted disabled:opacity-30" title="Move later">›</button>
-                <button type="button" disabled={busy} onClick={() => saveQuick(quickNames.filter((n) => n !== b.name))} className="rounded px-1 text-xs text-muted-foreground hover:bg-muted" title="Remove from quick picks">×</button>
+                <button type="button" disabled={busy || i === scopedBrands.length - 1} onClick={() => move(i, 1)} className="rounded px-1 text-xs text-muted-foreground hover:bg-muted disabled:opacity-30" title="Move later">›</button>
+                <button type="button" disabled={busy} onClick={() => saveScoped(quickNames.filter((n) => n !== b.name))} className="rounded px-1 text-xs text-muted-foreground hover:bg-muted" title="Remove from quick picks">×</button>
               </li>
             ))}
-            {quick.length === 0 && <li className="text-sm text-muted-foreground">None chosen yet.</li>}
+            {scopedBrands.length === 0 && <li className="text-sm text-muted-foreground">None chosen yet{scope ? " — the fallback list shows for this category" : ""}.</li>}
           </ol>
-          <input ref={logoRef} type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f && logoFor) void uploadLogo(logoFor, f); }} />
-          <p className="text-xs text-muted-foreground">Tap the box in front of a brand to add or replace its logo (PNG, JPG, SVG or WebP, under 1 MB; about 200 pixels wide is plenty). It shows above the name on the tag form.</p>
+          <input ref={logoRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f && logoFor) void uploadLogo(logoFor, f); }} />
+          <p className="text-xs text-muted-foreground">Tap the box in front of a brand to add or replace its logo (PNG, JPG or WebP, under 1 MB; about 400 pixels wide is plenty). It shows above the name on the tag form.</p>
           <form className="flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); addQuick(); }}>
             <Input list="quick-brands" value={quickAdd} onChange={(e) => setQuickAdd(e.target.value)} placeholder="Add a brand from the list…" className="h-9 w-64" autoComplete="off" />
-            <datalist id="quick-brands">{(brands ?? []).filter((b) => b.active && b.quick_pick_order == null).map((b) => <option key={b.id} value={b.name} />)}</datalist>
+            <datalist id="quick-brands">{(brands ?? []).filter((b) => b.active && !quickNames.includes(b.name)).map((b) => <option key={b.id} value={b.name} />)}</datalist>
             <Button type="submit" size="sm" disabled={busy || !quickAdd.trim() || !(brands ?? []).some((b) => b.active && b.name.toLowerCase() === quickAdd.trim().toLowerCase())}>Add to quick picks</Button>
           </form>
         </CardContent>

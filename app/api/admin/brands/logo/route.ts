@@ -1,6 +1,6 @@
 /**
  * POST /api/admin/brands/logo — multipart { name, file } sets a brand's logo
- * (PNG/JPG/SVG/WebP up to 1 MB), stored in the public `garments` bucket under
+ * (PNG/JPG/WebP up to 1 MB), stored in the public `garments` bucket under
  * brand-logos/. DELETE { name } clears it. Shown on the tag form's
  * quick-pick buttons so a tagger recognises the brand at a glance.
  */
@@ -11,7 +11,7 @@ import { audit, requireManager } from "@/lib/admin/auth";
 
 export const instant = false;
 
-const TYPES: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/svg+xml": "svg", "image/webp": "webp" };
+const TYPES: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" }; // the bucket does not take SVG
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "brand";
 
 export async function POST(request: Request) {
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
   const file = form.get("file");
   if (!name || !(file instanceof File)) return NextResponse.json({ error: "Brand name and a file are required." }, { status: 400 });
   const ext = TYPES[file.type];
-  if (!ext) return NextResponse.json({ error: "Use a PNG, JPG, SVG or WebP image." }, { status: 400 });
+  if (!ext) return NextResponse.json({ error: "Use a PNG, JPG or WebP image." }, { status: 400 });
   if (file.size > 1024 * 1024) return NextResponse.json({ error: "Keep the logo under 1 MB — a 200-pixel image is plenty." }, { status: 400 });
 
   const db = gate.db;
