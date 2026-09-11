@@ -11,7 +11,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { loadRareReasons, rareWebParagraphs } from "@/lib/pricing/rare-reasons";
-import { createProduct, setVisibility, shopifyConfig, ShopifyError, updateProduct, type Visibility } from "@/lib/shopify/client";
+import { createProduct, findProductBySku, setVisibility, shopifyConfig, ShopifyError, updateProduct, type Visibility } from "@/lib/shopify/client";
 import { shopifyTags, shopifyTitle } from "@/lib/shopify/tags";
 
 type Photo = { url: string; path: string; kind: "original" | "cutout"; source?: string; taken_at?: string };
@@ -49,7 +49,14 @@ export async function pushItem(db: SupabaseClient, sku: string, visibility: Visi
       vendor: item.brand_text ?? "Khazanay", productType: subCategory, tags, sku, price, imageUrls,
       status: (visibility === "draft" ? "DRAFT" : "ACTIVE") as "DRAFT" | "ACTIVE", locationId,
     };
-    const result = item.shopify_product_id ? await updateProduct(cfg, item.shopify_product_id, { ...input, imageUrls: [] }) : await createProduct(cfg, input);
+    // Reuse a product that already exists for this SKU (a half-finished earlier upload) rather than making a second one.
+    let productId = item.shopify_product_id as string | null;
+    if (!productId) {
+      const existing = await findProductBySku(cfg, sku);
+      if (existing) { productId = existing.productId; await db.from("items").update({ shopify_product_id: existing.productId, shopify_handle: existing.handle }).eq("id", item.id); }
+    }
+    const result = productId ? await updateProduct(cfg, productId, { ...input, imageUrls: productId === item.shopify_product_id ? [] : imageUrls }) : await createProduct(cfg, input);
+    if (!productId) await db.from("items").update({ shopify_product_id: result.productId, shopify_handle: result.handle }).eq("id", item.id);
     await setVisibility(cfg, result.productId, visibility);
     const onWeb = visibility === "online" || visibility === "both";
     await db.from("items").update({

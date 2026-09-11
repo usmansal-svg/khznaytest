@@ -153,6 +153,17 @@ export async function updateProduct(cfg: ShopifyConfig, productId: string, input
   return { productId: product.id, handle: product.handle, variantId: variant.id, inventoryItemId: variant.inventoryItem.id, adminUrl: adminUrl(cfg, product.id) };
 }
 
+/** A product already on the store carrying this SKU on its variant — so a retry never creates a duplicate. */
+export async function findProductBySku(cfg: ShopifyConfig, sku: string): Promise<{ productId: string; handle: string; variantId: string; inventoryItemId: string } | null> {
+  const data = await gql<{ productVariants: { nodes: { id: string; inventoryItem: { id: string }; product: { id: string; handle: string } }[] } }>(
+    cfg,
+    `query bySku($q: String!) { productVariants(first: 1, query: $q) { nodes { id inventoryItem { id } product { id handle } } } }`,
+    { q: `sku:${JSON.stringify(sku)}` },
+  );
+  const v = data.productVariants.nodes[0];
+  return v ? { productId: v.product.id, handle: v.product.handle, variantId: v.id, inventoryItemId: v.inventoryItem.id } : null;
+}
+
 /** Every location on the store, for mapping outlets to where their Shopify POS pulls stock from. */
 export async function listLocations(cfg: ShopifyConfig): Promise<{ id: string; name: string; active: boolean }[]> {
   const data = await gql<{ locations: { nodes: { id: string; name: string; isActive: boolean }[] } }>(cfg, `query { locations(first: 50) { nodes { id name isActive } } }`, {});
@@ -216,6 +227,15 @@ async function setVariant(cfg: ShopifyConfig, productId: string, variantId: stri
 
 async function setQuantity(cfg: ShopifyConfig, inventoryItemId: string, quantity: number, location?: string) {
   const locationId = location ?? (await primaryLocationId(cfg));
+  // An inventory item must be stocked ("activated") at a location before a quantity can be set there.
+  const act = await gql<{ inventoryActivate: { userErrors: GqlError[] } }>(
+    cfg,
+    `mutation act($inventoryItemId: ID!, $locationId: ID!, $available: Int) { inventoryActivate(inventoryItemId: $inventoryItemId, locationId: $locationId, available: $available) { userErrors { field message } } }`,
+    { inventoryItemId, locationId, available: quantity },
+  );
+  // "already active" is not an error for us; anything else is.
+  const real = (act.inventoryActivate.userErrors ?? []).filter((e) => !/already/i.test(e.message));
+  userErrors(real, "inventoryActivate");
   const data = await gql<{ inventorySetQuantities: { userErrors: GqlError[] } }>(
     cfg,
     `mutation qty($input: InventorySetQuantitiesInput!) { inventorySetQuantities(input: $input) { userErrors { field message } } }`,
