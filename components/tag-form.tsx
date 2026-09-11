@@ -555,13 +555,13 @@ export function TagForm() {
                 <datalist id="brands">{brandHits.map((b) => <option key={b.name} value={b.name}>{tierLabel(b.tier)}</option>)}</datalist>
               </Field>
               <div className="grid min-w-0 content-start gap-1.5 sm:col-span-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-3">
                   <Label>Size on label {size && <span className="font-normal text-muted-foreground">· {size}</span>}</Label>
-                  <div className="flex gap-1">
+                  <div className="flex gap-1 rounded-md border p-0.5">
                     {sizeSeries.map((s) => (
-                      <Button key={s.code} type="button" size="sm" variant={s.code === activeSeries.code && !sizeOther ? "secondary" : "ghost"} className="h-8 px-2.5 text-xs" onClick={() => { setSizeSeriesCode(s.code); setSizeOther(false); }}>{s.label}</Button>
+                      <Button key={s.code} type="button" size="sm" variant={s.code === activeSeries.code && !sizeOther ? "secondary" : "ghost"} className="h-7 px-2.5 text-xs" onClick={() => { setSizeSeriesCode(s.code); setSizeOther(false); }}>{s.label}</Button>
                     ))}
-                    <Button type="button" size="sm" variant={sizeOther ? "secondary" : "ghost"} className="h-8 px-2.5 text-xs" onClick={() => { setSizeOther(true); requestAnimationFrame(() => sizeRef.current?.focus()); }}>Other…</Button>
+                    <Button type="button" size="sm" variant={sizeOther ? "secondary" : "ghost"} className="h-7 px-2.5 text-xs" onClick={() => { setSizeOther(true); requestAnimationFrame(() => sizeRef.current?.focus()); }}>Other…</Button>
                   </div>
                 </div>
                 {!sizeOther ? (
