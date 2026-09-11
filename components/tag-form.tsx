@@ -381,7 +381,7 @@ export function TagForm() {
         void save();
       }}
       onKeyDown={onKeyDown}
-      className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[1fr_360px]"
+      className="mx-auto grid max-w-7xl gap-6 lg:grid-cols-[minmax(0,1fr)_260px]"
     >
       <div className="space-y-6">
         {/* ---------------------------------------------------- session */}
@@ -424,12 +424,12 @@ export function TagForm() {
                     : "No open lots — ask a manager to create one"
               }
             >
-              <div className="flex items-center gap-2">
-                <select className={selectClass} value={lotId} disabled={lotLocked} onChange={(e) => setLotId(e.target.value)}>
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <select className={cn(selectClass, "min-w-0 flex-1 basis-40")} value={lotId} disabled={lotLocked} onChange={(e) => setLotId(e.target.value)}>
                   {ref.lots.length === 0 && <option value="">No open lots</option>}
                   {ref.lots.map((l) => (
                     <option key={l.id} value={l.id}>
-                      {l.code} · {l.supplier} · {l.basis}
+                      {l.code} · {l.supplier}
                     </option>
                   ))}
                 </select>
@@ -629,21 +629,20 @@ export function TagForm() {
       {/* --------------------------------------------------------- price */}
       <div className="space-y-4 lg:sticky lg:top-6 lg:self-start max-lg:sticky max-lg:bottom-0 max-lg:z-10 max-lg:-mx-4 max-lg:border-t max-lg:bg-background max-lg:p-4">
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center justify-between text-base">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center justify-between text-sm">
               Price
               {pricing && <span className="text-xs font-normal text-muted-foreground">updating…</span>}
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-3">
             {price?.error && <Note tone="error">{price.error}</Note>}
             {handoff ? (
               <Note tone="warn">{rareFind ? "Rare find — no price now. Save prints a hold tag; a senior prices it with the garment in hand." : price?.block_reason}</Note>
             ) : (
               <div>
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Our price</div>
-                <div className="text-4xl font-bold tabular-nums">{listPrice ? pkr(listPrice) : "—"}</div>
-                <div className="text-xs text-muted-foreground">Price includes sales tax</div>
+                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Our price · incl. tax</div>
+                <div className="text-2xl font-bold tabular-nums">{listPrice ? pkr(listPrice) : "—"}</div>
               </div>
             )}
 
@@ -654,7 +653,7 @@ export function TagForm() {
 
 
             {price && !price.restricted && price.markdowns?.length ? (
-              <dl className="space-y-1 border-t pt-3 text-sm">
+              <dl className="space-y-0.5 border-t pt-2 text-xs">
                 {price.markdowns.map((m) => (
                   <div key={m.stage} className="flex justify-between">
                     <dt className="text-muted-foreground">{MARKDOWN_LABELS[m.stage] ?? m.stage}</dt>
@@ -665,7 +664,7 @@ export function TagForm() {
             ) : null}
 
             {price && !price.restricted && (
-              <dl className="space-y-1 border-t pt-3 text-sm">
+              <dl className="space-y-0.5 border-t pt-2 text-xs">
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Landed cost</dt>
                   <dd className="tabular-nums">{pkr(price.landed_cost ?? 0)}</dd>
@@ -723,15 +722,14 @@ export function TagForm() {
             ) : (
               <>
             {outlet && (
-            <div className="flex items-center gap-4">
-              <button type="button" onClick={() => photoRef.current?.click()} className={cn("flex size-24 shrink-0 items-center justify-center overflow-hidden rounded-md border-2 border-dashed", photo ? "border-transparent" : "border-amber-500")}>
+            <div className="flex items-center gap-3">
+              <button type="button" onClick={() => photoRef.current?.click()} className={cn("flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-md border-2 border-dashed", photo ? "border-transparent" : "border-amber-500")}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                {photo ? <img src={photo.url} alt="garment" className="size-full object-cover" /> : <Camera className="size-8 text-muted-foreground" />}
+                {photo ? <img src={photo.url} alt="garment" className="size-full object-cover" /> : <Camera className="size-5 text-muted-foreground" />}
               </button>
-              <div className="grid gap-1">
-                <Label>Photo <span className="font-normal text-muted-foreground">· last step, one is enough</span></Label>
-                <Button type="button" variant={photo ? "outline" : "default"} className="h-11 w-fit" onClick={() => photoRef.current?.click()}><Camera className="size-4" /> {photo ? "Retake" : "Take photo"}</Button>
-                <p className="text-xs text-muted-foreground">{photo ? "Saved with the garment on Save." : "A reference shot on the iPad — not for customers. The garment can't be saved without one."}</p>
+              <div className="grid min-w-0 gap-1">
+                <Button type="button" variant={photo ? "outline" : "default"} className="h-10 w-fit" onClick={() => photoRef.current?.click()}><Camera className="size-4" /> {photo ? "Retake photo" : "Take photo"}</Button>
+                <p className="text-[11px] leading-tight text-muted-foreground">{photo ? "Saved with the garment." : "Reference shot, required · last step before Save"}</p>
               </div>
             </div>
             )}
@@ -756,7 +754,7 @@ export function TagForm() {
 /* -------------------------------------------------------------- helpers */
 
 const selectClass =
-  "flex h-11 md:h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base md:text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
+  "flex h-11 md:h-9 w-full min-w-0 max-w-full rounded-md border border-input bg-transparent px-3 py-1 text-base md:text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
 
 const COLOURS = ["Black", "White", "Grey", "Navy", "Blue", "Red", "Green", "Beige", "Brown", "Pink", "Yellow", "Orange", "Purple", "Multi"];
 
@@ -771,7 +769,7 @@ function kidsHint(size: string) {
 
 function Field({ label, hint, hintTone, small, children }: { label: string; hint?: string; hintTone?: "warn"; small?: boolean; children: React.ReactNode }) {
   return (
-    <div className="grid gap-1.5">
+    <div className="grid min-w-0 gap-1.5">
       <Label className={cn(small && "text-xs")}>{label}</Label>
       {children}
       {hint && <p className={cn("text-xs", hintTone === "warn" ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")}>{hint}</p>}

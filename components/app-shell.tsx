@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Activity, ArrowRightLeft, Camera, ClipboardCheck, LayoutDashboard, Package, Search, SlidersHorizontal, Tag, Tags, Users, type LucideIcon } from "lucide-react";
+import { Activity, ArrowRightLeft, Camera, ClipboardCheck, PanelLeftClose, PanelLeftOpen, LayoutDashboard, Package, Search, SlidersHorizontal, Tag, Tags, Users, type LucideIcon } from "lucide-react";
 
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { cn } from "@/lib/utils";
@@ -46,6 +46,15 @@ export function AppShell({ auth, children }: { auth: React.ReactNode; children: 
       })
       .catch(() => {});
   }, [pathname]);
+  // The sidebar can be tucked away so the tag form gets the whole iPad.
+  // Remembered per device; the tagger rarely needs the menu.
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    try { setCollapsed(localStorage.getItem("khz_nav") === "closed"); } catch { /* no storage */ }
+  }, []);
+  function toggleNav() {
+    setCollapsed((c) => { try { localStorage.setItem("khz_nav", c ? "open" : "closed"); } catch { /* fine */ } return !c; });
+  }
   const rank = role ? RANK[role] : 0;
   const can = (item: NavItem) => !item.min || rank >= RANK[item.min];
   const work = WORK.filter(can);
@@ -53,10 +62,11 @@ export function AppShell({ auth, children }: { auth: React.ReactNode; children: 
 
   return (
     <div className="flex min-h-screen bg-muted/40">
-      <aside className="hidden w-56 shrink-0 flex-col border-r bg-background print:hidden md:flex">
-        <Link href="/tag" className="flex h-14 items-center border-b px-5 text-base font-bold">
-          Khazanay
-        </Link>
+      <aside className={cn("hidden w-56 shrink-0 flex-col border-r bg-background print:hidden", !collapsed && "md:flex")}>
+        <div className="flex h-14 items-center justify-between border-b pl-5 pr-2">
+          <Link href="/tag" className="text-base font-bold">Khazanay</Link>
+          <button type="button" onClick={toggleNav} title="Hide the menu" className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground"><PanelLeftClose className="size-5" /></button>
+        </div>
         <nav className="flex-1 space-y-6 p-3">
           <NavGroup title="Work" items={work} pathname={pathname} />
           {admin.length > 0 && <NavGroup title="Admin" items={admin} pathname={pathname} />}
@@ -82,7 +92,10 @@ export function AppShell({ auth, children }: { auth: React.ReactNode; children: 
             ))}
           </nav>
         </header>
-        <main className="flex-1 p-4 md:p-6">{children}</main>
+        {collapsed && (
+          <button type="button" onClick={toggleNav} title="Show the menu" className="fixed left-2 top-2 z-30 hidden rounded-md border bg-background p-2 text-muted-foreground shadow-sm hover:bg-muted hover:text-foreground print:hidden md:block"><PanelLeftOpen className="size-5" /></button>
+        )}
+        <main className={cn("flex-1 p-4 md:p-6", collapsed && "md:pt-14")}>{children}</main>
       </div>
     </div>
   );
