@@ -14,10 +14,36 @@ type Tier = (typeof TIERS)[number];
 
 export async function GET() {
   const supabase = await createClient();
-  const { data, error } = await supabase.from("brands").select("id, name, tier, active, source, added_at, staff:added_by(name)").order("name");
+  const { data, error } = await supabase.from("brands").select("id, name, tier, active, source, added_at, quick_pick_order, staff:added_by(name)").order("name");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   const one = (v: unknown) => (Array.isArray(v) ? v[0] : v) as { name: string } | null | undefined;
-  return NextResponse.json({ brands: (data ?? []).map((b) => ({ id: b.id, name: b.name, tier: b.tier, active: b.active, source: b.source, added_at: b.added_at, added_by: one(b.staff)?.name ?? null })) });
+  return NextResponse.json({ brands: (data ?? []).map((b) => ({ id: b.id, name: b.name, tier: b.tier, active: b.active, source: b.source, added_at: b.added_at, quick_pick_order: b.quick_pick_order ?? null, added_by: one(b.staff)?.name ?? null })) });
+}
+
+/**
+ * PATCH /api/admin/brands { quick_pick: ["Nike", "Adidas", …] } — the quick-pick
+ * buttons on the tag form, in order. Everything not listed is cleared.
+ */
+export async function PATCH(request: Request) {
+  let body: { quick_pick?: string[] };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Body must be JSON." }, { status: 400 });
+  }
+  const gate = await requireManager();
+  if ("response" in gate) return gate.response;
+  const names = [...new Set((body.quick_pick ?? []).map((n) => String(n).trim()).filter(Boolean))].slice(0, 20);
+  const db = gate.db;
+  const { data: before } = await db.from("brands").select("name, quick_pick_order").not("quick_pick_order", "is", null).order("quick_pick_order");
+  const { error: clearError } = await db.from("brands").update({ quick_pick_order: null }).not("quick_pick_order", "is", null);
+  if (clearError) return NextResponse.json({ error: clearError.message }, { status: 500 });
+  for (let i = 0; i < names.length; i++) {
+    const { error } = await db.from("brands").update({ quick_pick_order: i + 1 }).eq("name", names[i]);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  await audit(db, gate.staff.id, "brands", "quick-pick", (before ?? []).map((b) => b.name), names, "Quick-pick brands on the tag form");
+  return NextResponse.json({ quick_pick: names });
 }
 
 export async function POST(request: Request) {

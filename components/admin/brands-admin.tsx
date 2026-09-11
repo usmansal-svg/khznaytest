@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
-type Brand = { id: number; name: string; tier: string; active: boolean; source: string; added_at: string; added_by: string | null };
+type Brand = { id: number; name: string; tier: string; active: boolean; source: string; added_at: string; added_by: string | null; quick_pick_order: number | null };
 const TIERS = [
   { code: "regular", label: "High street", mult: "×1.00", note: "Standard price" },
   { code: "affordable_luxury", label: "Affordable luxury", mult: "×2.00", note: "Roughly double" },
@@ -40,6 +40,23 @@ export function BrandsAdmin() {
     } catch (e) { setMessage({ tone: "error", text: e instanceof Error ? e.message : "Failed." }); } finally { setBusy(false); }
   }
   const setTierOf = (b: Brand, t: string) => post({ brands: [{ name: b.name, tier: t, active: b.active }] });
+
+  // Quick-pick buttons on the tag form: chosen and ordered here, 20 at most.
+  const quick = useMemo(() => (brands ?? []).filter((b) => b.active && b.quick_pick_order != null).sort((a, b) => (a.quick_pick_order ?? 0) - (b.quick_pick_order ?? 0)), [brands]);
+  const [quickAdd, setQuickAdd] = useState("");
+  async function saveQuick(names: string[]) {
+    setBusy(true); setMessage(null);
+    try {
+      const res = await fetch("/api/admin/brands", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ quick_pick: names }) });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error ?? "Failed.");
+      setMessage({ tone: "ok", text: `Quick-pick list saved: ${j.quick_pick.length} brand${j.quick_pick.length === 1 ? "" : "s"}.` });
+      await load();
+    } catch (e) { setMessage({ tone: "error", text: e instanceof Error ? e.message : "Failed." }); } finally { setBusy(false); }
+  }
+  const quickNames = quick.map((b) => b.name);
+  const move = (i: number, d: -1 | 1) => { const n = [...quickNames]; const j = i + d; if (j < 0 || j >= n.length) return; [n[i], n[j]] = [n[j], n[i]]; void saveQuick(n); };
+  const addQuick = () => { const name = quickAdd.trim(); if (!name || quickNames.some((q) => q.toLowerCase() === name.toLowerCase())) return; if (quickNames.length >= 20) { setMessage({ tone: "error", text: "Twenty is the most the form shows — remove one first." }); return; } void saveQuick([...quickNames, name]); setQuickAdd(""); };
   const deactivate = (b: Brand) => window.confirm(`Remove ${b.name} from the list? Garments already tagged keep the name.`) && post({ brands: [{ name: b.name, tier: b.tier, active: false }] });
 
   if (!brands) return <p className="text-muted-foreground">Loading…</p>;
@@ -51,6 +68,31 @@ export function BrandsAdmin() {
         <p className="text-sm text-muted-foreground">Tier is resolved from this list, never judged by the tagger. Misspellings snap to the listed name; a brand nobody has listed is added here as High street when the garment is saved, marked <em>new from tagger</em>, for you to tier.</p>
       </div>
       {message && <p className={cn("rounded-md border p-3 text-sm", message.tone === "ok" ? "border-green-600 bg-green-50 text-green-800 dark:bg-green-950 dark:text-green-300" : "border-red-600 bg-red-50 text-red-800 dark:bg-red-950 dark:text-red-300")}>{message.text}</p>}
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Quick-pick buttons on the tag form <span className="font-normal text-muted-foreground">· {quick.length} of 20</span></CardTitle>
+          <p className="text-xs text-muted-foreground">The first ten show under Brand; the next ten appear under <em>More brands…</em>. Order here is the button order. With none chosen, the form shows the most-tagged brands of the last 90 days.</p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <ol className="flex flex-wrap gap-2">
+            {quick.map((b, i) => (
+              <li key={b.id} className={cn("flex items-center gap-1 rounded-md border px-2 py-1 text-sm", i >= 10 && "border-dashed text-muted-foreground")}>
+                <span className="mr-1 text-xs tabular-nums text-muted-foreground">{i + 1}</span>{b.name}
+                <button type="button" disabled={busy || i === 0} onClick={() => move(i, -1)} className="rounded px-1 text-xs text-muted-foreground hover:bg-muted disabled:opacity-30" title="Move earlier">‹</button>
+                <button type="button" disabled={busy || i === quick.length - 1} onClick={() => move(i, 1)} className="rounded px-1 text-xs text-muted-foreground hover:bg-muted disabled:opacity-30" title="Move later">›</button>
+                <button type="button" disabled={busy} onClick={() => saveQuick(quickNames.filter((n) => n !== b.name))} className="rounded px-1 text-xs text-muted-foreground hover:bg-muted" title="Remove from quick picks">×</button>
+              </li>
+            ))}
+            {quick.length === 0 && <li className="text-sm text-muted-foreground">None chosen yet.</li>}
+          </ol>
+          <form className="flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); addQuick(); }}>
+            <Input list="quick-brands" value={quickAdd} onChange={(e) => setQuickAdd(e.target.value)} placeholder="Add a brand from the list…" className="h-9 w-64" autoComplete="off" />
+            <datalist id="quick-brands">{(brands ?? []).filter((b) => b.active && b.quick_pick_order == null).map((b) => <option key={b.id} value={b.name} />)}</datalist>
+            <Button type="submit" size="sm" disabled={busy || !quickAdd.trim() || !(brands ?? []).some((b) => b.active && b.name.toLowerCase() === quickAdd.trim().toLowerCase())}>Add to quick picks</Button>
+          </form>
+        </CardContent>
+      </Card>
 
       {fromTaggers.length > 0 && (
         <Card className="border-amber-500">

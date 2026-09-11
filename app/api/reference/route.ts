@@ -21,21 +21,24 @@ export async function GET() {
   const supabase = await dbFor(me);
   const ctx = await loadPricingContext(supabase);
   const since = new Date(Date.now() - 90 * 86400_000).toISOString();
-  const [categoriesRes, outletsRes, lots, recentRes] = await Promise.all([
+  const [categoriesRes, outletsRes, lots, recentRes, quickRes] = await Promise.all([
     supabase.from("categories").select("slug, name, sort_order, gender").not("gender", "is", null).eq("active", true).order("sort_order"),
     supabase.from("outlets").select("id, name, is_online").eq("active", true).order("id"),
     loadOpenLots(supabase, ctx.settings),
     supabase.from("items").select("brand_text").gte("tagged_at", since).not("brand_text", "is", null).limit(5000),
+    supabase.from("brands").select("name").eq("active", true).not("quick_pick_order", "is", null).order("quick_pick_order").limit(20),
   ]);
 
-  // Quick-pick brands: the most tagged in the last 90 days, topped up from
-  // the brands that come through every bale, so the list is useful from
-  // day one and settles on what this warehouse actually sees.
+  // Quick-pick brands: chosen by hand on the Brands page (Usman's call —
+  // once the list is long, automatic ranking is not what he wants). Until
+  // any are chosen, fall back to the most tagged in the last 90 days topped
+  // up from the brands that come through every bale.
+  const chosen = (quickRes.data ?? []).map((b) => b.name);
   const counts = new Map<string, number>();
   for (const r of recentRes.data ?? []) { const b = (r.brand_text ?? "").trim(); if (b) counts.set(b, (counts.get(b) ?? 0) + 1); }
   const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([b]) => b);
   const topBrands: string[] = [];
-  for (const b of [...ranked, ...COMMON_BRANDS]) { if (topBrands.length >= 20) break; if (!topBrands.some((t) => t.toLowerCase() === b.toLowerCase())) topBrands.push(b); }
+  for (const b of chosen.length ? chosen : [...ranked, ...COMMON_BRANDS]) { if (topBrands.length >= 20) break; if (!topBrands.some((t) => t.toLowerCase() === b.toLowerCase())) topBrands.push(b); }
 
   let tagger: { name: string; role: string; outlet_id: number | null; today: number; target: number } | null = null;
   if (me) {
