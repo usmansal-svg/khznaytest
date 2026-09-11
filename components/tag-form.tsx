@@ -535,14 +535,15 @@ export function TagForm() {
                     {quickBrands.slice(0, moreBrands ? 20 : 10).map((b) => {
                       const on = brand.trim().toLowerCase() === b.name.toLowerCase();
                       return (
-                        <Button key={b.name} type="button" variant={on ? "default" : "outline"} className={cn("h-auto min-w-[4.5rem] flex-col gap-1 px-2 py-1.5", b.logo_url ? "" : "justify-center")} onClick={() => { setBrand(b.name); requestAnimationFrame(() => sizeRef.current?.focus()); }}>
-                          {b.logo_url && (
-                            <span className="flex h-8 w-14 items-center justify-center overflow-hidden rounded bg-white">
+                        <Button key={b.name} type="button" variant={on ? "default" : "outline"} title={b.name} aria-label={b.name} className={cn("h-9 px-2 md:h-8", b.logo_url ? "w-16 justify-center" : "text-sm md:text-xs")} onClick={() => { setBrand(b.name); requestAnimationFrame(() => sizeRef.current?.focus()); }}>
+                          {b.logo_url ? (
+                            <span className={cn("flex h-6 w-12 items-center justify-center overflow-hidden rounded bg-white", on && "ring-2 ring-primary-foreground/60")}>
                               {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={b.logo_url} alt="" className="max-h-8 max-w-14 object-contain" />
+                              <img src={b.logo_url} alt={b.name} className="max-h-5 max-w-10 object-contain" />
                             </span>
+                          ) : (
+                            b.name
                           )}
-                          <span className="text-xs leading-tight">{b.name}</span>
                         </Button>
                       );
                     })}
