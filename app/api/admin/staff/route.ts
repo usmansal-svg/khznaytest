@@ -10,7 +10,7 @@ import { NextResponse } from "next/server";
 import { PIN_PATTERN, hashPin } from "@/lib/auth/pin";
 import { requireManager } from "@/lib/auth/staff";
 
-const ROLES = ["tagger", "qc_senior", "manager", "founder", "photographer"];
+const ROLES = ["tagger", "qc_senior", "manager", "founder", "photographer", "cashier", "outlet_manager"];
 
 export async function GET() {
   const gate = await requireManager();
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
   }
   const name = body.name?.trim();
   if (!name) return NextResponse.json({ error: "Name is required." }, { status: 400 });
-  if (!ROLES.includes(body.role ?? "")) return NextResponse.json({ error: "Role must be tagger, qc_senior, manager, founder or photographer." }, { status: 400 });
+  if (!ROLES.includes(body.role ?? "")) return NextResponse.json({ error: "Role must be one of tagger, qc_senior, manager, founder, photographer, cashier, outlet_manager." }, { status: 400 });
   if (body.role === "founder" && gate.staff.role !== "founder") return NextResponse.json({ error: "Only the founder can add a founder." }, { status: 403 });
   if (!body.pin || !PIN_PATTERN.test(body.pin)) return NextResponse.json({ error: "PIN must be 4 to 6 digits." }, { status: 400 });
 

@@ -14,6 +14,7 @@ import { NextResponse } from "next/server";
 
 import { currentStaff, dbFor, requireStaff } from "@/lib/auth/staff";
 import { meetsOutletMinimum, type GradeCode } from "@/lib/pricing/constants";
+import { colourForMonth } from "@/lib/pricing/engine";
 import { loadPricingContext } from "@/lib/pricing/repo";
 
 const GRADE_NAMES: Record<GradeCode, string> = { bnwt: "Brand New with Tags", premium: "Premium", excellent: "Excellent", very_good: "Very Good", rejected: "Rejected" };
@@ -96,7 +97,11 @@ export async function PATCH(request: Request) {
     if (t.status === "received") return NextResponse.json({ error: "Already received." }, { status: 400 });
     const { data: lines } = await db.from("transfer_items").select("item_id").eq("transfer_id", t.id);
     const ids = (lines ?? []).map((l) => l.item_id);
-    if (ids.length) await db.from("items").update({ outlet_id: t.to_outlet_id, received_at: new Date().toISOString() }).in("id", ids);
+    // Receiving is flooring: the garment is on sale from today, in this
+    // month's colour, and the markdown clock starts. The POS reads these.
+    const now = new Date();
+    const flooredOn = new Date(now.getTime() + 5 * 3600_000).toISOString().slice(0, 10); // Pakistan date
+    if (ids.length) await db.from("items").update({ outlet_id: t.to_outlet_id, received_at: now.toISOString(), status: "on_floor", floored_on: flooredOn, colour_tag: colourForMonth(now) }).in("id", ids).in("status", ["tagged", "on_floor"]);
     await db.from("transfers").update({ status: "received", received_at: new Date().toISOString(), received_by: gate.staff.id }).eq("id", t.id);
   } else {
     return NextResponse.json({ error: "Unknown action." }, { status: 400 });

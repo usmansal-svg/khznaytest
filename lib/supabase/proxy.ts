@@ -62,15 +62,14 @@ export async function updateSession(request: NextRequest) {
     path.startsWith("/api/auth") ||
     // /health is a public connectivity check and must not require a session.
     path.startsWith("/health") ||
-    // TEMPORARY: the pricing demo and the till are open for a look without
-    // an account. Re-gate before production use, and drop the anon grants
-    // migration for the till.
+    // TEMPORARY: the pricing demo is open for a look without an account.
+    // Re-gate before production use.
     path.startsWith("/price") ||
     path.startsWith("/api/price") ||
-    path.startsWith("/pos") ||
-    path.startsWith("/api/pos") ||
     // Tags print from a plain image URL; the SKU is the only payload.
-    path.startsWith("/api/tags");
+    path.startsWith("/api/tags") ||
+    // The hourly Shopify sold-out worker authenticates with CRON_SECRET inside the route.
+    path === "/api/pos/shopify-sync";
 
   if (!user && !staff && !isPublic) {
     // API callers get a 401 they can act on. Redirecting a fetch() to the
@@ -93,6 +92,21 @@ export async function updateSession(request: NextRequest) {
   // with costs, staff or the master view needs a manager or the founder;
   // floor and transfers need QC senior or above.
   if (staff) {
+    // Outlet staff live in the POS and nothing else.
+    if (staff.role === "cashier" || staff.role === "outlet_manager") {
+      const allowed = ["/pos", "/api/pos", "/api/auth", "/login", "/health", "/api/tags"];
+      if (!allowed.some((p) => path.startsWith(p))) {
+        if (path.startsWith("/api/")) {
+          const denied = NextResponse.json({ error: "Your role cannot open this." }, { status: 403 });
+          for (const cookie of supabaseResponse.cookies.getAll()) denied.cookies.set(cookie);
+          return denied;
+        }
+        const url = request.nextUrl.clone();
+        url.pathname = "/pos";
+        url.search = "";
+        return NextResponse.redirect(url);
+      }
+    }
     // The photographer sees the Photos station and nothing else.
     if (staff.role === "photographer") {
       const allowed = ["/photos", "/api/photos", "/api/items/", "/api/auth", "/login", "/health", "/api/tags"];
@@ -110,7 +124,7 @@ export async function updateSession(request: NextRequest) {
     }
     const managerOnly = ["/dashboard", "/lots", "/admin", "/api/dashboard", "/api/lots", "/api/admin", "/api/export"];
     const seniorUp = ["/floor", "/transfers", "/qc", "/api/floor", "/api/transfers", "/api/qc"];
-    const rank = { tagger: 0, qc_senior: 1, manager: 2, founder: 3, photographer: 0 }[staff.role] ?? 0;
+    const rank = { tagger: 0, qc_senior: 1, manager: 2, founder: 3, photographer: 0, cashier: 0, outlet_manager: 0 }[staff.role] ?? 0;
     const need = managerOnly.some((p) => path.startsWith(p)) ? 2 : seniorUp.some((p) => path.startsWith(p)) ? 1 : 0;
     if (rank < need) {
       if (path.startsWith("/api/")) {

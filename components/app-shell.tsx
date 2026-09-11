@@ -3,15 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Activity, ArrowRightLeft, Camera, ClipboardCheck, PanelLeftClose, PanelLeftOpen, LayoutDashboard, Package, Search, SlidersHorizontal, Tag, Tags, Users, type LucideIcon } from "lucide-react";
+import { Activity, ArrowRightLeft, Camera, ClipboardCheck, PanelLeftClose, PanelLeftOpen, Store, LayoutDashboard, Package, Search, SlidersHorizontal, Tag, Tags, Users, type LucideIcon } from "lucide-react";
 
 import { BrandLogo } from "@/components/brand-logo";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { cn } from "@/lib/utils";
 
-type Role = "tagger" | "qc_senior" | "manager" | "founder" | "photographer";
+type Role = "tagger" | "qc_senior" | "manager" | "founder" | "photographer" | "cashier" | "outlet_manager";
 type NavItem = { href: string; label: string; icon: LucideIcon; hint?: string; min?: Role };
-const RANK: Record<Role, number> = { tagger: 0, qc_senior: 1, manager: 2, founder: 3, photographer: 0 };
+const RANK: Record<Role, number> = { tagger: 0, qc_senior: 1, manager: 2, founder: 3, photographer: 0, cashier: 0, outlet_manager: 0 };
 
 const WORK: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, hint: "Master view", min: "manager" },
@@ -27,6 +27,7 @@ const ADMIN: NavItem[] = [
   { href: "/admin/pricing", label: "Pricing", icon: SlidersHorizontal, hint: "Constants & weights", min: "manager" },
   { href: "/admin/brands", label: "Brands", icon: Tags, hint: "Tiers & import", min: "manager" },
   { href: "/admin/staff", label: "Staff", icon: Users, hint: "Names & PINs", min: "manager" },
+  { href: "/pos", label: "POS", icon: Store, hint: "Outlet tills & sales", min: "manager" },
   { href: "/health", label: "Health", icon: Activity, min: "manager" },
 ];
 

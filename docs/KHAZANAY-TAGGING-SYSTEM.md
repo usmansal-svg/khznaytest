@@ -50,7 +50,7 @@ Managers add staff at **Admin → Staff** (name, role, home outlet, PIN, daily t
 | Brands | `/admin/brands` | manager+ | Quick-pick list for the tag form; three tier columns; new-from-tagger tray |
 | Staff | `/admin/staff` | manager+ | Names, roles, PINs, targets |
 
-Removed from this platform's sidebar (code kept for the POS): the Till (`/pos`) and the Floor screen (drop day / monthly sweep). The public pricing demo at `/price` remains open and should be closed before real stock.
+The Floor screen (drop day / monthly sweep) moved into the POS (Stock → Monthly sweep); managers reach the POS from the Admin menu. The public pricing demo at `/price` remains open and should be closed before real stock.
 
 ---
 
@@ -206,13 +206,32 @@ Khazanay wordmark · unmarked space top-right for the month's **colour sticker**
 
 ---
 
-## 12. Online channel (parked)
+## 12. Point of sale (`/pos`, 12 Sep)
+
+**One database, two surfaces.** The POS is its own screen set with its own roles but reads and writes the same `items` table, so stock "moves" to the POS simply by being received there. No import, no export.
+
+| Piece | What it does |
+|---|---|
+| **Roles** | *Cashier* and *Outlet manager*, each tied to one outlet on Staff; they see `/pos` only. Managers and the founder open any outlet from a switcher in the POS header and see Reports. |
+| **Receive** | Transfers sent from the warehouse appear at the outlet; *Receive all* (or scanning the sheet's code) puts every garment **on the floor from today, in this month's colour**, and starts its markdown clock. Receiving from the warehouse side (Transfers → received) does the same. |
+| **Till** | Scan; the server prices the garment **for today** (list price walked down the ladder by months on the floor, live settings). A different price needs a reason and is recorded beside the shelf price. Discount, five payment methods, change, customer phone, 80 mm receipt. Stock not received here is refused unless an outlet manager overrides. Every sale is atomic (`checkout_sale`). |
+| **Shopify sold-out** | A sold garment that is listed online is taken off Shopify at once; if that call fails it waits in `shopify_sync_queue` and an hourly cron (`vercel.json` → `/api/pos/shopify-sync`, `CRON_SECRET`) retries, with the error shown on the garment. Set `CRON_SECRET` in Vercel. |
+| **Till session** | Open with a float; close by counting the drawer. Expected cash = float + cash sales − cash refunds; short/over is recorded with a note. Selling needs an open session. |
+| **Sales** | Receipts by date or search; reprint; **return** one garment (reason, refund, back on the floor or damaged); **void** a receipt (outlet manager, reason) — garments return to the floor. |
+| **Stock** | Everything on the floor here, oldest first, with stage, price today, days on floor and colour; the **monthly sweep** lists the stickers due and the garments to pull (four colours back), and marks them pulled. |
+| **Reports** (HQ) | Sold, takings, realised vs list, GP, average sold price, returns; sold-at-which-markdown against the profile assumptions; by condition, selling profile, sub-category and outlet with median days to sell and sell-through of what was floored in the window. This is the loop back into Pricing → Selling profiles and Grades. |
+
+Tables: `sales`, `sale_items` (shelf price, override reason, return fields), `till_sessions`, `shopify_sync_queue`, `receipt_counter`; functions `checkout_sale`, `void_sale`, `return_sale_item`. Item statuses gained `returned_damaged`. The till's earlier open-without-login access was closed.
+
+---
+
+## 13. Online channel (parked)
 
 Garment page: channel switch, photos (camera capture, on-device background removal via `@imgly/background-removal`, composited onto white, stored in the public `garments` bucket), automatic Shopify collection tags (`Men`, `Heavy Hoodie`, `Men Heavy Hoodie`, brand, `Size L`, grade, colour, …), **Send to Shopify** (one product per garment, single variant, quantity 1) and **Unlist**. Needs `SHOPIFY_STORE_DOMAIN` and `SHOPIFY_ADMIN_ACCESS_TOKEN` in Vercel; not yet set.
 
 ---
 
-## 13. Technical reference
+## 14. Technical reference
 
 **Stack:** Next.js 16 (App Router, cache components), React 19, TypeScript, Tailwind + shadcn/ui, Supabase (Postgres, Storage), Vercel. Node 24 runs the tests natively (`node --test`, no framework).
 
@@ -228,7 +247,7 @@ Garment page: channel switch, photos (camera capture, on-device background remov
 
 **API (all under `/api`):** `price`, `items`, `items/[sku]`, `reference`, `brands`, `lots`, `transfers`, `qc`, `photos`, `tags/[sku]/barcode`, `export`, `dashboard`, `auth/*`, `admin/{settings,profiles,grades,sub-categories,categories,brands,brands/logo,brands/quick-picks,rare-reasons,staff,reference-prices,pricing/sheet}`, `shopify/push`.
 
-**Migrations (36, all applied):** `pricing_schema` · `pricing_seed` (generated from code by `test/gen-seed.ts`) · `sub_category_codes` · `tagging_support` · `lots_and_weights` · `channels_photos_shopify` · `staff_pins_transfers` · `transfer_seq` · `lot_split` · `lot_description_pieces` · `lot_imported_sequence` · `settings_changed_by` · `categories_flat_gender` · `categories_two_level` · `subcategory_planning_rates` · `price_steps_alerts` · `brands_source` · `qc_and_targets` · `qc_hold` · `standard_cost` · `reference_prices` · `rare_handoff` · `outlet_min_grade` · `outlet_override` · `subcategory_season` · `brand_quick_pick` · `brand_logo` · `brand_quick_picks_by_category` · `size_labels` · `rare_note` · `rare_reasons` · `photographer` · `rare_reasons_table` — plus the health check and two POS migrations from a parallel session.
+**Migrations (39, all applied):** `pricing_schema` · `pricing_seed` (generated from code by `test/gen-seed.ts`) · `sub_category_codes` · `tagging_support` · `lots_and_weights` · `channels_photos_shopify` · `staff_pins_transfers` · `transfer_seq` · `lot_split` · `lot_description_pieces` · `lot_imported_sequence` · `settings_changed_by` · `categories_flat_gender` · `categories_two_level` · `subcategory_planning_rates` · `price_steps_alerts` · `brands_source` · `qc_and_targets` · `qc_hold` · `standard_cost` · `reference_prices` · `rare_handoff` · `outlet_min_grade` · `outlet_override` · `subcategory_season` · `brand_quick_pick` · `brand_logo` · `brand_quick_picks_by_category` · `size_labels` · `rare_note` · `rare_reasons` · `photographer` · `rare_reasons_table` · `pos_sales` · `pos_anon_temp` · `pos_v2` — plus the health check and two POS migrations from a parallel session.
 
 **Environment (Vercel + `.env.local`):** `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (server only; also signs sessions), optional `SESSION_SECRET`, `SHOPIFY_*`.
 
@@ -236,7 +255,7 @@ Garment page: channel switch, photos (camera capture, on-device background remov
 
 ---
 
-## 14. Decisions worth remembering
+## 15. Decisions worth remembering
 
 - **Markdowns round** (25/50/75 → 1,390 / 890 / 490 on a 1,790 shirt); the original spec's floor example was an error, corrected by spec v2.
 - **Standard cost per sub-category, not scale weight**, sets the shelf price (10 Sep). Weight-based pricing remains in the engine for lot P&L.
@@ -250,7 +269,7 @@ Garment page: channel switch, photos (camera capture, on-device background remov
 
 ---
 
-## 15. Open items
+## 16. Open items
 
 **Yours to do**
 - Overwrite *Cost per piece* on the sheet with real purchase costs (seeded values are ~11% high — they were landed costs)
@@ -261,10 +280,11 @@ Garment page: channel switch, photos (camera capture, on-device background remov
 - Choose a scale (Bluetooth keyboard output) and a station label printer — the two hardware changes that cut the most seconds
 
 **Before real stock — security**
-- Remove the last temporary bypasses: `/price` and `/pos` in `lib/supabase/proxy.ts`, and the `temp_anon_read` policies (migrations `20260907220000` and `20260908090100`)
+- Remove the last temporary bypasses: `/price` in `lib/supabase/proxy.ts`, and the `temp_anon_read` policies plus the two DEMO garments (migrations `20260907220000` and `20260908090100`)
+- Set `CRON_SECRET` in Vercel so the hourly Shopify sold-out retry runs
 
 **Next phase**
-- POS platform (separate software) reading `items`; sell-through by grade and profile lights up from `sold_stage`
+- POS: stock counts per outlet; customer accounts; exchanges as one receipt; the sell-through numbers feeding Selling profiles automatically
 - Shopify orders webhook (an online sale marks the item sold)
 - Stock counts per outlet; drop day / monthly sweep move to the POS
 - Merge `pricing-engine` into `main` so production auto-deploys

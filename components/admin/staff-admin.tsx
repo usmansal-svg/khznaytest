@@ -16,6 +16,8 @@ const ROLES = [
   { code: "manager", label: "Manager" },
   { code: "founder", label: "Founder" },
   { code: "photographer", label: "Photographer" },
+  { code: "cashier", label: "Cashier (outlet)" },
+  { code: "outlet_manager", label: "Outlet manager" },
 ];
 
 export function StaffAdmin() {

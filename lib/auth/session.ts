@@ -13,7 +13,7 @@ export const SESSION_HOURS = 12;
 export type StaffSession = {
   id: number;
   name: string;
-  role: "tagger" | "qc_senior" | "manager" | "founder" | "photographer";
+  role: "tagger" | "qc_senior" | "manager" | "founder" | "photographer" | "cashier" | "outlet_manager";
   outlet_id: number | null;
   exp: number; // unix seconds
 };
