@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { connection } from "next/server";
 
-import { listLocations, shopifyConfig } from "@/lib/shopify/client";
+import { listLocations, listWebhooks, shopifyConfig } from "@/lib/shopify/client";
 
 // This route must never be served from the prerender cache: every request
 // has to actually run the checks. `instant = false` makes it blocking.
@@ -89,6 +89,13 @@ async function runChecks(): Promise<Check[]> {
     try {
       const locations = await listLocations(cfg);
       checks.push({ name: "Shopify", ok: true, detail: `connected to ${cfg.domain} · ${locations.filter((l) => l.active).length} active location${locations.filter((l) => l.active).length === 1 ? "" : "s"} (${locations.length} total) · auth ${cfg.token ? "fixed token" : "client credentials"}` });
+      try {
+        const hooks = await listWebhooks(cfg);
+        const ours = hooks.find((h) => h.topic === "ORDERS_PAID" && h.url?.endsWith("/api/shopify/webhook"));
+        checks.push({ name: "Shopify order webhook", ok: Boolean(ours), detail: ours ? `registered by the app for paid orders → ${ours.url}` : "not registered yet — a manager presses “Register order webhook” on Staff → Outlets" });
+      } catch (e) {
+        checks.push({ name: "Shopify order webhook", ok: false, detail: `could not read subscriptions: ${e instanceof Error ? e.message.slice(0, 160) : "error"}` });
+      }
     } catch (e) {
       checks.push({ name: "Shopify", ok: false, detail: `configured for ${cfg.domain} but the store refused: ${e instanceof Error ? e.message.slice(0, 200) : "unknown error"}` });
     }

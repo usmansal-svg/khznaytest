@@ -19,6 +19,12 @@ export function OutletsCard() {
     const r = await fetch("/api/admin/outlets", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, ...patch }) });
     const j = await r.json(); setMsg(r.ok ? "Saved." : j.error); void load();
   }
+  async function registerWebhook() {
+    setMsg("Registering…");
+    const r = await fetch("/api/admin/outlets", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "register_webhook" }) });
+    const j = await r.json();
+    setMsg(r.ok ? (j.created ? "Order webhook registered with Shopify. Sales on any Shopify POS or the website now mark garments sold here." : "Order webhook was already registered.") : j.error);
+  }
   if (!data) return null;
   return (
     <Card>
@@ -28,6 +34,12 @@ export function OutletsCard() {
       </CardHeader>
       <CardContent>
         {msg && <p className="mb-2 text-xs text-muted-foreground">{msg}</p>}
+        {data.shopify_connected && (
+          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border p-2 text-xs">
+            <span className="text-muted-foreground">Sales flow back from Shopify through an order webhook the app registers itself.</span>
+            <Button size="sm" variant="outline" className="h-8" onClick={registerWebhook}>Register order webhook</Button>
+          </div>
+        )}
         <table className="w-full text-sm">
           <thead className="text-left text-xs uppercase text-muted-foreground"><tr><th className="pb-1">Name</th><th className="pb-1">Shopify location</th><th className="pb-1"></th></tr></thead>
           <tbody className="divide-y">

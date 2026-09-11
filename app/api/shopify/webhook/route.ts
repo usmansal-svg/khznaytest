@@ -17,15 +17,16 @@ import { createServiceClient } from "@/lib/supabase/service";
 export const instant = false;
 
 export async function POST(request: Request) {
-  const secret = process.env.SHOPIFY_WEBHOOK_SECRET;
+  // Two possible signers: a webhook the app registered itself is signed with the app's client secret;
+  // one created by hand in Shopify admin → Notifications is signed with the store's webhook secret.
+  const secrets = [process.env.SHOPIFY_CLIENT_SECRET, process.env.SHOPIFY_WEBHOOK_SECRET].map((s) => s?.trim()).filter((s): s is string => Boolean(s));
   const raw = await request.text();
-  if (!secret) return NextResponse.json({ error: "SHOPIFY_WEBHOOK_SECRET is not set." }, { status: 503 });
+  if (!secrets.length) return NextResponse.json({ error: "No Shopify secret is set (SHOPIFY_CLIENT_SECRET or SHOPIFY_WEBHOOK_SECRET)." }, { status: 503 });
   const given = request.headers.get("x-shopify-hmac-sha256") ?? "";
-  const expected = createHmac("sha256", secret).update(raw, "utf8").digest("base64");
-  const ok = given.length === expected.length && timingSafeEqual(Buffer.from(given), Buffer.from(expected));
+  const ok = secrets.some((secret) => { const expected = createHmac("sha256", secret).update(raw, "utf8").digest("base64"); return given.length === expected.length && timingSafeEqual(Buffer.from(given), Buffer.from(expected)); });
   if (!ok) {
     // Recorded so a mis-pasted secret shows up as "refused" in the audit log rather than silence.
-    await createServiceClient().from("admin_audits").insert({ table_name: "shopify_webhook", row_key: "refused", before: null, after: { topic: request.headers.get("x-shopify-topic"), shop: request.headers.get("x-shopify-shop-domain"), has_signature: Boolean(given), body_bytes: raw.length }, changed_by: null, note: "Shopify webhook refused: signature did not match SHOPIFY_WEBHOOK_SECRET" });
+    await createServiceClient().from("admin_audits").insert({ table_name: "shopify_webhook", row_key: "refused", before: null, after: { topic: request.headers.get("x-shopify-topic"), shop: request.headers.get("x-shopify-shop-domain"), has_signature: Boolean(given), body_bytes: raw.length }, changed_by: null, note: "Shopify webhook refused: signature matched neither the app secret nor the notifications secret" });
     return NextResponse.json({ error: "Bad signature." }, { status: 401 });
   }
 
