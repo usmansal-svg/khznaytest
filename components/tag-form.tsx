@@ -600,8 +600,6 @@ export function TagForm() {
               </Field>)}
             </div>
 
-
-
             <ButtonGroup
               label="Condition"
               hint="Tags → BNWT · fabric used → Very Good · stain or repair → Excellent · else Premium. When in doubt, grade up."
@@ -633,6 +631,12 @@ export function TagForm() {
                 <span className="font-semibold">Outlet override on</span> — this {GRADE_LABELS[grade]} garment will be tagged for an outlet. <button type="button" className="underline" onClick={() => setOutletOverride(false)}>Undo</button>
               </p>
             )}
+
+            {!rejected && !handoff && (
+              <div className="grid gap-2">
+                {!blocked && (
+                  <label className="flex items-center gap-2 text-sm"><Checkbox checked={manualOn} onCheckedChange={(v) => { setManualOn(v === true); if (v !== true) setManualPrice(""); }} /> Set the price by hand <span className="text-muted-foreground">· exceptional piece; anything below the sheet is logged</span></label>
+                )}
 
             {!rejected && (
               <label className={cn("flex items-start gap-3 rounded-md border p-3 text-sm", rareFind && "border-amber-500 bg-amber-50 dark:bg-amber-950/40")}>
@@ -667,24 +671,7 @@ export function TagForm() {
               </div>
             )}
 
-            {!rejected && !handoff && (
-              <div className="grid gap-2">
-                <Label>Price adjustment <span className="font-normal text-muted-foreground">· 5% steps</span></Label>
-                <div className="flex items-center gap-2">
-                  <Button type="button" variant="outline" className="h-12 w-14 text-xl" disabled={manualOn || adjustPct <= -50} onClick={() => setAdjustPct((p) => p - 5)}>−</Button>
-                  <div className={cn("min-w-[5.5rem] text-center text-lg font-semibold tabular-nums", adjustPct > 0 && "text-green-700 dark:text-green-400", adjustPct < 0 && "text-red-700 dark:text-red-400")}>{adjustPct > 0 ? "+" : ""}{adjustPct}%</div>
-                  <Button type="button" variant="outline" className="h-12 w-14 text-xl" disabled={manualOn || adjustPct >= 100} onClick={() => setAdjustPct((p) => p + 5)}>+</Button>
-                  {adjustPct !== 0 && <Button type="button" variant="ghost" size="sm" disabled={manualOn} onClick={() => setAdjustPct(0)}>Reset</Button>}
-                </div>
-                <p className="text-xs text-muted-foreground">Plus for pieces that will sell easily; minus for dated styles or extreme sizes. Anything below the pricing sheet is logged with your name.</p>
-              </div>
-            )}
 
-            {!rejected && !handoff && (
-              <div className="grid gap-2">
-                {!blocked && (
-                  <label className="flex items-center gap-2 text-sm"><Checkbox checked={manualOn} onCheckedChange={(v) => { setManualOn(v === true); if (v !== true) setManualPrice(""); }} /> Set the price by hand (exceptional piece)</label>
-                )}
                 {needsManual && (
                   <Field label="Manual price (Rs)" hint={blocked ? price?.block_reason : standardPrice ? `Pricing sheet says Rs ${standardPrice.toLocaleString()} at this grade` : undefined} hintTone={blocked ? "warn" : undefined}>
                     <Input type="number" inputMode="numeric" min="1" step="1" value={manualPrice} onChange={(e) => setManualPrice(e.target.value)} className="max-w-xs" autoFocus />
@@ -724,8 +711,6 @@ export function TagForm() {
             {price?.cost_basis === "planning" && (
               <Note tone="warn">No standard cost set for this sub-category yet — ask a manager to set it under Pricing.</Note>
             )}
-
-
 
             {price && !price.restricted && price.markdowns?.length ? (
               <dl className="space-y-0.5 border-t pt-2 text-xs">

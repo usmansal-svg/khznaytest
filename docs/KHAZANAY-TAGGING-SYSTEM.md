@@ -131,11 +131,10 @@ Order on the full (online) form:
 8. **Rare find** — hands the garment off (§8.2)
 9. Sleeves (half / full / sleeveless) on shirts, T-shirts, sports tops, outerwear — required
 10. Measured flat, in inches, per garment type (chest & length · waist & length · bust, waist, length · chest, length, sleeve)
-11. **Price adjustment** — a ± stepper in 5% blocks (−50% to +100%)
-12. *Set the price by hand* for exceptional pieces
+11. *Set the price by hand* sits directly under the Condition buttons, for exceptional pieces (the ±5% stepper was removed on 11 Sep)
 13. **Save & print tag** — SKU allocated atomically (`KHZ-{season}{wearer}-{3-letter code}-{5 digits}`), photo uploaded, tag printed from the form via a hidden print frame (Auto-print on by default)
 
-**Under-pricing is logged, never silent.** Every save records the sheet's standard price beside the final price. Any price below standard — by steps or by hand — requires a **reason** and writes a `price_alerts` row (tagger, SKU, sheet price, final, % below, reason). The dashboard lists them and counts them per tagger.
+**Under-pricing is logged, never silent.** Every save records the sheet's standard price beside the final price. Any price below standard — by hand — requires a **reason** and writes a `price_alerts` row (tagger, SKU, sheet price, final, % below, reason). The dashboard lists them and counts them per tagger.
 
 **Outlet minimum condition (11 Sep).** Outlets take only the better conditions: *Lowest condition for outlets* on the Constants tab, default **Excellent**. With Outlet selected, choosing a condition below it (Very Good by default) marks the button *Not for outlets*, blocks Save and tells the tagger to put the garment on the Very Good pile for online tagging later — no SKU, no price, no tag. The server refuses the save as well, and transfers refuse any such garment that slips through. A deliberate exception is possible: *Send it to the outlet anyway…* asks "Are you sure?" a second time, then unlocks Save; the override is stored on the garment (`items.outlet_override`) and audited under the tagger's name, and transfers honour it.
 
