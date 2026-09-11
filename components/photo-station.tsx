@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Camera, ChevronLeft, ChevronRight, Scissors, Trash2, X } from "lucide-react";
+import { ArrowLeft, Camera, ChevronLeft, ChevronRight, RotateCw, Scissors, SlidersHorizontal, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useHoldDrag } from "@/lib/hold-drag";
-import { cutoutOnWhite, squareForShopify } from "@/lib/photos";
+import { applyAdjust, cutoutOnWhite, NO_ADJUST, squareForShopify, type Adjust } from "@/lib/photos";
 import { cn } from "@/lib/utils";
 
 /**
@@ -26,6 +26,7 @@ export function PhotoStation({ sku }: { sku: string }) {
   const [note, setNote] = useState<string | null>(null);
   const [view, setView] = useState<number | null>(null); // index into originals
   const [showOriginal, setShowOriginal] = useState(false);
+  const [adjust, setAdjust] = useState<Adjust | null>(null); // open editor for the full-view picture
   const touchX = useRef<number | null>(null);
 
 
@@ -58,6 +59,32 @@ export function PhotoStation({ sku }: { sku: string }) {
       if (!res.ok) throw new Error((await res.json()).error ?? "Upload failed.");
       await load(); setNote(null);
     } catch (err) { setNote(err instanceof Error ? err.message : "Background removal failed."); } finally { setBusy(null); }
+  }
+
+  // Brightness / contrast / rotate on a picture that was saved earlier: the
+  // edited picture replaces the file in the same position; a cut-out made
+  // from the old version is removed (redo it after).
+  async function applyEdit(p: Photo, a: Adjust) {
+    if (!item) return;
+    setBusy(p.path); setNote("Applying…");
+    try {
+      const src = await (await fetch(p.url)).blob();
+      const square = await squareForShopify(await applyAdjust(src, a), 2048, 1024 * 1024);
+      const fd = new FormData();
+      fd.append("sku", sku); fd.append("kind", "original"); fd.append("file", square, "photo.jpg");
+      const res = await fetch("/api/photos", { method: "POST", body: fd });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error ?? "Upload failed.");
+      const newPath = (j.photo as Photo).path;
+      const old = cutFor(p);
+      if (old) await fetch("/api/photos", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ sku, path: old.path }) });
+      await fetch("/api/photos", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ sku, path: p.path }) });
+      const order = originals.map((o) => (o.path === p.path ? newPath : o.path));
+      await saveOrder(order);
+      await load();
+      setAdjust(null);
+      setNote(old ? "Applied. The cut-out was made from the old version — tap Remove background to redo it." : null);
+    } catch (err) { setNote(err instanceof Error ? err.message : "Could not apply."); } finally { setBusy(null); }
   }
 
   async function remove(p: Photo) {
@@ -107,21 +134,45 @@ export function PhotoStation({ sku }: { sku: string }) {
       {current && (
         <div className="fixed inset-0 z-50 flex flex-col bg-black text-white">
           <div className="flex items-center justify-between px-3 py-2 text-sm">
-            <button type="button" onClick={() => { setView(null); setShowOriginal(false); }} className="flex items-center gap-1"><X className="size-5" /> Close</button>
+            <button type="button" onClick={() => { setView(null); setShowOriginal(false); setAdjust(null); }} className="flex items-center gap-1"><X className="size-5" /> Close</button>
             <span>Picture {view! + 1} of {originals.length}{view === 0 ? " · cover" : ""}</span>
             <span className="w-12" />
           </div>
           <div className="relative flex-1 overflow-hidden"
             onTouchStart={(e) => { touchX.current = e.touches[0]?.clientX ?? null; }}
-            onTouchEnd={(e) => { const x0 = touchX.current; touchX.current = null; const x1 = e.changedTouches[0]?.clientX; if (x0 == null || x1 == null) return; const dx = x1 - x0; if (dx < -40) setView((i) => Math.min(originals.length - 1, (i ?? 0) + 1)); if (dx > 40) setView((i) => Math.max(0, (i ?? 0) - 1)); }}>
+            onTouchEnd={(e) => { const x0 = touchX.current; touchX.current = null; const x1 = e.changedTouches[0]?.clientX; if (x0 == null || x1 == null) return; const dx = x1 - x0; if (Math.abs(dx) > 40) setAdjust(null); if (dx < -40) setView((i) => Math.min(originals.length - 1, (i ?? 0) + 1)); if (dx > 40) setView((i) => Math.max(0, (i ?? 0) - 1)); }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={showOriginal ? current.url : shown(current)} alt="" className="h-full w-full object-contain" />
+            <img src={showOriginal || adjust ? current.url : shown(current)} alt="" className="h-full w-full object-contain" style={adjust ? { filter: `brightness(${adjust.brightness}) contrast(${adjust.contrast})`, transform: `rotate(${adjust.rotate}deg)` } : undefined} />
             {cutFor(current) && <button type="button" onClick={() => setShowOriginal((v) => !v)} className="absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-black">{showOriginal ? "Showing original · tap for cut-out" : "Background removed · tap for original"}</button>}
             {view! > 0 && <button type="button" onClick={() => setView((i) => (i ?? 1) - 1)} className="absolute left-0 top-0 h-full w-1/5" aria-label="Previous"><ChevronLeft className="absolute left-2 top-1/2 size-8 -translate-y-1/2 opacity-70" /></button>}
             {view! < originals.length - 1 && <button type="button" onClick={() => setView((i) => (i ?? 0) + 1)} className="absolute right-0 top-0 h-full w-1/5" aria-label="Next"><ChevronRight className="absolute right-2 top-1/2 size-8 -translate-y-1/2 opacity-70" /></button>}
           </div>
           {note && <p className="bg-neutral-900 px-4 pt-2 text-xs text-amber-300">{note}</p>}
+          {adjust && (
+            <div className="space-y-3 bg-neutral-900 px-4 pt-3">
+              {(["brightness", "contrast"] as const).map((key) => {
+                const val = adjust[key];
+                const set = (v: number) => setAdjust((a) => (a ? { ...a, [key]: Math.round(Math.min(1.4, Math.max(0.6, v)) * 100) / 100 } : a));
+                return (
+                  <div key={key} className="grid grid-cols-[5.5rem_2.5rem_1fr_2.5rem_3rem] items-center gap-2 text-xs">
+                    <span className="capitalize">{key}</span>
+                    <button type="button" onClick={() => set(val - 0.05)} className="h-9 rounded border border-white/40 text-lg leading-none">−</button>
+                    <input type="range" min="0.6" max="1.4" step="0.02" value={val} onChange={(e) => set(Number(e.target.value))} className="accent-white" />
+                    <button type="button" onClick={() => set(val + 0.05)} className="h-9 rounded border border-white/40 text-lg leading-none">+</button>
+                    <span className="text-right tabular-nums">{val > 1 ? "+" : ""}{Math.round((val - 1) * 100)}</span>
+                  </div>
+                );
+              })}
+              <div className="flex gap-2 text-xs">
+                <button type="button" onClick={() => setAdjust((a) => (a ? { ...a, rotate: ((a.rotate + 90) % 360) as Adjust["rotate"] } : a))} className="flex items-center gap-1 rounded border border-white/40 px-3 py-2"><RotateCw className="size-4" /> Rotate</button>
+                <button type="button" onClick={() => setAdjust({ ...NO_ADJUST })} className="rounded border border-white/40 px-3 py-2">Reset</button>
+                <button type="button" onClick={() => setAdjust(null)} className="ml-auto rounded border border-white/40 px-3 py-2">Cancel</button>
+                <button type="button" disabled={busy != null} onClick={() => applyEdit(current, adjust)} className="rounded bg-white px-4 py-2 font-semibold text-black disabled:opacity-40">{busy === current.path ? "Applying…" : "Apply"}</button>
+              </div>
+            </div>
+          )}
           <div className="flex gap-2 bg-neutral-900 px-4 pb-6 pt-3 text-sm">
+            {!adjust && <button type="button" disabled={busy != null} onClick={() => { setAdjust({ ...NO_ADJUST }); setShowOriginal(false); }} className="flex flex-1 items-center justify-center gap-1 rounded border border-white/40 py-3"><SlidersHorizontal className="size-4" /> Adjust</button>}
             <button type="button" disabled={busy != null} onClick={() => cutExisting(current)} className="flex flex-1 items-center justify-center gap-1 rounded border border-white/40 py-3"><Scissors className="size-4" /> {busy === current.path ? "Working…" : cutFor(current) ? "Redo background" : "Remove background"}</button>
             {cutFor(current) && <button type="button" disabled={busy != null} onClick={() => remove(cutFor(current)!)} className="flex items-center justify-center gap-1 rounded border border-white/40 px-3 py-3" title="Put the original back">Undo</button>}
             <button type="button" disabled={busy != null} onClick={() => remove(current)} className="flex flex-1 items-center justify-center gap-1 rounded border border-red-400 py-3 text-red-300"><Trash2 className="size-4" /> Delete</button>

@@ -18,7 +18,7 @@ export async function GET() {
   return NextResponse.json({ configured: Boolean(cfg), domain: cfg?.domain ?? null });
 }
 
-type Photo = { url: string; kind: "original" | "cutout" };
+type Photo = { url: string; path: string; kind: "original" | "cutout"; source?: string; taken_at?: string };
 
 export async function POST(request: Request) {
   let body: { sku?: string; action?: "push" | "unlist" };
@@ -64,9 +64,12 @@ export async function POST(request: Request) {
     if (!price) return NextResponse.json({ error: "This garment has no price to list at." }, { status: 400 });
     if (item.status === "sold" || item.status === "rejected") return NextResponse.json({ error: `Cannot list a ${item.status} garment.` }, { status: 400 });
 
+    // Every picture in its order; where a picture has a cut-out, the cut-out stands in for it.
     const photos = (item.photos ?? []) as Photo[];
-    const cutouts = photos.filter((p) => p.kind === "cutout").map((p) => p.url);
-    const imageUrls = cutouts.length ? cutouts : photos.map((p) => p.url);
+    const originals = photos.filter((p) => p.kind !== "cutout");
+    const cutouts = photos.filter((p) => p.kind === "cutout");
+    const cutFor = (p: Photo) => cutouts.find((c) => c.source === p.path) ?? cutouts.find((c) => !c.source && (c.taken_at ?? "") > (p.taken_at ?? "") && !originals.some((o) => (o.taken_at ?? "") > (p.taken_at ?? "") && (o.taken_at ?? "") < (c.taken_at ?? "")));
+    const imageUrls = originals.length ? originals.map((p) => cutFor(p)?.url ?? p.url) : cutouts.map((c) => c.url);
 
     const taggable = {
       wearer: item.wearer, season: item.season, category, sub_category: subCategory, brand: item.brand_text, brand_tier: item.brand_tier,
