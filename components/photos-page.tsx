@@ -34,14 +34,14 @@ export function PhotosPage() {
   function open(sku: string) {
     const s = sku.trim().toUpperCase();
     if (!s) return;
-    router.push(`/items/${encodeURIComponent(s)}#photos`);
+    router.push(`/photos/${encodeURIComponent(s)}`);
   }
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Photos</h1>
-        <p className="text-sm text-muted-foreground">The photography station. Scan the tag on an online garment, take its pictures on the garment page, then the next one. Outlet garments never come here — their reference shot is taken at tagging.</p>
+        <p className="text-sm text-muted-foreground">The photography station. Scan the tag on an online garment, take its pictures, then the next one. Outlet garments never come here — their reference shot is taken at tagging.</p>
       </div>
 
       <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); open(scan); }}>
@@ -77,7 +77,7 @@ export function PhotosPage() {
                           <td className="py-2 pr-3">{r.size ?? "—"}</td>
                           <td className="py-2 pr-3">{GRADE[r.grade] ?? r.grade}</td>
                           <td className="py-2 pr-3 text-muted-foreground">{new Date(r.tagged_at).toLocaleDateString("en-PK", { day: "numeric", month: "short" })}</td>
-                          <td className="py-2 text-right"><Link href={`/items/${encodeURIComponent(r.sku)}#photos`} className="text-xs underline" onClick={(e) => e.stopPropagation()}>Take pictures</Link></td>
+                          <td className="py-2 text-right"><Link href={`/photos/${encodeURIComponent(r.sku)}`} className="text-xs underline" onClick={(e) => e.stopPropagation()}>Take pictures</Link></td>
                         </tr>
                       ))}
                     </tbody>
@@ -94,7 +94,7 @@ export function PhotosPage() {
                 <ul className="grid gap-1 text-sm sm:grid-cols-2">
                   {data.done.map((r) => (
                     <li key={r.sku} className="flex justify-between gap-2">
-                      <Link href={`/items/${encodeURIComponent(r.sku)}`} className="font-mono text-xs underline">{r.sku}</Link>
+                      <Link href={`/photos/${encodeURIComponent(r.sku)}`} className="font-mono text-xs underline">{r.sku}</Link>
                       <span className="truncate text-muted-foreground">{r.sub_category} · {r.brand ?? "—"} · {r.photos} photo{r.photos === 1 ? "" : "s"}{r.online_status ? ` · ${r.online_status}` : ""}</span>
                     </li>
                   ))}

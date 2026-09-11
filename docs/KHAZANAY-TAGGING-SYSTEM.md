@@ -37,7 +37,7 @@ Managers add taggers at **Admin → Staff** (name, role, home outlet, PIN, daily
 |---|---|---|---|
 | Sign in | `/login` | all | Name grid + keypad; first run sets up the founder |
 | **Tag item** | `/tag` | tagger+ | The one screen that must be fast (§5) |
-| Photos | `/photos` | tagger+ | Photography station: online garments waiting for pictures, scan to open |
+| Photos | `/photos` · `/photos/[sku]` | tagger+ | Photography station: queue of online garments, scan to open the capture screen |
 | Items | `/items` | tagger+ | Search by SKU / brand / sub-category; reprint; Excel/CSV export with a date range (managers) |
 | Garment | `/items/[sku]` | tagger+ | Channel, destination outlet, photos, listing preview, Shopify push |
 | Print tag | `/items/[sku]/print` · `/print?skus=…` | tagger+ | One tag, or a whole session's tags in one print job |
@@ -117,7 +117,7 @@ Regular high street ×1.00 · Affordable luxury ×2.00 · Ultra luxury → hande
 
 ## 5. The tag form — how a garment is tagged
 
-**Two forms, one screen (11 Sep).** *Tagging for* switches the form. **Outlet** is the short form: season, wearer, category and sub-category as tap buttons (they set the price and the SKU), reference photo, brand, size, condition, price. Colour, measurements and sleeves are not asked. **Online** is the full form below, minus the photo: pictures are taken afterwards at the photography station (**Photos** in the menu, `/photos`), which lists every online garment without pictures, oldest first; scan the tag, take the pictures on the garment page, next. Works for a dedicated photographer or a tagger doing a photo session.
+**Two forms, one screen (11 Sep).** *Tagging for* switches the form. **Outlet** is the short form: season, wearer, category and sub-category as tap buttons (they set the price and the SKU), reference photo, brand, size, condition, price. Colour, measurements and sleeves are not asked. **Online** is the full form below, minus the photo: pictures are taken afterwards at the photography station (**Photos** in the menu, `/photos`), which lists every online garment without pictures, oldest first; scan the tag and a dedicated capture screen (`/photos/[sku]`) opens: a big *Take picture* button straight to the camera, every picture compressed on the iPad to under 1 MB (longest side 2000 px, JPEG), the background removed from the **first** picture automatically (the full-garment shot; close-ups keep theirs — a per-picture *Remove background* button covers the rest), then *Next garment*. No channel or listing controls live there; the online listing gets its own screen later. Works for a dedicated photographer or a tagger doing a photo session.
 
 Order on the full (online) form:
 
