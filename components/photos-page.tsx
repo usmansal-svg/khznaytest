@@ -51,6 +51,23 @@ export function PhotosPage() {
   const [search, setSearch] = useState("");
   const [listFilter, setListFilter] = useState<"none" | "done" | "all">("all");
   const touchX = useRef<number | null>(null);
+  // Press-and-hold drag to reorder the thumbnails (pointer events, so it works on iPhone).
+  const [dragId, setDragId] = useState<number | null>(null);
+  const holdTimer = useRef<number | null>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  function onTilePointerDown(id: number) {
+    holdTimer.current = window.setTimeout(() => { setDragId(id); if (navigator.vibrate) navigator.vibrate(10); }, 250);
+  }
+  function cancelHold() { if (holdTimer.current) { window.clearTimeout(holdTimer.current); holdTimer.current = null; } }
+  function onGridPointerMove(e: React.PointerEvent) {
+    if (dragId == null) return;
+    e.preventDefault();
+    const el = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>("[data-shot]");
+    const overId = el ? Number(el.dataset.shot) : NaN;
+    if (!Number.isFinite(overId) || overId === dragId) return;
+    setShots((all) => { const from = all.findIndex((x) => x.id === dragId); const to = all.findIndex((x) => x.id === overId); if (from < 0 || to < 0) return all; const c = [...all]; const [m] = c.splice(from, 1); c.splice(to, 0, m); return c; });
+  }
+  function endDrag() { cancelHold(); setDragId(null); }
   const [camInfo, setCamInfo] = useState<string | null>(null);
   const [autoCut, setAutoCut] = useState(true);
   const [flash, setFlash] = useState(false);
@@ -146,7 +163,6 @@ export function PhotosPage() {
   }
 
   const keptCount = shots.filter((s) => s.keep).length;
-  const removeShot = (id: number) => setShots((all) => { const s = all.find((x) => x.id === id); if (s?.blob) URL.revokeObjectURL(s.url); return all.filter((x) => x.id !== id); });
   function snap() {
     const v = videoRef.current;
     if (!v || !v.videoWidth || keptCount >= MAX_SHOTS) return;
@@ -169,7 +185,7 @@ export function PhotosPage() {
 
   /* ------------------------------------------------------- background save */
 
-  async function upload(sku: string, file: Blob, kind: "original" | "cutout"): Promise<{ url: string }> {
+  async function upload(sku: string, file: Blob, kind: "original" | "cutout"): Promise<{ url: string; path: string }> {
     const fd = new FormData();
     fd.append("sku", sku); fd.append("kind", kind); fd.append("file", file, kind === "cutout" ? "cutout.jpg" : "photo.jpg");
     const res = await fetch("/api/photos", { method: "POST", body: fd });
@@ -205,6 +221,7 @@ export function PhotosPage() {
       const del = (path: string) => fetch("/api/photos", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ sku, path }) });
       let cover: Blob | null = null;
       let done = 0;
+      const uploaded: string[] = [];
       try {
         for (const path of discarded) await del(path);
         for (const w of work) {
@@ -216,11 +233,18 @@ export function PhotosPage() {
           const source = w.blob ?? (await (await fetch(w.url)).blob());
           const square = await squareForShopify(await applyAdjust(source, w.adjust), 2048, 1024 * 1024);
           if (w.isCover) cover = square;
-          await upload(sku, square, "original");
+          const ph = await upload(sku, square, "original");
+          uploaded.push(ph.path);
           if (w.existing) await del(w.existing.path); // the edited version replaces it
           update({ done: ++done });
         }
       } catch (e) { update({ error: e instanceof Error ? e.message : "Upload failed.", cutout: "failed" }); return; }
+      // The order on screen is the order on Shopify.
+      try {
+        const order: string[] = [];
+        for (const w of work) order.push(w.existing && !(w.adjust.brightness !== 1 || w.adjust.contrast !== 1 || w.adjust.rotate !== 0) ? w.existing.path : (uploaded.shift() ?? ""));
+        await fetch("/api/photos", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ sku, order: order.filter(Boolean) }) });
+      } catch { /* order is cosmetic; the pictures are safe */ }
       // A new cover means a new cut-out; the old cut-outs go.
       if (wantCut && cover) for (const path of oldCutouts) await del(path);
       if (wantCut && cover) {
@@ -491,21 +515,28 @@ export function PhotosPage() {
                 <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={onNative} />
                 <button type="button" onClick={() => fileRef.current?.click()} className="text-xs text-muted-foreground underline">Or take one shot with the phone&apos;s own camera app (full resolution)</button>
                 {camInfo && <p className="text-[11px] text-muted-foreground">Camera {camInfo} · saved square at 2048 px for Shopify, under 1 MB</p>}
-                {shots.length > 0 && <p className="text-xs text-muted-foreground">{retaking ? "Earlier pictures are marked; keep, adjust or discard any of them and add new ones. " : ""}Picture 1 is the cover (★); the star on a picture makes it the cover. Tap a picture to review and adjust it; untick the box to leave it out; the bin deletes it.</p>}
+                {shots.length > 0 && <p className="text-xs text-muted-foreground">{retaking ? "Earlier pictures are marked; keep, adjust or discard any of them and add new ones. " : ""}Press and hold a picture, then drag it to change the order — picture 1 is the cover and the order is the order on Shopify. Tap a picture to review and adjust it.</p>}
                 {shots.length > 0 && (
-                  <div className="grid grid-cols-3 gap-2">
+                  <div ref={gridRef} className="grid grid-cols-3 gap-2 select-none" onPointerMove={onGridPointerMove} onPointerUp={endDrag} onPointerCancel={endDrag} onPointerLeave={endDrag} style={{ touchAction: dragId != null ? "none" : "auto" }}>
                     {shots.map((s, i) => (
-                      <div key={s.id} className={cn("relative aspect-square overflow-hidden rounded-md border-2", s.keep ? (s.id === coverId ? "border-amber-500" : "border-green-600") : "border-transparent opacity-40")}>
-                        <button type="button" onClick={() => { setReviewIdx(i); setMode("review"); }} className="h-full w-full">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={s.url} alt={`Shot ${i + 1}`} className="h-full w-full object-cover" style={{ filter: cssFilter(s.adjust), transform: `rotate(${s.adjust.rotate}deg)` }} />
-                        </button>
-                        {s.id === coverId && s.keep && <span className="absolute inset-x-0 top-0 bg-amber-500 py-0.5 text-center text-[10px] font-bold uppercase tracking-wide text-black">★ Cover</span>}
-                        <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1 text-[10px] text-white">{i + 1}{s.existing ? " · earlier" : ""}</span>
-                        <label className="absolute bottom-1 right-1 flex items-center rounded bg-white/90 p-1" title={s.keep ? "Untick to leave this picture out" : "Tick to keep it"}><Checkbox checked={s.keep} onCheckedChange={(v) => setShot(s.id, { keep: v === true })} /></label>
-                        <button type="button" onClick={() => removeShot(s.id)} className="absolute right-1 top-6 rounded-full bg-black/60 p-1 text-white" aria-label="Delete this picture"><Trash2 className="size-3.5" /></button>
-                        {s.keep && s.id !== coverId && <button type="button" onClick={() => toFront(s.id)} className="absolute left-1 top-6 rounded-full bg-black/60 p-1 text-white" aria-label="Make this the cover"><Star className="size-3.5" /></button>}
-
+                      <div key={s.id} data-shot={s.id} className={cn("flex flex-col overflow-hidden rounded-md border-2 bg-background", s.keep ? (i === 0 ? "border-amber-500" : "border-green-600") : "border-dashed border-muted-foreground/40 opacity-60", dragId === s.id && "scale-105 shadow-xl ring-2 ring-primary")}>
+                        <div className="relative aspect-square" onPointerDown={() => onTilePointerDown(s.id)} onPointerUp={cancelHold} onPointerCancel={cancelHold} onContextMenu={(e) => e.preventDefault()}>
+                          <button type="button" onClick={() => { if (dragId == null) { setReviewIdx(i); setMode("review"); } }} className="h-full w-full">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={s.url} alt={`Picture ${i + 1}`} draggable={false} className="h-full w-full object-cover" style={{ filter: cssFilter(s.adjust), transform: `rotate(${s.adjust.rotate}deg)` }} />
+                          </button>
+                          {i === 0 && s.keep && <span className="absolute inset-x-0 top-0 bg-amber-500 py-0.5 text-center text-[10px] font-bold uppercase tracking-wide text-black">★ Cover</span>}
+                          <span className="absolute bottom-1 left-1 rounded bg-black/70 px-1.5 text-xs font-semibold text-white">{i + 1}</span>
+                          {s.existing && <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 text-[10px] text-white">earlier</span>}
+                        </div>
+                        <div className="grid grid-cols-2 divide-x border-t text-[11px]">
+                          {s.keep
+                            ? <button type="button" onClick={() => setShot(s.id, { keep: false })} className="flex items-center justify-center gap-1 py-1.5 text-red-700 dark:text-red-400"><Trash2 className="size-3.5" /> Delete</button>
+                            : <button type="button" onClick={() => setShot(s.id, { keep: true })} className="flex items-center justify-center gap-1 py-1.5 font-semibold"><Check className="size-3.5" /> Keep</button>}
+                          {i === 0 && s.keep
+                            ? <span className="flex items-center justify-center gap-1 py-1.5 text-amber-700 dark:text-amber-400"><Star className="size-3.5" /> Cover</span>
+                            : <button type="button" disabled={!s.keep} onClick={() => toFront(s.id)} className="flex items-center justify-center gap-1 py-1.5 disabled:opacity-40"><Star className="size-3.5" /> Make cover</button>}
+                        </div>
                       </div>
                     ))}
                   </div>

@@ -43,6 +43,33 @@ export async function POST(request: Request) {
   return NextResponse.json({ photo, photos });
 }
 
+/**
+ * PATCH /api/photos { sku, order: [path, …] } — the order the pictures are
+ * shown and sent to Shopify in. Paths not listed keep their place after the
+ * listed ones; cut-outs stay attached to their originals' order.
+ */
+export async function PATCH(request: Request) {
+  let body: { sku?: string; order?: string[] };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Body must be JSON." }, { status: 400 });
+  }
+  const gate = await requireStaff();
+  if ("response" in gate) return gate.response;
+  const sku = body.sku?.trim().toUpperCase();
+  if (!sku || !Array.isArray(body.order)) return NextResponse.json({ error: "sku and order are required." }, { status: 400 });
+  const { data: item } = await gate.db.from("items").select("id, photos").eq("sku", sku).maybeSingle();
+  if (!item) return NextResponse.json({ error: `No item with SKU ${sku}.` }, { status: 404 });
+  const photos = (item.photos ?? []) as Photo[];
+  const rank = new Map(body.order.map((p, i) => [p, i]));
+  const originals = photos.filter((p) => p.kind !== "cutout").sort((a, b) => (rank.get(a.path) ?? 1e9) - (rank.get(b.path) ?? 1e9));
+  const cutouts = photos.filter((p) => p.kind === "cutout");
+  const { error } = await gate.db.from("items").update({ photos: [...originals, ...cutouts] }).eq("id", item.id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ photos: [...originals, ...cutouts] });
+}
+
 export async function DELETE(request: Request) {
   let body: { sku?: string; path?: string };
   try {
