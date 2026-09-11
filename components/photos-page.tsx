@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, Check, ChevronLeft, ChevronRight, RefreshCw, RotateCw, ScanLine, Search, Star, Trash2, X } from "lucide-react";
+import { Camera, Check, ChevronLeft, ChevronRight, LogOut, RefreshCw, RotateCw, ScanLine, Search, Star, Trash2, UserRound, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,6 +37,9 @@ const MAX_SHOTS = 6;
 const cssFilter = (a: Adjust) => `brightness(${a.brightness}) contrast(${a.contrast})`;
 
 export function PhotosPage() {
+  const router = useRouter();
+  const [profile, setProfile] = useState(false);
+  const [pf, setPf] = useState({ name: "", current: "", next: "", busy: false, msg: null as { ok: boolean; text: string } | null });
   const [data, setData] = useState<{ waiting: Row[]; done: Row[]; total_online: number; me: Me; sees_names?: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"home" | "scan" | "shoot" | "review">("home");
@@ -247,15 +251,70 @@ export function PhotosPage() {
 
   /* ------------------------------------------------------------ views */
 
-  const Progress = me && (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-background px-3 py-2">
-      <div>
-        <div className="text-sm font-semibold">{me.name} <span className="font-normal capitalize text-muted-foreground">· {me.role.replace("_", " ")}</span></div>
-        <div className="text-xs text-muted-foreground">{me.today} of {me.target} garments today · {Math.max(0, me.target - me.today)} to go</div>
+  async function logout() {
+    closeCamera();
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.replace("/login");
+    router.refresh();
+  }
+  async function saveProfile() {
+    setPf((p) => ({ ...p, busy: true, msg: null }));
+    try {
+      const res = await fetch("/api/auth/profile", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ current_pin: pf.current, name: pf.name.trim() || undefined, new_pin: pf.next || undefined }) });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error ?? "Could not save.");
+      setPf((p) => ({ ...p, busy: false, current: "", next: "", msg: { ok: true, text: "Saved." } }));
+      void load();
+    } catch (e) { setPf((p) => ({ ...p, busy: false, msg: { ok: false, text: e instanceof Error ? e.message : "Could not save." } })); }
+  }
+
+  // Header: wordmark (home), the day's progress as a ring, profile / sign out.
+  const pct = me ? Math.min(100, me.pct) : 0;
+  const ring = 2 * Math.PI * 34;
+  const Header = (
+    <div className="overflow-hidden rounded-2xl border bg-gradient-to-br from-neutral-900 to-neutral-700 text-white shadow-md dark:from-neutral-800 dark:to-neutral-950">
+      <div className="flex items-center justify-between px-4 pt-3">
+        <button type="button" onClick={goHome} className="text-lg font-black tracking-tight" aria-label="Home">Khazanay <span className="ml-1 rounded bg-white/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-widest">Photos</span></button>
+        <div className="flex items-center gap-1">
+          <button type="button" onClick={() => { setPf((p) => ({ ...p, name: me?.name ?? "", msg: null })); setProfile(true); }} className="rounded-full p-2 hover:bg-white/10" aria-label="Profile"><UserRound className="size-5" /></button>
+          <button type="button" onClick={logout} className="rounded-full p-2 hover:bg-white/10" aria-label="Sign out"><LogOut className="size-5" /></button>
+        </div>
       </div>
-      <div className="flex items-center gap-3">
-        <div className="h-2 w-28 rounded bg-muted"><div className={cn("h-2 rounded", me.pct >= 100 ? "bg-green-600" : "bg-foreground/70")} style={{ width: `${Math.min(100, me.pct)}%` }} /></div>
-        <div className={cn("text-xl font-bold tabular-nums", me.pct >= 100 && "text-green-700 dark:text-green-400")}>{me.pct}%</div>
+      {me && (
+        <div className="flex items-center gap-4 px-4 pb-4 pt-2">
+          <div className="relative size-24 shrink-0">
+            <svg viewBox="0 0 80 80" className="size-24 -rotate-90">
+              <circle cx="40" cy="40" r="34" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="8" />
+              <circle cx="40" cy="40" r="34" fill="none" stroke={pct >= 100 ? "#22c55e" : "#f59e0b"} strokeWidth="8" strokeLinecap="round" strokeDasharray={ring} strokeDashoffset={ring * (1 - pct / 100)} className="transition-[stroke-dashoffset] duration-700" />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center"><span className="text-xl font-black tabular-nums leading-none">{me.pct}%</span><span className="text-[10px] text-white/60">today</span></div>
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-xs uppercase tracking-widest text-white/60">{new Date().toLocaleDateString("en-PK", { weekday: "long", day: "numeric", month: "short" })}</div>
+            <div className="truncate text-2xl font-bold leading-tight">{me.name}</div>
+            <div className="mt-1 text-sm text-white/80"><span className="text-lg font-semibold text-white">{me.today}</span> of {me.target} garments{me.today >= me.target ? " · target met 🎉" : ` · ${me.target - me.today} to go`}</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const Profile = profile && (
+    <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/60" onClick={() => setProfile(false)}>
+      <div className="rounded-t-2xl bg-background p-4" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-bold">Your profile</h2>
+        <p className="mb-3 text-sm text-muted-foreground">Change your name or PIN. Your current PIN is needed for either.</p>
+        <div className="grid gap-3">
+          <div className="grid gap-1"><label className="text-xs font-medium" htmlFor="pf-name">Name</label><Input id="pf-name" value={pf.name} onChange={(e) => setPf((p) => ({ ...p, name: e.target.value }))} className="h-11" /></div>
+          <div className="grid gap-1"><label className="text-xs font-medium" htmlFor="pf-cur">Current PIN</label><Input id="pf-cur" type="password" inputMode="numeric" value={pf.current} onChange={(e) => setPf((p) => ({ ...p, current: e.target.value.replace(/\D/g, "").slice(0, 6) }))} className="h-11 font-mono" /></div>
+          <div className="grid gap-1"><label className="text-xs font-medium" htmlFor="pf-new">New PIN <span className="font-normal text-muted-foreground">· leave empty to keep it</span></label><Input id="pf-new" type="password" inputMode="numeric" value={pf.next} onChange={(e) => setPf((p) => ({ ...p, next: e.target.value.replace(/\D/g, "").slice(0, 6) }))} className="h-11 font-mono" placeholder="4–6 digits" /></div>
+          {pf.msg && <p className={cn("text-sm", pf.msg.ok ? "text-green-700 dark:text-green-400" : "text-destructive")}>{pf.msg.text}</p>}
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" className="h-12" onClick={() => setProfile(false)}>Close</Button>
+            <Button type="button" className="h-12 flex-1" disabled={pf.busy || pf.current.length < 4} onClick={saveProfile}>{pf.busy ? "Saving…" : "Save"}</Button>
+            <Button type="button" variant="ghost" className="h-12" onClick={logout}><LogOut className="size-4" /> Sign out</Button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -333,7 +392,8 @@ export function PhotosPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       {Review}
-      {Progress}
+      {Profile}
+      {Header}
       {jobs.some((j) => j.error) && <p className="text-sm text-destructive">{jobs.filter((j) => j.error).map((j) => `${j.sku}: ${j.error}`).join(" · ")}</p>}
       {error && <p className="text-sm text-destructive">{error}</p>}
 
