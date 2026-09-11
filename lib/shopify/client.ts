@@ -189,29 +189,6 @@ export async function ensureOrderWebhook(cfg: ShopifyConfig, callbackUrl: string
   return { id: data.webhookSubscriptionCreate.webhookSubscription!.id, created: true };
 }
 
-/** The app's own webhook subscriptions (admin-created ones are not visible here). */
-export async function listWebhooks(cfg: ShopifyConfig): Promise<{ id: string; topic: string; url: string | null }[]> {
-  const data = await gql<{ webhookSubscriptions: { nodes: { id: string; topic: string; endpoint: { __typename: string; callbackUrl?: string } }[] } }>(
-    cfg,
-    `query { webhookSubscriptions(first: 50) { nodes { id topic endpoint { __typename ... on WebhookHttpEndpoint { callbackUrl } } } } }`,
-    {},
-  );
-  return data.webhookSubscriptions.nodes.map((n) => ({ id: n.id, topic: n.topic, url: n.endpoint.callbackUrl ?? null }));
-}
-
-/** Make sure Shopify sends paid orders to our endpoint; signed with the app's client secret. */
-export async function ensureOrderWebhook(cfg: ShopifyConfig, callbackUrl: string): Promise<{ id: string; created: boolean }> {
-  const existing = (await listWebhooks(cfg)).find((w) => w.topic === "ORDERS_PAID" && w.url === callbackUrl);
-  if (existing) return { id: existing.id, created: false };
-  const data = await gql<{ webhookSubscriptionCreate: { webhookSubscription: { id: string } | null; userErrors: GqlError[] } }>(
-    cfg,
-    `mutation sub($topic: WebhookSubscriptionTopic!, $sub: WebhookSubscriptionInput!) { webhookSubscriptionCreate(topic: $topic, webhookSubscription: $sub) { webhookSubscription { id } userErrors { field message } } }`,
-    { topic: "ORDERS_PAID", sub: { callbackUrl, format: "JSON" } },
-  );
-  userErrors(data.webhookSubscriptionCreate.userErrors, "webhookSubscriptionCreate");
-  return { id: data.webhookSubscriptionCreate.webhookSubscription!.id, created: true };
-}
-
 /** Every location on the store, for mapping outlets to where their Shopify POS pulls stock from. */
 export async function listLocations(cfg: ShopifyConfig): Promise<{ id: string; name: string; active: boolean }[]> {
   const data = await gql<{ locations: { nodes: { id: string; name: string; isActive: boolean }[] } }>(cfg, `query { locations(first: 50) { nodes { id name isActive } } }`, {});
