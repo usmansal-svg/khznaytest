@@ -298,7 +298,7 @@ export function PhotosPage() {
   const Header = (
     <div className="overflow-hidden rounded-2xl border bg-gradient-to-br from-neutral-900 to-neutral-700 text-white shadow-md dark:from-neutral-800 dark:to-neutral-950">
       <div className="flex items-center justify-between px-4 pt-3">
-        <button type="button" onClick={goHome} className="text-lg font-black tracking-tight" aria-label="Home">Khazanay <span className="ml-1 rounded bg-white/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-widest">Photos</span></button>
+        <span className="rounded bg-white/15 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-widest">Photography</span>
         <div className="flex items-center gap-1">
           <button type="button" onClick={() => { setPf((p) => ({ ...p, name: me?.name ?? "", msg: null })); setProfile(true); }} className="rounded-full p-2 hover:bg-white/10" aria-label="Profile"><UserRound className="size-5" /></button>
           <button type="button" onClick={logout} className="rounded-full p-2 hover:bg-white/10" aria-label="Sign out"><LogOut className="size-5" /></button>
@@ -417,7 +417,7 @@ export function PhotosPage() {
     <div className="mx-auto max-w-3xl space-y-4">
       {Review}
       {Profile}
-      {Header}
+      {mode === "home" && Header}
       {jobs.some((j) => j.error) && <p className="text-sm text-destructive">{jobs.filter((j) => j.error).map((j) => `${j.sku}: ${j.error}`).join(" · ")}</p>}
       {error && <p className="text-sm text-destructive">{error}</p>}
 

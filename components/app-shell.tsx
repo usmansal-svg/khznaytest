@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Activity, ArrowRightLeft, Camera, ClipboardCheck, PanelLeftClose, PanelLeftOpen, LayoutDashboard, Package, Search, SlidersHorizontal, Tag, Tags, Users, type LucideIcon } from "lucide-react";
 
+import { BrandLogo } from "@/components/brand-logo";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { cn } from "@/lib/utils";
 
@@ -56,6 +57,7 @@ export function AppShell({ auth, children }: { auth: React.ReactNode; children: 
     setCollapsed((c) => { try { localStorage.setItem("khz_nav", c ? "open" : "closed"); } catch { /* fine */ } return !c; });
   }
   const rank = role ? RANK[role] : 0;
+  const home = role === "photographer" ? "/photos" : role === "manager" || role === "founder" ? "/dashboard" : "/tag";
   const can = (item: NavItem) => !item.min || rank >= RANK[item.min];
   const work = role === "photographer" ? WORK.filter((i) => i.href === "/photos") : WORK.filter(can);
   const admin = role === "photographer" ? [] : ADMIN.filter(can);
@@ -64,7 +66,7 @@ export function AppShell({ auth, children }: { auth: React.ReactNode; children: 
     <div className="flex min-h-screen bg-muted/40">
       <aside className={cn("hidden w-56 shrink-0 flex-col border-r bg-background print:hidden", !collapsed && "md:flex")}>
         <div className="flex h-14 items-center justify-between border-b pl-5 pr-2">
-          <Link href={role === "photographer" ? "/photos" : "/tag"} className="text-base font-bold">Khazanay</Link>
+          <BrandLogo href={home} />
           <button type="button" onClick={toggleNav} title="Hide the menu" className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground"><PanelLeftClose className="size-5" /></button>
         </div>
         <nav className="flex-1 space-y-6 p-3">
@@ -78,8 +80,8 @@ export function AppShell({ auth, children }: { auth: React.ReactNode; children: 
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 items-center gap-3 border-b bg-background px-4 print:hidden md:hidden">
-          <Link href="/tag" className="font-bold">Khazanay</Link>
+        <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b bg-background px-4 print:hidden md:hidden">
+          <BrandLogo href={home} />
           <nav className="flex gap-3 overflow-x-auto text-sm">
             {[...work, ...admin].map((item) => (
               <Link
