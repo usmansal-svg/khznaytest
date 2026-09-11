@@ -31,6 +31,9 @@ export async function POST(request: Request) {
   if (topic.startsWith("orders/") && order.financial_status && !["paid", "partially_paid", "authorized"].includes(order.financial_status)) return NextResponse.json({ ok: true, skipped: order.financial_status });
 
   const db = createServiceClient();
+  // Every verified call is recorded, test notifications included, so delivery can be checked without server logs.
+  const skusOnOrder = (order.line_items ?? []).map((l) => l.sku?.trim().toUpperCase()).filter((x): x is string => Boolean(x));
+  await db.from("admin_audits").insert({ table_name: "shopify_webhook", row_key: String(order.name ?? order.id ?? "test"), before: null, after: { topic, source: order.source_name ?? null, financial_status: order.financial_status ?? null, lines: skusOnOrder.length, skus: skusOnOrder.slice(0, 20) }, changed_by: null, note: `Shopify webhook received (${request.headers.get("x-shopify-shop-domain") ?? "unknown shop"})` });
   const soldAt = order.created_at ?? new Date().toISOString();
   const via = order.source_name === "pos" ? "shopify_pos" : "shopify_web";
   const done: string[] = [];
