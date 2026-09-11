@@ -1,6 +1,6 @@
 # Khazanay Tagging System — Reference
 
-*Everything built from 7 September 2026. The POS built on 12 September is moving to its own project; see KHAZANAY-POS.md. The system of record for how the tagging platform works, why it works that way, and what is still open. Keep this current when things change.*
+*Everything built from 7 September 2026. This is the tagging platform only: the POS built on 12 September was moved out of the app into `archive/pos/` (with its own reference document) to become separate software. The system of record for how the tagging platform works, why it works that way, and what is still open. Keep this current when things change.*
 
 **Live:** https://khazanaytest.vercel.app · **Repo branch:** `pricing-engine` (48 commits) · **Database:** Supabase project `dytirapyaaadjobklree` · **Tests:** 101, all passing (`npm test`)
 
@@ -51,7 +51,7 @@ Managers add staff at **Admin → Staff** (name, role, home outlet, PIN, daily t
 | Brands | `/admin/brands` | manager+ | Quick-pick list for the tag form; three tier columns; new-from-tagger tray |
 | Staff | `/admin/staff` | manager+ | Names, roles, PINs, targets |
 
-The Floor screen (drop day / monthly sweep) moved into the POS (Stock → Monthly sweep); managers reach the POS from the Admin menu. The public pricing demo at `/price` remains open and should be closed before real stock.
+The Floor screen (drop day / monthly sweep) is not in this platform; it belongs to the POS. The public pricing demo at `/price` remains open and should be closed before real stock.
 
 ---
 
@@ -211,22 +211,9 @@ Khazanay wordmark · unmarked space top-right for the month's **colour sticker**
 
 ---
 
-## 12. Point of sale (`/pos`, 12 Sep)
+## 12. Point of sale — separate software
 
-**One database, two surfaces.** The POS is its own screen set with its own roles but reads and writes the same `items` table, so stock "moves" to the POS simply by being received there. No import, no export.
-
-| Piece | What it does |
-|---|---|
-| **Roles** | *Cashier* and *Outlet manager*, each tied to one outlet on Staff; they see `/pos` only. Managers and the founder open any outlet from a switcher in the POS header and see Reports. |
-| **Receive** | Transfers sent from the warehouse appear at the outlet; *Receive all* (or scanning the sheet's code) puts every garment **on the floor from today, in this month's colour**, and starts its markdown clock. Receiving from the warehouse side (Transfers → received) does the same. |
-| **Till** | Scan; the server prices the garment **for today** (list price walked down the ladder by months on the floor, live settings). A different price needs a reason and is recorded beside the shelf price. Discount, five payment methods, change, customer phone, 80 mm receipt. Stock not received here is refused unless an outlet manager overrides. Every sale is atomic (`checkout_sale`). |
-| **Shopify sold-out** | A sold garment that is listed online is taken off Shopify at once; if that call fails it waits in `shopify_sync_queue` and the till retries the queue after every sale and a nightly cron (`vercel.json` → `/api/pos/shopify-sync`, `CRON_SECRET`; Vercel Hobby allows one run a day) sweeps up the rest, with the error shown on the garment. Set `CRON_SECRET` in Vercel. |
-| **Till session** | Open with a float; close by counting the drawer. Expected cash = float + cash sales − cash refunds; short/over is recorded with a note. Selling needs an open session. |
-| **Sales** | Receipts by date or search; reprint; **return** one garment (reason, refund, back on the floor or damaged); **void** a receipt (outlet manager, reason) — garments return to the floor. |
-| **Stock** | Everything on the floor here, oldest first, with stage, price today, days on floor and colour; the **monthly sweep** lists the stickers due and the garments to pull (four colours back), and marks them pulled. |
-| **Reports** (HQ) | Sold, takings, realised vs list, GP, average sold price, returns; sold-at-which-markdown against the profile assumptions; by condition, selling profile, sub-category and outlet with median days to sell and sell-through of what was floored in the window. This is the loop back into Pricing → Selling profiles and Grades. |
-
-Tables: `sales`, `sale_items` (shelf price, override reason, return fields), `till_sessions`, `shopify_sync_queue`, `receipt_counter`; functions `checkout_sale`, `void_sale`, `return_sale_item`. Item statuses gained `returned_damaged`. The till's earlier open-without-login access was closed.
+The POS is **not part of this platform**. It was built here on 12 September and moved out the same day, at Usman's decision, to become its own project. Its code, migrations and reference document sit in `archive/pos/` (nothing there is compiled or deployed), with a README on how to lift it into a new project. What this platform keeps for it: the shared `items` table, the `cashier` and `outlet_manager` roles on `staff`, and **receiving a transfer floors the stock** (status on_floor, floored_on, month colour), which the POS prices from.
 
 ---
 
@@ -245,7 +232,7 @@ Garment page: channel switch, photos (camera capture, on-device background remov
 - `lib/pricing/quote.ts` — the price quote used by `/api/price` and item save
 - `lib/pricing/repo.ts` — loads settings, grades, profiles, sub-categories, lots from the database
 - `lib/pricing/sheet.ts` — the Pricing tab as an Excel workbook and back (`sheet.test.ts` round-trips it)
-- `lib/pricing/compare.ts` — comparison price lookup · `lib/pricing/lot-pnl.ts` · `lib/pricing/floor.ts` (POS later)
+- `lib/pricing/compare.ts` — comparison price lookup · `lib/pricing/lot-pnl.ts` · `lib/pricing/floor.ts` (the sweep logic, used by the POS)
 - `lib/brands/normalise.ts` — brand cleanup and fuzzy match · `lib/barcode/code128.ts` — barcode SVG · `lib/shopify/*`
 - `lib/auth/*` — PIN hashing, signed sessions, `requireStaff` / `requireManager`
 - `lib/supabase/proxy.ts` — route gating by session and role

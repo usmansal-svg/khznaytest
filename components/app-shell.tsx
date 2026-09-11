@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Activity, ArrowRightLeft, Award, Camera, ClipboardCheck, PanelLeftClose, PanelLeftOpen, Store, LayoutDashboard, Package, Search, SlidersHorizontal, Tag, Tags, Users, type LucideIcon } from "lucide-react";
+import { Activity, ArrowRightLeft, Award, Camera, ClipboardCheck, PanelLeftClose, PanelLeftOpen, LayoutDashboard, Package, Search, SlidersHorizontal, Tag, Tags, Users, type LucideIcon } from "lucide-react";
 
 import { BrandLogo } from "@/components/brand-logo";
 import { ThemeSwitcher } from "@/components/theme-switcher";
@@ -28,7 +28,6 @@ const ADMIN: NavItem[] = [
   { href: "/admin/brands", label: "Brands", icon: Tags, hint: "Tiers & import", min: "manager" },
   { href: "/admin/staff", label: "Staff", icon: Users, hint: "Names & PINs", min: "manager" },
   { href: "/admin/taggers", label: "Taggers", icon: Award, hint: "Monthly scorecard", min: "manager" },
-  { href: "/pos", label: "POS", icon: Store, hint: "Outlet tills & sales", min: "manager" },
   { href: "/health", label: "Health", icon: Activity, min: "manager" },
 ];
 

@@ -67,9 +67,7 @@ export async function updateSession(request: NextRequest) {
     path.startsWith("/price") ||
     path.startsWith("/api/price") ||
     // Tags print from a plain image URL; the SKU is the only payload.
-    path.startsWith("/api/tags") ||
-    // The hourly Shopify sold-out worker authenticates with CRON_SECRET inside the route.
-    path === "/api/pos/shopify-sync";
+    path.startsWith("/api/tags");
 
   if (!user && !staff && !isPublic) {
     // API callers get a 401 they can act on. Redirecting a fetch() to the
@@ -92,21 +90,6 @@ export async function updateSession(request: NextRequest) {
   // with costs, staff or the master view needs a manager or the founder;
   // floor and transfers need QC senior or above.
   if (staff) {
-    // Outlet staff live in the POS and nothing else.
-    if (staff.role === "cashier" || staff.role === "outlet_manager") {
-      const allowed = ["/pos", "/api/pos", "/api/auth", "/login", "/health", "/api/tags"];
-      if (!allowed.some((p) => path.startsWith(p))) {
-        if (path.startsWith("/api/")) {
-          const denied = NextResponse.json({ error: "Your role cannot open this." }, { status: 403 });
-          for (const cookie of supabaseResponse.cookies.getAll()) denied.cookies.set(cookie);
-          return denied;
-        }
-        const url = request.nextUrl.clone();
-        url.pathname = "/pos";
-        url.search = "";
-        return NextResponse.redirect(url);
-      }
-    }
     // The photographer sees the Photos station and nothing else.
     if (staff.role === "photographer") {
       const allowed = ["/photos", "/api/photos", "/api/items/", "/api/auth", "/login", "/health", "/api/tags"];
