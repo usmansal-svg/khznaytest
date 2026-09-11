@@ -448,7 +448,7 @@ export function TagForm() {
                 {WEARER_OPTIONS.map((w) => <option key={w.code} value={w.code}>{w.label}</option>)}
               </select>
             </Field>
-            <Field label="Find a garment type" hint="Shortcut — type a few letters, e.g. crop, jeans, hoodie. Or tap Category then Sub-category below.">
+            <Field label="Find a garment type" hint="Shortcut — type a few letters, e.g. crop, jeans">
               <div className="relative">
                 <Input value={find} onChange={(e) => setFind(e.target.value)} placeholder="Search sub-categories…" autoComplete="off" onKeyDown={(e) => { if (e.key === "Enter" && hits[0]) { e.preventDefault(); e.stopPropagation(); pick(hits[0]); } }} />
                 {hits.length > 0 && (
@@ -769,7 +769,7 @@ function kidsHint(size: string) {
 
 function Field({ label, hint, hintTone, small, children }: { label: string; hint?: string; hintTone?: "warn"; small?: boolean; children: React.ReactNode }) {
   return (
-    <div className="grid min-w-0 gap-1.5">
+    <div className="grid min-w-0 content-start gap-1.5">
       <Label className={cn(small && "text-xs")}>{label}</Label>
       {children}
       {hint && <p className={cn("text-xs", hintTone === "warn" ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")}>{hint}</p>}
@@ -788,7 +788,7 @@ function Note({ tone, children }: { tone: "ok" | "warn" | "error"; children: Rea
 
 function ButtonGroup<T extends string>({ label, hint, options, value, onChange }: { label: string; hint?: string; options: { code: T; label: string; sub?: string }[]; value: T; onChange: (v: T) => void }) {
   return (
-    <div className="grid gap-2">
+    <div className="grid min-w-0 content-start gap-1.5">
       <Label>{label}</Label>
       <div className="flex flex-wrap gap-2">
         {options.map((o) => (
