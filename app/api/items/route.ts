@@ -18,6 +18,7 @@ import { REJECTED, type Adjustment, type GradeCode, meetsOutletMinimum } from "@
 import { ADJUSTMENTS, GRADE_CODES, quote } from "@/lib/pricing/quote";
 import { loadRareReasons, rareReason } from "@/lib/pricing/rare-reasons";
 import { loadLot, loadPricingContext, resolveBrandDb } from "@/lib/pricing/repo";
+import { stationOf } from "@/lib/pricing/station";
 import { SEASONS, WEARERS, buildSku, type Season, type Wearer } from "@/lib/pricing/sku";
 
 type Body = {
@@ -215,9 +216,9 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from("items")
-    .select("id, sku, brand_text, grade_code, size_label, colour_tag, status, price, price_manual, weight_kg, tagged_at, sub_categories(name), lots(code)")
+    .select("id, sku, brand_text, grade_code, size_label, colour_tag, status, channel, online_status, qc_hold, photos, price, price_manual, weight_kg, tagged_at, season, wearer, is_rare, sub_categories(name, gender, categories(name)), lots(code), outlets(name), staff:tagged_by(name), transfer_items(transfers(status, outlets!transfers_to_outlet_id_fkey(name)))")
     .order("tagged_at", { ascending: false })
-    .limit(50);
+    .limit(q ? 500 : 300);
 
   if (q) {
     const { data: subs } = await supabase.from("sub_categories").select("slug").ilike("name", `%${q}%`);
@@ -232,20 +233,35 @@ export async function GET(request: Request) {
 
   const one = <T,>(v: unknown) => (Array.isArray(v) ? v[0] : v) as T | null | undefined;
   return NextResponse.json({
-    items: (data ?? []).map((r) => ({
-      id: r.id,
-      sku: r.sku,
-      brand: r.brand_text ?? "",
-      sub_category: one<{ name: string }>(r.sub_categories)?.name ?? "",
-      lot: one<{ code: string }>(r.lots)?.code ?? null,
-      grade: r.grade_code,
-      size_label: r.size_label,
-      weight_kg: r.weight_kg,
-      colour_tag: r.colour_tag,
-      status: r.status,
-      list_price: r.price_manual ?? r.price,
-      tagged_at: r.tagged_at,
-    })),
+    items: (data ?? []).map((r) => {
+      const sub = one<{ name: string; gender: string; categories: unknown }>(r.sub_categories);
+      const transfers = ((r.transfer_items ?? []) as { transfers: unknown }[]).map((t) => one<{ status: string; outlets: unknown }>(t.transfers)).filter(Boolean);
+      const last = transfers.at(-1);
+      const outlet = one<{ name: string }>(r.outlets)?.name ?? null;
+      return {
+        id: r.id,
+        sku: r.sku,
+        brand: r.brand_text ?? "",
+        sub_category: sub?.name ?? "",
+        category: one<{ name: string }>(sub?.categories)?.name ?? "",
+        gender: sub?.gender ?? "",
+        lot: one<{ code: string }>(r.lots)?.code ?? null,
+        grade: r.grade_code,
+        size_label: r.size_label,
+        weight_kg: r.weight_kg,
+        colour_tag: r.colour_tag,
+        status: r.status,
+        channel: r.channel,
+        station: stationOf({ status: r.status, channel: r.channel, online_status: r.online_status, qc_hold: r.qc_hold, photos: r.photos as unknown[] | null, outlet, transfer: last ? { status: last.status, outlet: one<{ name: string }>(last.outlets)?.name ?? null } : null }),
+        outlet,
+        tagged_by: one<{ name: string }>(r.staff)?.name ?? null,
+        season: r.season,
+        wearer: r.wearer,
+        rare: r.is_rare,
+        list_price: r.price_manual ?? r.price,
+        tagged_at: r.tagged_at,
+      };
+    }),
   });
 }
 

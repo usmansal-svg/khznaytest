@@ -10,6 +10,7 @@ import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 
 import { requireManager } from "@/lib/auth/staff";
+import { stationOf } from "@/lib/pricing/station";
 
 type Cell = string | number | boolean | Date | null;
 type Sheet = { name: string; columns: { header: string; key: string; width?: number }[]; rows: Record<string, Cell>[] };
@@ -19,14 +20,26 @@ const one = <T,>(v: unknown) => (Array.isArray(v) ? v[0] : v) as T | null | unde
 const pk = (iso: string | null | undefined) => (iso ? new Date(new Date(iso).toLocaleString("en-US", { timeZone: "Asia/Karachi" })) : null);
 
 export async function GET(request: Request) {
+  const url = new URL(request.url);
+  return run({ what: url.searchParams.get("what") ?? "items", format: url.searchParams.get("format"), from: url.searchParams.get("from"), to: url.searchParams.get("to"), skus: url.searchParams.get("skus")?.split(",") ?? null });
+}
+
+/** POST with a form (what, format, skus) — the Items screen posts a chosen list of SKUs, which is too long for a URL. */
+export async function POST(request: Request) {
+  const form = await request.formData();
+  const skusRaw = String(form.get("skus") ?? "");
+  return run({ what: String(form.get("what") ?? "items"), format: String(form.get("format") ?? "xlsx"), from: (form.get("from") as string) || null, to: (form.get("to") as string) || null, skus: skusRaw ? skusRaw.split(/[\s,]+/).filter(Boolean) : null });
+}
+
+async function run(p: { what: string; format: string | null; from: string | null; to: string | null; skus: string[] | null }) {
   const gate = await requireManager();
   if ("response" in gate) return gate.response;
   const db = gate.db;
-  const url = new URL(request.url);
-  const what = url.searchParams.get("what") ?? "items";
-  const format = url.searchParams.get("format") === "csv" ? "csv" : "xlsx";
-  const from = url.searchParams.get("from");
-  const to = url.searchParams.get("to");
+  const what = p.what;
+  const format = p.format === "csv" ? "csv" : "xlsx";
+  const from = p.skus?.length ? null : p.from;
+  const to = p.skus?.length ? null : p.to;
+  const skus = p.skus?.map((s) => s.trim().toUpperCase()).filter(Boolean).slice(0, 5000) ?? null;
   const fromIso = from ? new Date(`${from}T00:00:00+05:00`).toISOString() : null;
   const toIso = to ? new Date(`${to}T23:59:59.999+05:00`).toISOString() : null;
 
@@ -34,9 +47,10 @@ export async function GET(request: Request) {
   if (what === "items") {
     let q = db
       .from("items")
-      .select("sku, tagged_at, status, channel, online_status, brand_text, brand_tier, grade_code, is_rare, is_unsure, flaw_note, season, wearer, size_label, colour, fabric, measurements, weight_kg, adjustment, colour_tag, floored_on, landed_cost, price, price_manual, settings_version, sold_at, sold_price, sold_stage, received_at, shopify_product_id, staff:tagged_by(name), lots(code, supplier), outlets(name), sub_categories(name, code, categories(name)), transfer_items(transfers(code, sent_at, received_at, status))")
+      .select("sku, tagged_at, status, channel, online_status, qc_hold, photos, brand_text, brand_tier, grade_code, is_rare, is_unsure, flaw_note, season, wearer, size_label, colour, fabric, measurements, weight_kg, adjustment, colour_tag, floored_on, landed_cost, price, price_manual, settings_version, sold_at, sold_price, sold_stage, received_at, shopify_product_id, staff:tagged_by(name), lots(code, supplier), outlets(name), sub_categories(name, code, categories(name)), transfer_items(transfers(code, sent_at, received_at, status, outlets!transfers_to_outlet_id_fkey(name)))")
       .order("tagged_at", { ascending: false })
       .limit(50000);
+    if (skus?.length) q = q.in("sku", skus);
     if (fromIso) q = q.gte("tagged_at", fromIso);
     if (toIso) q = q.lte("tagged_at", toIso);
     const { data, error } = await q;
@@ -44,9 +58,11 @@ export async function GET(request: Request) {
     const rows = (data ?? []).map((i) => {
       const sub = one<{ name: string; code: string; categories: unknown }>(i.sub_categories);
       const m = (i.measurements ?? {}) as Record<string, unknown>;
-      const tr = (i.transfer_items as { transfers: unknown }[] | null)?.map((t) => one<{ code: string; sent_at: string | null; received_at: string | null; status: string }>(t.transfers)).filter(Boolean).at(-1) ?? null;
+      const tr = (i.transfer_items as { transfers: unknown }[] | null)?.map((t) => one<{ code: string; sent_at: string | null; received_at: string | null; status: string; outlets: unknown }>(t.transfers)).filter(Boolean).at(-1) ?? null;
+      const outletName = one<{ name: string }>(i.outlets)?.name ?? "";
+      const station = stationOf({ status: i.status, channel: i.channel, online_status: i.online_status, qc_hold: i.qc_hold, photos: i.photos as unknown[] | null, outlet: outletName || null, transfer: tr ? { status: tr.status, outlet: one<{ name: string }>(tr.outlets)?.name ?? null } : null });
       return {
-        sku: i.sku, tagged_at: pk(i.tagged_at), tagger: one<{ name: string }>(i.staff)?.name ?? "", lot: one<{ code: string; supplier: string }>(i.lots)?.code ?? "", supplier: one<{ code: string; supplier: string }>(i.lots)?.supplier ?? "",
+        sku: i.sku, station, tagged_at: pk(i.tagged_at), tagger: one<{ name: string }>(i.staff)?.name ?? "", lot: one<{ code: string; supplier: string }>(i.lots)?.code ?? "", supplier: one<{ code: string; supplier: string }>(i.lots)?.supplier ?? "",
         category: one<{ name: string }>(sub?.categories)?.name ?? "", sub_category: sub?.name ?? "", code: sub?.code ?? "",
         brand: i.brand_text ?? "", tier: i.brand_tier, grade: GRADE[i.grade_code] ?? i.grade_code, rare: i.is_rare, unsure: i.is_unsure, flaw: i.flaw_note ?? "",
         season: i.season ?? "", wearer: i.wearer ?? "", size: i.size_label ?? "", colour: i.colour ?? "", fabric: i.fabric ?? "",
@@ -60,7 +76,7 @@ export async function GET(request: Request) {
     sheets = [{
       name: "Items",
       columns: [
-        ["sku", "SKU", 20], ["tagged_at", "Tagged at", 18], ["tagger", "Tagger", 14], ["lot", "Lot", 14], ["supplier", "Supplier", 14], ["category", "Category", 22], ["sub_category", "Sub-category", 22], ["code", "Code", 7],
+        ["sku", "SKU", 20], ["station", "Station", 22], ["tagged_at", "Tagged at", 18], ["tagger", "Tagger", 14], ["lot", "Lot", 14], ["supplier", "Supplier", 14], ["category", "Category", 22], ["sub_category", "Sub-category", 22], ["code", "Code", 7],
         ["brand", "Brand", 16], ["tier", "Brand tier", 16], ["grade", "Grade", 18], ["rare", "Rare", 6], ["unsure", "Unsure", 7], ["flaw", "Flaw", 18], ["season", "Season", 10], ["wearer", "Wearer", 8], ["size", "Size", 8], ["colour", "Colour", 10], ["fabric", "Fabric", 10],
         ["weight_kg", "Weight kg", 10], ["measurements", "Measured flat", 26], ["adjustment", "Adjustment", 10], ["landed_cost", "Landed cost", 12], ["price", "Price", 10], ["price_manual", "Manual price", 12], ["list_price", "List price", 10],
         ["status", "Status", 10], ["channel", "Channel", 8], ["online_status", "Online status", 12], ["colour_tag", "Colour tag", 10], ["floored_on", "Floored on", 12], ["outlet", "Outlet", 12], ["transfer", "Transfer", 18], ["dispatched_at", "Dispatched", 18], ["received_at", "Received", 18],
@@ -92,7 +108,7 @@ export async function GET(request: Request) {
   }
 
   const stamp = new Date().toISOString().slice(0, 10);
-  const filename = `khazanay-${what}${from || to ? `-${from ?? "start"}-to-${to ?? "today"}` : ""}-${stamp}`;
+  const filename = `khazanay-${what}${skus?.length ? `-${skus.length}-selected` : from || to ? `-${from ?? "start"}-to-${to ?? "today"}` : ""}-${stamp}`;
 
   if (format === "csv") {
     const s = sheets[0];

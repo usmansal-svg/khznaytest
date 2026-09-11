@@ -1,6 +1,6 @@
 # Khazanay Tagging System — Reference
 
-*Everything built between 7 and 10 September 2026. The system of record for how the tagging platform works, why it works that way, and what is still open. Keep this current when things change.*
+*Everything built from 7 September 2026. The POS built on 12 September is moving to its own project; see KHAZANAY-POS.md. The system of record for how the tagging platform works, why it works that way, and what is still open. Keep this current when things change.*
 
 **Live:** https://khazanaytest.vercel.app · **Repo branch:** `pricing-engine` (48 commits) · **Database:** Supabase project `dytirapyaaadjobklree` · **Tests:** 101, all passing (`npm test`)
 
@@ -39,7 +39,7 @@ Managers add staff at **Admin → Staff** (name, role, home outlet, PIN, daily t
 | Sign in | `/login` | all | Name grid + keypad; first run sets up the founder |
 | **Tag item** | `/tag` | tagger+ | The one screen that must be fast (§5) |
 | Photos | `/photos` · `/photos/[sku]` | tagger+, photographer | Photography station: scan-and-shoot on the iPhone, review per garment |
-| Items | `/items` | tagger+ | Search by SKU / brand / sub-category; reprint; Excel/CSV export with a date range (managers) |
+| Items | `/items` | tagger+ | Every garment with Lot, Brand, Item, Grade, Size, **Station**, Channel, Tagger; Excel-style filters on every column; tick boxes with Select all; export exactly the ticked rows or all shown, or by date range (managers) |
 | Garment | `/items/[sku]` | tagger+ | Channel, destination outlet, photos, listing preview, Shopify push |
 | Print tag | `/items/[sku]/print` · `/print?skus=…` | tagger+ | One tag, or a whole session's tags in one print job |
 | Transfers | `/transfers` | QC senior+ | Ship garments to an outlet (§7) |
@@ -145,6 +145,8 @@ Order on the full (online) form:
 Taggers see only the shelf price and the grade prices — no cost, margin or ladder.
 
 ---
+
+**Station** (`lib/pricing/station.ts`) says where a garment is in the words the floor uses, and is the same on the Items screen and in the export. Online: *Tagging → Photography station → Packing station → Online shelf → Sold*. Outlet: *Tagging station → Being packed for X → In transit to X → At X → Sold*. Either: *QC rail · Set aside · Pulled · Returned damaged · Rejected · Unlisted*.
 
 ## 6. Lots
 
