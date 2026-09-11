@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { GRADE_RANK, type ColourTag, type GradeCode } from "@/lib/pricing/constants";
 import { ADULT_SIZES, KIDS_SIZES } from "@/lib/pricing/kids-sizes";
+import { sizeSeriesFor } from "@/lib/pricing/sizes";
 import { GENDER_LABELS, type Gender, type Season, type Wearer } from "@/lib/pricing/sku";
 import { SLEEVE_TYPES } from "@/lib/pricing/sub-categories";
 
@@ -106,6 +107,10 @@ export function TagForm() {
   const [brandHits, setBrandHits] = useState<{ name: string; tier: string }[]>([]);
   const [moreBrands, setMoreBrands] = useState(false);
   const [size, setSize] = useState("");
+  // Size buttons: the series is chosen by the garment (collar for shirts,
+  // waist for bottoms, letters otherwise); the switch flips to the other.
+  const [sizeSeriesCode, setSizeSeriesCode] = useState<string | null>(null);
+  const [sizeOther, setSizeOther] = useState(false);
   const [colour, setColour] = useState("");
   const [grade, setGrade] = useState<GradeCode>("premium");
   const [measure, setMeasure] = useState<Record<string, string>>({});
@@ -204,6 +209,10 @@ export function TagForm() {
     requestAnimationFrame(() => brandRef.current?.focus());
   }
   const isKids = KIDS.has(wearer);
+  const sizeSeries = useMemo(() => sizeSeriesFor(selectedSub ?? null, KIDS_SIZES.map((k) => k.label), isKids), [selectedSub, isKids]);
+  const activeSeries = sizeSeries.find((s) => s.code === sizeSeriesCode) ?? sizeSeries[0];
+  // A new garment type resets the switch to that type's own series.
+  useEffect(() => { setSizeSeriesCode(null); setSizeOther(false); }, [sub, isKids]);
   const asksSleeve = Boolean(selectedSub?.asks_sleeve);
   const isManager = ref?.tagger?.role === "manager" || ref?.tagger?.role === "founder";
   const selectedLot = ref?.lots.find((l) => String(l.id) === lotId) ?? null;
@@ -525,12 +534,32 @@ export function TagForm() {
                 )}
                 <datalist id="brands">{brandHits.map((b) => <option key={b.name} value={b.name}>{tierLabel(b.tier)}</option>)}</datalist>
               </Field>
-              <Field label="Size on label" hint={isKids ? kidsHint(size) : undefined}>
-                <Input ref={sizeRef} list="sizes" value={size} onChange={(e) => setSize(e.target.value)} placeholder={isKids ? "e.g. 4–5 Y or 4T" : "e.g. M or 32"} autoComplete="off" />
-                <datalist id="sizes">
-                  {(isKids ? KIDS_SIZES.map((k) => k.label) : ADULT_SIZES).map((s) => <option key={s} value={s} />)}
-                </datalist>
-              </Field>
+              <div className="grid min-w-0 content-start gap-1.5 sm:col-span-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Label>Size on label {size && <span className="font-normal text-muted-foreground">· {size}</span>}</Label>
+                  <div className="flex gap-1">
+                    {sizeSeries.map((s) => (
+                      <Button key={s.code} type="button" size="sm" variant={s.code === activeSeries.code && !sizeOther ? "secondary" : "ghost"} className="h-8 px-2.5 text-xs" onClick={() => { setSizeSeriesCode(s.code); setSizeOther(false); }}>{s.label}</Button>
+                    ))}
+                    <Button type="button" size="sm" variant={sizeOther ? "secondary" : "ghost"} className="h-8 px-2.5 text-xs" onClick={() => { setSizeOther(true); requestAnimationFrame(() => sizeRef.current?.focus()); }}>Other…</Button>
+                  </div>
+                </div>
+                {!sizeOther ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {activeSeries.sizes.map((s) => (
+                      <Button key={s} type="button" size="sm" variant={size.trim().toLowerCase() === s.toLowerCase() ? "default" : "outline"} className="h-11 min-w-12 px-3 text-base md:h-8 md:min-w-10 md:px-2.5 md:text-sm" onClick={() => setSize(s)}>{s}</Button>
+                    ))}
+                  </div>
+                ) : (
+                  <>
+                    <Input ref={sizeRef} list="sizes" value={size} onChange={(e) => setSize(e.target.value)} placeholder={isKids ? "e.g. 4–5 Y or 4T" : "Copy the label, e.g. 34x32 or One size"} autoComplete="off" />
+                    <datalist id="sizes">
+                      {(isKids ? KIDS_SIZES.map((k) => k.label) : ADULT_SIZES).map((s) => <option key={s} value={s} />)}
+                    </datalist>
+                  </>
+                )}
+                {isKids && size && <p className="text-xs text-muted-foreground">{kidsHint(size)}</p>}
+              </div>
               {!outlet && (<Field label="Colour">
                 <Input list="colours" value={colour} onChange={(e) => setColour(e.target.value)} placeholder="e.g. Black" autoComplete="off" />
                 <datalist id="colours">{COLOURS.map((c) => <option key={c} value={c} />)}</datalist>

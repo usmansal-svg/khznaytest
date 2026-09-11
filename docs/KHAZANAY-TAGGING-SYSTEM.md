@@ -117,16 +117,16 @@ Regular high street ×1.00 · Affordable luxury ×2.00 · Ultra luxury → hande
 
 ## 5. The tag form — how a garment is tagged
 
-**Two forms, one screen (11 Sep).** *Tagging for* switches the form. **Outlet** is the short form: season, wearer, category and sub-category as tap buttons (they set the price and the SKU; the type-to-find box is a shortcut), reference photo, brand, size, condition, price. Colour, measurements and sleeves are not asked. **Online** is the full form below, minus the photo: pictures are taken afterwards at the photography station (**Photos** in the menu, `/photos`), which lists every online garment without pictures, oldest first; scan the tag, take the pictures on the garment page, next. Works for a dedicated photographer or a tagger doing a photo session.
+**Two forms, one screen (11 Sep).** *Tagging for* switches the form. **Outlet** is the short form: season, wearer, category and sub-category as tap buttons (they set the price and the SKU), reference photo, brand, size, condition, price. Colour, measurements and sleeves are not asked. **Online** is the full form below, minus the photo: pictures are taken afterwards at the photography station (**Photos** in the menu, `/photos`), which lists every online garment without pictures, oldest first; scan the tag, take the pictures on the garment page, next. Works for a dedicated photographer or a tagger doing a photo session.
 
 Order on the full (online) form:
 
 1. **Tagging for** Outlet / Online, with a **Lock** · **Lot**, with a **Lock** — set once, tag garment after garment
 2. **Season** (Summer/Winter, tap buttons) · Wearer (Men, Women, Boy, Girl, Infant, Unisex). Every sub-category carries a season on the pricing sheet — Summer, Winter or All year — and the form shows only that season's categories and sub-categories (no coats in summer, no shorts in winter). The season also goes into the SKU and into the Shopify tags, on its own and combined: *Summer*, *Summer T-Shirt*, *Summer Men T-Shirt*, so a collection can be built on season, wearer and type together.
-3. **Category → Sub-category as tap buttons** (no keyboard, no picker wheel — fastest on the iPad; categories are per gender: Tops & Blouses, Dresses & Jumpsuits, Jeans, …), with a **Find a garment type** box as a shortcut (type "crop" → *Crop top*). Both stay selected for the next garment, since taggers work through piles.
+3. **Category → Sub-category as tap buttons** (no keyboard, no picker wheel — fastest on the iPad; categories are per gender: Tops & Blouses, Dresses & Jumpsuits, Jeans, …). Both stay selected for the next garment, since taggers work through piles.
 4. **Photo — compulsory** (opens the iPad camera; downscaled on device)
 5. **Brand** — misspellings snap to the listed brand offline (*calvin klien* → Calvin Klein); a brand nobody has listed is cleaned up and **added to the Brands tab as High street** at save, marked *new from tagger*
-6. Size on label (kids age bands with height hints) · Colour
+6. **Size on label as buttons** — the series follows the garment: collar (14–18) for button-down shirts, waist (26–44) for bottoms, UK numbers for dresses, letters (XS–4XL) otherwise, age bands for kids; a small switch flips to the other series and *Other…* opens a text box for odd labels · **Brand as buttons** — the ten most-tagged brands of the last 90 days (topped up from a fixed list of common ones until there is data), *More brands…* shows ten more; typing is for the rare ones · Colour (online only)
 7. **Condition** — five buttons, each showing its price
 8. **Rare find** — hands the garment off (§8.2)
 9. Sleeves (half / full / sleeveless) on shirts, T-shirts, sports tops, outerwear — required
