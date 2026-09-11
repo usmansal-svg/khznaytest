@@ -57,8 +57,22 @@ export async function pushItem(db: SupabaseClient, sku: string, visibility: Visi
       const existing = await findProductBySku(cfg, sku);
       if (existing) { productId = existing.productId; await db.from("items").update({ shopify_product_id: existing.productId, shopify_handle: existing.handle }).eq("id", item.id); }
     }
-    const result = productId ? await updateProduct(cfg, productId, { ...input, imageUrls: productId === item.shopify_product_id ? [] : imageUrls }) : await createProduct(cfg, input);
-    if (!productId) await db.from("items").update({ shopify_product_id: result.productId, shopify_handle: result.handle }).eq("id", item.id);
+    let result;
+    if (productId) {
+      try {
+        result = await updateProduct(cfg, productId, { ...input, imageUrls: productId === item.shopify_product_id ? [] : imageUrls });
+      } catch (e) {
+        // Deleted in Shopify admin since: forget the stale ID and create it again.
+        if (!(e instanceof Error && /not found|does not exist|doesn't exist|no product/i.test(e.message))) throw e;
+        productId = null;
+        await db.from("items").update({ shopify_product_id: null, shopify_handle: null }).eq("id", item.id);
+      }
+    }
+    if (!productId) {
+      result = await createProduct(cfg, input);
+      await db.from("items").update({ shopify_product_id: result.productId, shopify_handle: result.handle }).eq("id", item.id);
+    }
+    if (!result) throw new ShopifyError("Shopify push produced no result.");
     await setVisibility(cfg, result.productId, visibility);
     const onWeb = visibility === "online" || visibility === "both";
     await db.from("items").update({
