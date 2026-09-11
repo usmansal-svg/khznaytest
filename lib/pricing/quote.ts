@@ -62,7 +62,7 @@ export type Quote = {
 };
 
 export function quote(input: QuoteInput, ctx: PricingContext): Quote {
-  const { subCategory, brand, grade, adjustment, isRare, lot } = input;
+  const { subCategory, brand, grade, adjustment, lot } = input;
   const warnings = [brand.warning, ctx.warning].filter((w): w is string => Boolean(w));
 
   // Cost inputs. The standard cost per garment wins — one shelf price for a
