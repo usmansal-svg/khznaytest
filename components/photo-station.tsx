@@ -163,20 +163,32 @@ export function PhotoStation({ sku }: { sku: string }) {
                   </div>
                 );
               })}
-              <div className="flex gap-2 text-xs">
-                <button type="button" onClick={() => setAdjust((a) => (a ? { ...a, rotate: ((a.rotate + 90) % 360) as Adjust["rotate"] } : a))} className="flex items-center gap-1 rounded border border-white/40 px-3 py-2"><RotateCw className="size-4" /> Rotate</button>
-                <button type="button" onClick={() => setAdjust({ ...NO_ADJUST })} className="rounded border border-white/40 px-3 py-2">Reset</button>
-                <button type="button" onClick={() => setAdjust(null)} className="ml-auto rounded border border-white/40 px-3 py-2">Cancel</button>
-                <button type="button" disabled={busy != null} onClick={() => applyEdit(current, adjust)} className="rounded bg-white px-4 py-2 font-semibold text-black disabled:opacity-40">{busy === current.path ? "Applying…" : "Apply"}</button>
+              <div className="grid grid-cols-4 gap-2 pb-7 text-xs">
+                <button type="button" onClick={() => setAdjust((a) => (a ? { ...a, rotate: ((a.rotate + 90) % 360) as Adjust["rotate"] } : a))} className="flex h-12 flex-col items-center justify-center gap-0.5 rounded-xl bg-white/10 font-medium active:bg-white/20"><RotateCw className="size-4" /> Rotate</button>
+                <button type="button" onClick={() => setAdjust({ ...NO_ADJUST })} className="flex h-12 items-center justify-center rounded-xl bg-white/10 font-medium active:bg-white/20">Reset</button>
+                <button type="button" onClick={() => setAdjust(null)} className="flex h-12 items-center justify-center rounded-xl bg-white/10 font-medium active:bg-white/20">Cancel</button>
+                <button type="button" disabled={busy != null} onClick={() => applyEdit(current, adjust)} className="flex h-12 items-center justify-center rounded-xl bg-white font-semibold text-black active:bg-white/90 disabled:opacity-40">{busy === current.path ? "Applying…" : "Apply"}</button>
               </div>
             </div>
           )}
-          <div className="flex gap-2 bg-neutral-900 px-4 pb-6 pt-3 text-sm">
-            {!adjust && <button type="button" disabled={busy != null} onClick={() => { setAdjust({ ...NO_ADJUST }); setShowOriginal(false); }} className="flex flex-1 items-center justify-center gap-1 rounded border border-white/40 py-3"><SlidersHorizontal className="size-4" /> Adjust</button>}
-            <button type="button" disabled={busy != null} onClick={() => cutExisting(current)} className="flex flex-1 items-center justify-center gap-1 rounded border border-white/40 py-3"><Scissors className="size-4" /> {busy === current.path ? "Working…" : cutFor(current) ? "Redo background" : "Remove background"}</button>
-            {cutFor(current) && <button type="button" disabled={busy != null} onClick={() => remove(cutFor(current)!)} className="flex items-center justify-center gap-1 rounded border border-white/40 px-3 py-3" title="Put the original back">Undo</button>}
-            <button type="button" disabled={busy != null} onClick={() => remove(current)} className="flex flex-1 items-center justify-center gap-1 rounded border border-red-400 py-3 text-red-300"><Trash2 className="size-4" /> Delete</button>
-          </div>
+          {!adjust && (
+            <div className="bg-neutral-900 px-4 pb-7 pt-3">
+              <div className="grid grid-cols-3 gap-2">
+                <button type="button" disabled={busy != null} onClick={() => { setAdjust({ ...NO_ADJUST }); setShowOriginal(false); }} className="flex h-16 flex-col items-center justify-center gap-1 rounded-xl bg-white/10 text-xs font-medium text-white active:bg-white/20 disabled:opacity-40">
+                  <SlidersHorizontal className="size-5" /> Adjust
+                </button>
+                <button type="button" disabled={busy != null} onClick={() => cutExisting(current)} className="flex h-16 flex-col items-center justify-center gap-1 rounded-xl bg-white/10 text-xs font-medium text-white active:bg-white/20 disabled:opacity-40">
+                  <Scissors className="size-5" /> {busy === current.path ? "Working…" : cutFor(current) ? "Redo background" : "Remove background"}
+                </button>
+                <button type="button" disabled={busy != null} onClick={() => remove(current)} className="flex h-16 flex-col items-center justify-center gap-1 rounded-xl bg-red-500/15 text-xs font-medium text-red-300 active:bg-red-500/25 disabled:opacity-40">
+                  <Trash2 className="size-5" /> Delete
+                </button>
+              </div>
+              {cutFor(current) && (
+                <button type="button" disabled={busy != null} onClick={() => remove(cutFor(current)!)} className="mt-3 w-full text-center text-xs text-white/60 underline underline-offset-2 disabled:opacity-40">Undo background removal · put the original back</button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
