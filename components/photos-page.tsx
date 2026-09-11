@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, Check, ChevronLeft, ChevronRight, LogOut, RefreshCw, RotateCw, ScanLine, Search, Star, Trash2, UserRound, X } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,6 +38,7 @@ const cssFilter = (a: Adjust) => `brightness(${a.brightness}) contrast(${a.contr
 
 export function PhotosPage() {
   const router = useRouter();
+  const params = useSearchParams();
   const [profile, setProfile] = useState(false);
   const [pf, setPf] = useState({ name: "", current: "", next: "", busy: false, msg: null as { ok: boolean; text: string } | null });
   const [data, setData] = useState<{ waiting: Row[]; done: Row[]; total_online: number; me: Me; sees_names?: boolean } | null>(null);
@@ -87,6 +88,14 @@ export function PhotosPage() {
     } catch (e) { setError(e instanceof Error ? e.message : "Could not load the list."); }
   }, []);
   useEffect(() => { void load(); try { setAutoCut(localStorage.getItem("khz_autocut") !== "off"); } catch { /* fine */ } }, [load]);
+  // "Add more pictures" on the review page lands here with ?sku=… and goes straight to the camera.
+  const wanted = params.get("sku");
+  useEffect(() => {
+    if (!wanted) return;
+    router.replace("/photos");
+    void pick(wanted.toUpperCase(), true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wanted]);
   function setAuto(v: boolean) { setAutoCut(v); try { localStorage.setItem("khz_autocut", v ? "on" : "off"); } catch { /* fine */ } }
 
   useEffect(() => {
@@ -468,8 +477,7 @@ export function PhotosPage() {
                             </div>
                             {none
                               ? <Button type="button" size="sm" className="h-9 shrink-0" onClick={() => void pick(r.sku)}>Shoot</Button>
-                              : <Button type="button" size="sm" variant="outline" className="h-9 shrink-0" onClick={() => void pick(r.sku, true)}>Retake</Button>}
-                            <Button asChild type="button" size="sm" variant="ghost" className="h-9 shrink-0 px-2"><Link href={`/photos/${encodeURIComponent(r.sku)}`}>Review</Link></Button>
+                              : <Button asChild type="button" size="sm" variant="outline" className="h-9 shrink-0"><Link href={`/photos/${encodeURIComponent(r.sku)}`}>Review</Link></Button>}
                           </li>
                         );
                       })}

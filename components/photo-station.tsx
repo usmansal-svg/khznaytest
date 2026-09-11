@@ -2,11 +2,9 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Camera, ChevronLeft, ChevronRight, Scissors, Trash2, X } from "lucide-react";
+import { ArrowLeft, Camera, ChevronLeft, ChevronRight, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { compressUnder, cutoutOnWhite, squareForShopify } from "@/lib/photos";
 import { cn } from "@/lib/utils";
 
 /**
@@ -18,22 +16,17 @@ import { cn } from "@/lib/utils";
 type Photo = { path: string; url: string; kind: "original" | "cutout"; bytes: number; taken_at: string };
 type Item = { sku: string; brand: string | null; sub_category: string; category: string; size_label: string | null; grade_code: string; colour: string | null; channel: string; photos: Photo[] };
 const GRADE: Record<string, string> = { bnwt: "BNWT", premium: "Premium", excellent: "Excellent", very_good: "Very Good", rejected: "Rejected" };
-const kb = (b: number) => (b >= 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(2)} MB` : `${Math.round(b / 1024)} KB`);
 
 export function PhotoStation({ sku }: { sku: string }) {
   const [item, setItem] = useState<Item | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
-  const [autoCut, setAutoCut] = useState(true);
   const [view, setView] = useState<number | null>(null); // index into originals
   const [dragPath, setDragPath] = useState<string | null>(null);
   const holdTimer = useRef<number | null>(null);
   const touchX = useRef<number | null>(null);
-  const cameraRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { try { setAutoCut(localStorage.getItem("khz_autocut") !== "off"); } catch { /* fine */ } }, []);
-  function setAuto(v: boolean) { setAutoCut(v); try { localStorage.setItem("khz_autocut", v ? "on" : "off"); } catch { /* fine */ } }
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/items/${encodeURIComponent(sku)}`);
@@ -44,41 +37,6 @@ export function PhotoStation({ sku }: { sku: string }) {
   }, [sku]);
   useEffect(() => { void load(); }, [load]);
 
-  async function upload(file: Blob, kind: "original" | "cutout"): Promise<Photo> {
-    const fd = new FormData();
-    fd.append("sku", sku); fd.append("kind", kind); fd.append("file", file, kind === "cutout" ? "cutout.jpg" : "photo.jpg");
-    const res = await fetch("/api/photos", { method: "POST", body: fd });
-    const j = await res.json();
-    if (!res.ok) throw new Error(j.error ?? "Upload failed.");
-    return j.photo as Photo;
-  }
-  async function cutout(source: Blob | string): Promise<Photo> {
-    const { removeBackground } = await import("@imgly/background-removal");
-    const src = typeof source === "string" ? await (await fetch(source)).blob() : source;
-    const png = await removeBackground(src, { output: { format: "image/png", quality: 0.9 } });
-    const shadowed = await cutoutOnWhite(png, 2048);
-    const jpg = shadowed.size > 1024 * 1024 ? await squareForShopify(shadowed, 2048, 1024 * 1024) : shadowed;
-    return upload(jpg, "cutout");
-  }
-  async function onShot(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []);
-    e.target.value = "";
-    if (!files.length || !item) return;
-    setBusy("shot"); setNote(null);
-    try {
-      const isFirst = item.photos.filter((p) => p.kind === "original").length === 0;
-      for (const f of files) {
-        const small = await squareForShopify(await compressUnder(f, 8 * 1024 * 1024, 4096), 2048, 1024 * 1024);
-        await upload(small, "original");
-        if (isFirst && autoCut) { setNote("Removing the background of the first picture…"); await cutout(small); }
-      }
-      await load(); setNote(null);
-    } catch (err) { setNote(err instanceof Error ? err.message : "Upload failed."); } finally { setBusy(null); }
-  }
-  async function cutExisting(p: Photo) {
-    setBusy(p.path); setNote("Removing background…");
-    try { await cutout(p.url); await load(); setNote(null); } catch (err) { setNote(err instanceof Error ? err.message : "Background removal failed."); } finally { setBusy(null); }
-  }
   async function remove(p: Photo) {
     if (!window.confirm("Delete this picture?")) return;
     setBusy(p.path);
@@ -129,15 +87,13 @@ export function PhotoStation({ sku }: { sku: string }) {
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
-      <input ref={cameraRef} type="file" accept="image/*" capture="environment" multiple hidden onChange={onShot} />
-
       {/* ---- full-screen viewer */}
       {current && (
         <div className="fixed inset-0 z-50 flex flex-col bg-black text-white">
           <div className="flex items-center justify-between px-3 py-2 text-sm">
             <button type="button" onClick={() => setView(null)} className="flex items-center gap-1"><X className="size-5" /> Close</button>
             <span>Picture {view! + 1} of {originals.length}{view === 0 ? " · cover" : ""}</span>
-            <span className="text-xs text-white/60">{kb(current.bytes)}</span>
+            <span className="w-12" />
           </div>
           <div className="relative flex-1 overflow-hidden"
             onTouchStart={(e) => { touchX.current = e.touches[0]?.clientX ?? null; }}
@@ -151,13 +107,11 @@ export function PhotoStation({ sku }: { sku: string }) {
             <div className="flex items-center gap-3 bg-neutral-900 px-4 py-2 text-xs">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={cutFor(current)!.url} alt="cut-out" className="h-14 w-14 rounded border border-white/20 bg-white object-contain" />
-              <span>Background removed · {kb(cutFor(current)!.bytes)}</span>
-              <button type="button" disabled={busy != null} onClick={() => remove(cutFor(current)!)} className="ml-auto underline">delete cut-out</button>
+              <span>Cover cut-out · background removed</span>
             </div>
           )}
           <div className="flex gap-2 bg-neutral-900 px-4 pb-6 pt-3 text-sm">
-            {!cutFor(current) && <button type="button" disabled={busy != null} onClick={() => cutExisting(current)} className="flex flex-1 items-center justify-center gap-1 rounded border border-white/40 py-3"><Scissors className="size-4" /> {busy === current.path ? "Working…" : "Remove background"}</button>}
-            <button type="button" disabled={busy != null} onClick={() => remove(current)} className="flex flex-1 items-center justify-center gap-1 rounded border border-red-400 py-3 text-red-300"><Trash2 className="size-4" /> Delete</button>
+            <button type="button" disabled={busy != null} onClick={() => remove(current)} className="flex flex-1 items-center justify-center gap-1 rounded border border-red-400 py-3 text-red-300"><Trash2 className="size-4" /> Delete this picture</button>
           </div>
         </div>
       )}
@@ -171,13 +125,13 @@ export function PhotoStation({ sku }: { sku: string }) {
         <Button asChild variant="outline"><Link href="/photos"><ArrowLeft className="size-4" /> Back</Link></Button>
       </div>
       {item.channel !== "online" && <p className="rounded-md border border-amber-500 bg-amber-50 px-3 py-2 text-sm dark:bg-amber-950/40">Outlet stock, not an online garment.</p>}
-      {note && <p className="text-sm text-muted-foreground">{note}</p>}
+      {note && <p className="text-sm text-destructive">{note}</p>}
 
       {originals.length === 0 ? (
         <p className="py-6 text-center text-sm text-muted-foreground">No pictures yet.</p>
       ) : (
         <>
-          <p className="text-xs text-muted-foreground">Tap a picture for the full view. Press and hold, then drag, to change the order — picture 1 is the cover and the order is the order on Shopify.</p>
+          <p className="text-xs text-muted-foreground">{originals.length} picture{originals.length === 1 ? "" : "s"} · picture 1 is the cover{cutouts.length ? " (background removed)" : ""}. Tap for the full view; press and hold, then drag, to reorder — the order is the order on Shopify.</p>
           <div className="grid grid-cols-3 gap-2 select-none" onPointerMove={onGridMove} onPointerUp={endDrag} onPointerCancel={endDrag} onPointerLeave={endDrag} style={{ touchAction: dragPath ? "none" : "auto" }}>
             {originals.map((p, i) => {
               const cut = cutFor(p);
@@ -195,12 +149,7 @@ export function PhotoStation({ sku }: { sku: string }) {
                       <img src={cut.url} alt="cut-out" className="absolute bottom-1 right-1 h-8 w-8 rounded border bg-white object-contain" title="Background removed" />
                     )}
                   </div>
-                  <div className="grid grid-cols-2 divide-x border-t text-[11px]">
-                    <button type="button" disabled={busy != null} onClick={() => remove(p)} className="flex items-center justify-center gap-1 py-1.5 text-red-700 dark:text-red-400"><Trash2 className="size-3.5" /> Delete</button>
-                    {cut
-                      ? <span className="flex items-center justify-center gap-1 py-1.5 text-muted-foreground"><Scissors className="size-3.5" /> Cut out</span>
-                      : <button type="button" disabled={busy != null} onClick={() => cutExisting(p)} className="flex items-center justify-center gap-1 py-1.5"><Scissors className="size-3.5" /> {busy === p.path ? "Working…" : "No background"}</button>}
-                  </div>
+                  <button type="button" disabled={busy != null} onClick={() => remove(p)} className="flex items-center justify-center gap-1 border-t py-1.5 text-[11px] text-red-700 dark:text-red-400"><Trash2 className="size-3.5" /> Delete</button>
                 </div>
               );
             })}
@@ -208,8 +157,8 @@ export function PhotoStation({ sku }: { sku: string }) {
         </>
       )}
 
-      <Button type="button" size="lg" className="h-14 w-full text-base" disabled={busy != null} onClick={() => cameraRef.current?.click()}><Camera className="size-5" /> {busy === "shot" ? "Saving…" : "Take another picture"}</Button>
-      <label className="flex items-center gap-2 text-xs"><Checkbox checked={autoCut} onCheckedChange={(v) => setAuto(v === true)} /> Remove the background from the first picture automatically</label>
+      <Button asChild size="lg" className="h-14 w-full text-base"><Link href={`/photos?sku=${encodeURIComponent(item.sku)}`}><Camera className="size-5" /> Add more pictures</Link></Button>
+      <p className="text-center text-xs text-muted-foreground">Opens the camera with these pictures loaded, so you can add, adjust or replace and the cover gets its background removed there.</p>
     </div>
   );
 }
