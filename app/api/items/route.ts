@@ -89,6 +89,7 @@ export async function POST(request: Request) {
   // The category's gender is the garment's wearer; it drives the SKU letter.
   const wearer = (WEARERS.includes(subCategory.gender as Wearer) ? subCategory.gender : "unisex") as Wearer;
 
+  if (staff.role === "photographer") return NextResponse.json({ error: "Photographers take pictures; tagging is for taggers." }, { status: 403 });
   const q = quote({ subCategory, brand, grade, adjustment, adjustPct, isRare: Boolean(body.is_rare), lot, weightKg: body.weight_kg ?? null }, ctx);
   if (q.error) return bad(q.error);
 

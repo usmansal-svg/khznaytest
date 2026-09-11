@@ -15,6 +15,7 @@ const ROLES = [
   { code: "qc_senior", label: "QC senior" },
   { code: "manager", label: "Manager" },
   { code: "founder", label: "Founder" },
+  { code: "photographer", label: "Photographer" },
 ];
 
 export function StaffAdmin() {

@@ -8,9 +8,9 @@ import { Activity, ArrowRightLeft, Camera, ClipboardCheck, PanelLeftClose, Panel
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { cn } from "@/lib/utils";
 
-type Role = "tagger" | "qc_senior" | "manager" | "founder";
+type Role = "tagger" | "qc_senior" | "manager" | "founder" | "photographer";
 type NavItem = { href: string; label: string; icon: LucideIcon; hint?: string; min?: Role };
-const RANK: Record<Role, number> = { tagger: 0, qc_senior: 1, manager: 2, founder: 3 };
+const RANK: Record<Role, number> = { tagger: 0, qc_senior: 1, manager: 2, founder: 3, photographer: 0 };
 
 const WORK: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, hint: "Master view", min: "manager" },
@@ -57,14 +57,14 @@ export function AppShell({ auth, children }: { auth: React.ReactNode; children: 
   }
   const rank = role ? RANK[role] : 0;
   const can = (item: NavItem) => !item.min || rank >= RANK[item.min];
-  const work = WORK.filter(can);
-  const admin = ADMIN.filter(can);
+  const work = role === "photographer" ? WORK.filter((i) => i.href === "/photos") : WORK.filter(can);
+  const admin = role === "photographer" ? [] : ADMIN.filter(can);
 
   return (
     <div className="flex min-h-screen bg-muted/40">
       <aside className={cn("hidden w-56 shrink-0 flex-col border-r bg-background print:hidden", !collapsed && "md:flex")}>
         <div className="flex h-14 items-center justify-between border-b pl-5 pr-2">
-          <Link href="/tag" className="text-base font-bold">Khazanay</Link>
+          <Link href={role === "photographer" ? "/photos" : "/tag"} className="text-base font-bold">Khazanay</Link>
           <button type="button" onClick={toggleNav} title="Hide the menu" className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground"><PanelLeftClose className="size-5" /></button>
         </div>
         <nav className="flex-1 space-y-6 p-3">

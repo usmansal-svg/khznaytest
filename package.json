@@ -15,6 +15,7 @@
     "@radix-ui/react-slot": "^1.2.2",
     "@supabase/ssr": "latest",
     "@supabase/supabase-js": "latest",
+    "@zxing/browser": "^0.2.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cn": "^0.2.6",

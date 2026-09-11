@@ -93,9 +93,24 @@ export async function updateSession(request: NextRequest) {
   // with costs, staff or the master view needs a manager or the founder;
   // floor and transfers need QC senior or above.
   if (staff) {
+    // The photographer sees the Photos station and nothing else.
+    if (staff.role === "photographer") {
+      const allowed = ["/photos", "/api/photos", "/api/items/", "/api/auth", "/login", "/health", "/api/tags"];
+      if (!allowed.some((p) => path.startsWith(p))) {
+        if (path.startsWith("/api/")) {
+          const denied = NextResponse.json({ error: "Your role cannot open this." }, { status: 403 });
+          for (const cookie of supabaseResponse.cookies.getAll()) denied.cookies.set(cookie);
+          return denied;
+        }
+        const url = request.nextUrl.clone();
+        url.pathname = "/photos";
+        url.search = "";
+        return NextResponse.redirect(url);
+      }
+    }
     const managerOnly = ["/dashboard", "/lots", "/admin", "/api/dashboard", "/api/lots", "/api/admin", "/api/export"];
     const seniorUp = ["/floor", "/transfers", "/qc", "/api/floor", "/api/transfers", "/api/qc"];
-    const rank = { tagger: 0, qc_senior: 1, manager: 2, founder: 3 }[staff.role] ?? 0;
+    const rank = { tagger: 0, qc_senior: 1, manager: 2, founder: 3, photographer: 0 }[staff.role] ?? 0;
     const need = managerOnly.some((p) => path.startsWith(p)) ? 2 : seniorUp.some((p) => path.startsWith(p)) ? 1 : 0;
     if (rank < need) {
       if (path.startsWith("/api/")) {

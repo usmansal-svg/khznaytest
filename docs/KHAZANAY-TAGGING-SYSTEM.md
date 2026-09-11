@@ -24,10 +24,11 @@ Sign-in is **name + PIN** on a shared iPad (no email accounts). The first person
 | **Manager** (supervisor) | Dashboard, lots and costs, splits, transfers, QC, pricing sheet, brands, staff, exports |
 | **QC senior** | Tag, items, transfers, QC (regrade, price rare pieces) |
 | **Tagger** | Tag item and item lookup only; lands on the tag screen |
+| **Photographer** | The Photos station only; lands there and is redirected from everything else. Cannot tag. |
 
 Enforced three times: the proxy (route gating), the sidebar (what shows), and every API (server check). Taggers get a stripped `/api/price` — no cost, margin, expected revenue, multiple or markdown ladder — so the restriction holds at the network, not just on screen.
 
-Managers add taggers at **Admin → Staff** (name, role, home outlet, PIN, daily target). PINs are scrypt-hashed; five wrong PINs lock a name for a minute; sessions are HMAC-signed cookies valid 12 hours.
+Managers add staff at **Admin → Staff** (name, role, home outlet, PIN, daily target — garments tagged for a tagger, garments photographed for a photographer). PINs are scrypt-hashed; five wrong PINs lock a name for a minute; sessions are HMAC-signed cookies valid 12 hours.
 
 ---
 
@@ -37,7 +38,7 @@ Managers add taggers at **Admin → Staff** (name, role, home outlet, PIN, daily
 |---|---|---|---|
 | Sign in | `/login` | all | Name grid + keypad; first run sets up the founder |
 | **Tag item** | `/tag` | tagger+ | The one screen that must be fast (§5) |
-| Photos | `/photos` · `/photos/[sku]` | tagger+ | Photography station: queue of online garments, scan to open the capture screen |
+| Photos | `/photos` · `/photos/[sku]` | tagger+, photographer | Photography station: scan-and-shoot on the iPhone, review per garment |
 | Items | `/items` | tagger+ | Search by SKU / brand / sub-category; reprint; Excel/CSV export with a date range (managers) |
 | Garment | `/items/[sku]` | tagger+ | Channel, destination outlet, photos, listing preview, Shopify push |
 | Print tag | `/items/[sku]/print` · `/print?skus=…` | tagger+ | One tag, or a whole session's tags in one print job |
@@ -117,7 +118,7 @@ Regular high street ×1.00 · Affordable luxury ×2.00 · Ultra luxury → hande
 
 ## 5. The tag form — how a garment is tagged
 
-**Two forms, one screen (11 Sep).** *Tagging for* switches the form. **Outlet** is the short form: season, wearer, category and sub-category as tap buttons (they set the price and the SKU), reference photo, brand, size, condition, price. Colour, measurements and sleeves are not asked. **Online** is the full form below, minus the photo: pictures are taken afterwards at the photography station (**Photos** in the menu, `/photos`), which lists every online garment without pictures, oldest first; scan the tag and a dedicated capture screen (`/photos/[sku]`) opens: a big *Take picture* button straight to the camera, every picture compressed on the iPad to under 1 MB (longest side 2000 px, JPEG), the background removed from the **first** picture automatically (the full-garment shot; close-ups keep theirs — a per-picture *Remove background* button covers the rest), then *Next garment*. No channel or listing controls live there; the online listing gets its own screen later. Works for a dedicated photographer or a tagger doing a photo session.
+**Two forms, one screen (11 Sep).** *Tagging for* switches the form. **Outlet** is the short form: season, wearer, category and sub-category as tap buttons (they set the price and the SKU), reference photo, brand, size, condition, price. Colour, measurements and sleeves are not asked. **Online** is the full form below, minus the photo: pictures are taken afterwards at the photography station (**Photos** in the menu, `/photos`), built for a professional photographer on an iPhone (11 Sep). One screen, no navigation: *Open camera* reads the tag's barcode through the phone camera, then the same camera becomes the shutter for that garment. Up to six shots; each thumbnail can be unticked; *Save & next garment* returns to scanning at once while the work runs in the background — every kept shot centre-cropped square and sized for Shopify (2048 px, JPEG under 1 MB, never upscaled) and uploaded, and the first kept shot's background removed on the phone and placed on white with a soft feathered drop shadow. A strip at the top shows each garment's upload count and cut-out status, with a *check* link to review. A typed SKU and the waiting list's *Shoot* buttons are the fallbacks; a per-garment review screen (`/photos/[sku]`) remains for the iPad. The photographer's daily target (garments, set per person on Staff) shows at the top as a count and a percentage, as does the tagger's on the tag form. Works for a dedicated photographer or a tagger doing a photo session.
 
 Order on the full (online) form:
 
@@ -226,7 +227,7 @@ Garment page: channel switch, photos (camera capture, on-device background remov
 
 **API (all under `/api`):** `price`, `items`, `items/[sku]`, `reference`, `brands`, `lots`, `transfers`, `qc`, `photos`, `tags/[sku]/barcode`, `export`, `dashboard`, `auth/*`, `admin/{settings,profiles,grades,sub-categories,categories,brands,brands/logo,brands/quick-picks,staff,reference-prices,pricing/sheet}`, `shopify/push`.
 
-**Migrations (34, all applied):** `pricing_schema` · `pricing_seed` (generated from code by `test/gen-seed.ts`) · `sub_category_codes` · `tagging_support` · `lots_and_weights` · `channels_photos_shopify` · `staff_pins_transfers` · `transfer_seq` · `lot_split` · `lot_description_pieces` · `lot_imported_sequence` · `settings_changed_by` · `categories_flat_gender` · `categories_two_level` · `subcategory_planning_rates` · `price_steps_alerts` · `brands_source` · `qc_and_targets` · `qc_hold` · `standard_cost` · `reference_prices` · `rare_handoff` · `outlet_min_grade` · `outlet_override` · `subcategory_season` · `brand_quick_pick` · `brand_logo` · `brand_quick_picks_by_category` · `size_labels` · `rare_note` · `rare_reasons` — plus the health check and two POS migrations from a parallel session.
+**Migrations (35, all applied):** `pricing_schema` · `pricing_seed` (generated from code by `test/gen-seed.ts`) · `sub_category_codes` · `tagging_support` · `lots_and_weights` · `channels_photos_shopify` · `staff_pins_transfers` · `transfer_seq` · `lot_split` · `lot_description_pieces` · `lot_imported_sequence` · `settings_changed_by` · `categories_flat_gender` · `categories_two_level` · `subcategory_planning_rates` · `price_steps_alerts` · `brands_source` · `qc_and_targets` · `qc_hold` · `standard_cost` · `reference_prices` · `rare_handoff` · `outlet_min_grade` · `outlet_override` · `subcategory_season` · `brand_quick_pick` · `brand_logo` · `brand_quick_picks_by_category` · `size_labels` · `rare_note` · `rare_reasons` · `photographer` — plus the health check and two POS migrations from a parallel session.
 
 **Environment (Vercel + `.env.local`):** `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (server only; also signs sessions), optional `SESSION_SECRET`, `SHOPIFY_*`.
 

@@ -435,7 +435,7 @@ export function TagForm() {
             </CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Field label="Tagger" hint={ref.tagger ? `${ref.tagger.today + sessionSkus.length} of ${ref.tagger.target} today` : undefined}>
+            <Field label="Tagger" hint={ref.tagger ? `${ref.tagger.today + sessionSkus.length} of ${ref.tagger.target} today · ${Math.round(((ref.tagger.today + sessionSkus.length) / Math.max(1, ref.tagger.target)) * 100)}%` : undefined}>
               {ref.tagger ? (
                 <div className="space-y-1">
                   <Input value={ref.tagger.name} readOnly className="bg-muted" />

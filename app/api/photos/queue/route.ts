@@ -15,6 +15,15 @@ type Row = { sku: string; brand_text: string | null; size_label: string | null; 
 export async function GET() {
   const gate = await requireStaff();
   if ("response" in gate) return gate.response;
+  // Today (Pakistan time): garments this person photographed, against their target.
+  const nowPk = new Date(Date.now() + 5 * 3600_000);
+  const startIso = new Date(Date.UTC(nowPk.getUTCFullYear(), nowPk.getUTCMonth(), nowPk.getUTCDate()) - 5 * 3600_000).toISOString();
+  const [{ count: today }, { data: me }, { data: settingsRow }] = await Promise.all([
+    gate.db.from("items").select("id", { count: "exact", head: true }).eq("photographed_by", gate.staff.id).gte("photographed_at", startIso),
+    gate.db.from("staff").select("daily_target").eq("id", gate.staff.id).maybeSingle(),
+    gate.db.from("settings").select("default_daily_target").order("version", { ascending: false }).limit(1).maybeSingle(),
+  ]);
+  const target = me?.daily_target ?? Number(settingsRow?.default_daily_target ?? 60);
   const { data, error } = await gate.db
     .from("items")
     .select("sku, brand_text, size_label, grade_code, tagged_at, photos, online_status, sub_categories(name)")
@@ -31,5 +40,5 @@ export async function GET() {
   });
   const waiting = rows.filter((r) => !(r.photos?.length)).map(shape);
   const done = rows.filter((r) => (r.photos?.length ?? 0) > 0).map(shape).slice(-50).reverse();
-  return NextResponse.json({ waiting, done, total_online: rows.length });
+  return NextResponse.json({ waiting, done, total_online: rows.length, me: { name: gate.staff.name, role: gate.staff.role, today: today ?? 0, target, pct: target ? Math.round(((today ?? 0) / target) * 100) : 0 } });
 }

@@ -10,7 +10,7 @@ import { NextResponse } from "next/server";
 
 import { requireStaff } from "@/lib/auth/staff";
 
-type Photo = { path: string; url: string; kind: "original" | "cutout"; bytes: number; taken_at: string };
+type Photo = { path: string; url: string; kind: "original" | "cutout"; bytes: number; taken_at: string; by?: number };
 
 export async function POST(request: Request) {
   const gate = await requireStaff();
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
   if (!sku || !(file instanceof File)) return NextResponse.json({ error: "sku and file are required." }, { status: 400 });
   if (file.size > 15 * 1024 * 1024) return NextResponse.json({ error: "Photo is over 15 MB." }, { status: 413 });
 
-  const { data: item } = await supabase.from("items").select("id, photos").eq("sku", sku).maybeSingle();
+  const { data: item } = await supabase.from("items").select("id, photos, photographed_by").eq("sku", sku).maybeSingle();
   if (!item) return NextResponse.json({ error: `No item with SKU ${sku}.` }, { status: 404 });
 
   const ext = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
@@ -33,10 +33,12 @@ export async function POST(request: Request) {
   if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
 
   const { data: pub } = supabase.storage.from("garments").getPublicUrl(path);
-  const photo: Photo = { path, url: pub.publicUrl, kind, bytes: file.size, taken_at: new Date().toISOString() };
+  const photo: Photo = { path, url: pub.publicUrl, kind, bytes: file.size, taken_at: new Date().toISOString(), by: gate.staff.id };
   const photos = [...((item.photos ?? []) as Photo[]), photo];
 
-  const { error } = await supabase.from("items").update({ photos, ...(kind === "cutout" ? { online_status: "ready" } : {}) }).eq("id", item.id);
+  // First original picture stamps the photographer and the time — the daily target counts garments, not shots.
+  const stamp = kind === "original" && !item.photographed_by ? { photographed_by: gate.staff.id, photographed_at: photo.taken_at } : {};
+  const { error } = await supabase.from("items").update({ photos, ...stamp, ...(kind === "cutout" ? { online_status: "ready" } : {}) }).eq("id", item.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ photo, photos });
 }

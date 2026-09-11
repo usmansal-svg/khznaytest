@@ -47,7 +47,7 @@ export function PinLogin() {
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "Sign-in failed.");
       const role = j.staff?.role as string | undefined;
-      const home = role === "manager" || role === "founder" ? "/dashboard" : "/tag";
+      const home = role === "manager" || role === "founder" ? "/dashboard" : role === "photographer" ? "/photos" : "/tag";
       router.replace(requested && requested !== "/" ? requested : home);
       router.refresh();
     } catch (e) {
