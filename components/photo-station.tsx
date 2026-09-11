@@ -40,7 +40,8 @@ export function PhotoStation({ sku }: { sku: string }) {
     const res = await fetch(`/api/items/${encodeURIComponent(sku)}`);
     const j = await res.json();
     if (!res.ok) { setError(j.error ?? "Not found."); return; }
-    setItem({ sku: j.sku, brand: j.brand ?? j.brand_text ?? null, sub_category: j.sub_category ?? "", category: j.category ?? "", size_label: j.size_label, grade_code: j.grade_code, colour: j.colour, channel: j.channel, photos: j.photos ?? [] });
+    const it = j.item ?? j; // the garment lookup nests its fields under `item`
+    setItem({ sku: it.sku, brand: it.brand ?? it.brand_text ?? null, sub_category: it.sub_category ?? "", category: it.category ?? "", size_label: it.size_label, grade_code: it.grade ?? it.grade_code, colour: it.colour, channel: it.channel, photos: it.photos ?? [] });
   }, [sku]);
   useEffect(() => { void load(); }, [load]);
 
