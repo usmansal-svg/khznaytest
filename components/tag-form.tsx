@@ -22,6 +22,7 @@ import { SLEEVE_TYPES } from "@/lib/pricing/sub-categories";
 type Reference = {
   genders: { code: Gender; name: string }[];
   top_brands: { name: string; logo_url: string | null }[];
+  size_extras: Record<string, string[]>;
   brand_picks_by_category: Record<string, { name: string; logo_url: string | null }[]>;
   categories: { slug: string; name: string; gender: Gender; sort_order: number }[];
   sub_categories: {
@@ -217,7 +218,19 @@ export function TagForm() {
     const list = catName ? ref?.brand_picks_by_category[catName] : undefined;
     return list && list.length ? list : ref?.top_brands ?? [];
   }, [ref, category]);
-  const sizeSeries = useMemo(() => sizeSeriesFor(selectedSub ?? null, KIDS_SIZES.map((k) => k.label), isKids), [selectedSub, isKids]);
+  const [sizeExtras, setSizeExtras] = useState<Record<string, string[]> | null>(null);
+  const sizeSeries = useMemo(() => sizeSeriesFor(selectedSub ?? null, KIDS_SIZES.map((k) => k.label), isKids, sizeExtras ?? ref?.size_extras ?? {}), [selectedSub, isKids, sizeExtras, ref]);
+  // "+" at the end of a size row: add a label that is missing from the
+  // series (a 24 waist, an XXS). Shared by every iPad from then on.
+  async function addSizeLabel(series: string) {
+    const label = window.prompt(`Add a size to the ${activeSeries.label} row — type it exactly as on the label:`)?.trim();
+    if (!label) return;
+    const res = await fetch("/api/sizes", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ series, label }) });
+    const j = await res.json();
+    if (!res.ok) { window.alert(j.error ?? "Could not add that size."); return; }
+    setSizeExtras((e) => { const base = e ?? ref?.size_extras ?? {}; return { ...base, [series]: [...(base[series] ?? []), j.label] }; });
+    setSize(j.label);
+  }
   const activeSeries = sizeSeries.find((s) => s.code === sizeSeriesCode) ?? sizeSeries[0];
   // A new garment type resets the switch to that type's own series.
   useEffect(() => { setSizeSeriesCode(null); setSizeOther(false); }, [sub, isKids]);
@@ -569,6 +582,7 @@ export function TagForm() {
                     {activeSeries.sizes.map((s) => (
                       <Button key={s} type="button" size="sm" variant={size.trim().toLowerCase() === s.toLowerCase() ? "default" : "outline"} className="h-11 min-w-12 px-3 text-base md:h-8 md:min-w-10 md:px-2.5 md:text-sm" onClick={() => setSize(s)}>{s}</Button>
                     ))}
+                    <Button type="button" size="sm" variant="ghost" title={`Add a size to the ${activeSeries.label} row`} className="h-11 w-11 px-0 text-xl text-muted-foreground md:h-8 md:w-8 md:text-base" onClick={() => addSizeLabel(activeSeries.code)}>+</Button>
                   </div>
                 ) : (
                   <>
