@@ -16,7 +16,6 @@ const GRADES = [
   { code: "very_good", label: "Very Good", hint: "Fabric visibly used" },
   { code: "rejected", label: "Reject", hint: "Unsellable" },
 ];
-const RARE_TRIGGERS = ["Fabric (leather, suede, silk, wool, cashmere, linen)", "Handwork (embroidery, beading, appliqué)", "Structure (lined blazer, tailored coat)", "Vintage markings (Made in Italy/Japan/USA, pre-2005)", "Occasion wear", "Matching set", "Statement piece", "Limited edition"];
 const LABEL: Record<string, string> = { bnwt: "BNWT", premium: "Premium", excellent: "Excellent", very_good: "Very Good", rejected: "Rejected" };
 
 /**
@@ -24,10 +23,7 @@ const LABEL: Record<string, string> = { bnwt: "BNWT", premium: "Premium", excell
  * appears only after the senior has chosen.
  */
 export function QcPage() {
-  const [mode, setMode] = useState<"held" | "rare" | "photo">("held");
-  const [rarePrice, setRarePrice] = useState("");
-  const [triggers, setTriggers] = useState<string[]>([]);
-  const [rareNote, setRareNote] = useState("");
+  const [mode, setMode] = useState<"held" | "photo">("held");
   const [queue, setQueue] = useState<Item[]>([]);
   const [pool, setPool] = useState<number | null>(null);
   const [current, setCurrent] = useState<Item | null>(null);
@@ -91,22 +87,10 @@ export function QcPage() {
         <div><h1 className="text-2xl font-bold">QC · regrade blind</h1><p className="text-sm text-muted-foreground">You never see the tagger&apos;s grade until you&apos;ve chosen yours. When in doubt, grade up.</p></div>
         <div className="flex gap-1 rounded-md border p-1 text-sm">
           <button onClick={() => { setMode("held"); setCurrent(null); setVerdict(null); }} className={cn("rounded px-3 py-1", mode === "held" ? "bg-foreground text-background" : "hover:bg-muted")}>Held for QC{mode === "held" && queue.length ? ` · ${remaining}` : ""}</button>
-          <button onClick={() => { setMode("rare"); setCurrent(null); setVerdict(null); }} className={cn("rounded px-3 py-1", mode === "rare" ? "bg-foreground text-background" : "hover:bg-muted")}>Rare pieces to price{mode === "rare" && queue.length ? ` · ${remaining}` : ""}</button>
           <button onClick={() => { setMode("photo"); setCurrent(null); setVerdict(null); }} className={cn("rounded px-3 py-1", mode === "photo" ? "bg-foreground text-background" : "hover:bg-muted")}>By photo · 30 this week</button>
         </div>
       </div>
 
-      {mode === "rare" && (
-        <Card>
-          <CardContent className="flex flex-wrap items-center gap-3 pt-6">
-            <form onSubmit={(e) => { e.preventDefault(); void lookup(); }} className="relative flex-1 min-w-[16rem]">
-              <ScanLine className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
-              <Input ref={scanRef} value={scan} onChange={(e) => setScan(e.target.value)} placeholder="Scan a hold tag from the Set Aside rail" className="h-11 pl-10 text-base" autoComplete="off" autoCapitalize="characters" />
-            </form>
-            <span className="text-sm text-muted-foreground">{queue.length === 0 ? "Nothing set aside." : `${remaining} rare piece${remaining === 1 ? "" : "s"} waiting for a price`}</span>
-          </CardContent>
-        </Card>
-      )}
       {mode === "held" && (
         <Card>
           <CardContent className="flex flex-wrap items-center gap-3 pt-6">
@@ -125,7 +109,7 @@ export function QcPage() {
         <Card>
           <CardContent className="pt-6">
             {!current ? (
-              <p className="py-10 text-center text-muted-foreground">{mode === "held" ? "The QC rail is clear. Held garments appear here as taggers set them aside." : mode === "rare" ? "No rare pieces waiting. Taggers hand them off from the tag form." : "Nothing left to review this week."}</p>
+              <p className="py-10 text-center text-muted-foreground">{mode === "held" ? "The QC rail is clear. Held garments appear here as taggers set them aside." : "Nothing left to review this week."}</p>
             ) : (
               <div className="grid gap-4 sm:grid-cols-[240px_1fr]">
                 <div className="aspect-square overflow-hidden rounded-md border bg-muted">
@@ -134,30 +118,6 @@ export function QcPage() {
                 </div>
                 <div className="space-y-3">
                   <div><div className="font-mono text-xs text-muted-foreground">{current.sku} · tagged by {current.tagger} · {new Date(current.tagged_at).toLocaleString("en-PK", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</div><div className="text-xl font-bold">{current.brand} · {current.sub_category}</div><div className="text-sm text-muted-foreground capitalize">{current.gender} · {current.category} · size {current.size_label ?? "—"}{current.colour ? ` · ${current.colour}` : ""}</div></div>
-                  {mode === "rare" ? (
-                    <div className="space-y-3">
-                      <div className="grid gap-1">
-                        <span className="text-xs font-medium">Why is it rare? <span className="font-normal text-muted-foreground">· tick all that apply; two or more is the rule</span></span>
-                        <div className="grid gap-1 sm:grid-cols-2">{RARE_TRIGGERS.map((t) => <label key={t} className="flex items-start gap-2 text-xs"><input type="checkbox" checked={triggers.includes(t)} onChange={(e) => setTriggers((x) => (e.target.checked ? [...x, t] : x.filter((y) => y !== t)))} className="mt-0.5" />{t}</label>)}</div>
-                      </div>
-                      <div className="grid gap-1"><span className="text-xs font-medium">Price · Rs</span><Input type="number" min="1" step="10" inputMode="numeric" value={rarePrice} onChange={(e) => setRarePrice(e.target.value)} className="h-11 max-w-xs text-lg" placeholder="e.g. 6990" /></div>
-                      <div className="grid gap-1"><span className="text-xs font-medium">Note</span><Input value={rareNote} onChange={(e) => setRareNote(e.target.value)} placeholder="e.g. Italian wool, lined, priced against resale listings" /></div>
-                      <p className="text-xs text-muted-foreground">Guide from the spec: 1.5× the standard price for one strong trigger, 2× for two or three, 3×+ for genuinely rare; anything collectible against real resale listings, not a multiple.</p>
-                      <Button disabled={busy || !(Number(rarePrice) > 0) || triggers.length < 1} className="h-12" onClick={async () => {
-                        if (!current) return;
-                        setBusy(true);
-                        try {
-                          const res = await fetch("/api/qc", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ sku: current.sku, price: Math.round(Number(rarePrice)), triggers, note: rareNote }) });
-                          const j = await res.json();
-                          if (!res.ok) throw new Error(j.error);
-                          setError(null);
-                          window.open(`/items/${current.sku}/print?auto=1`, "_blank");
-                          const rest = queue.filter((q) => q.id !== current.id);
-                          setQueue(rest); setCurrent(rest[0] ?? null); setRarePrice(""); setTriggers([]); setRareNote("");
-                        } catch (e) { setError(e instanceof Error ? e.message : "Failed."); } finally { setBusy(false); }
-                      }}>Price it · print the tag</Button>
-                    </div>
-                  ) : (
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                     {GRADES.map((g) => (
                       <Button key={g.code} variant="outline" disabled={busy} onClick={() => grade(g.code)} className={cn("h-16 flex-col gap-0", g.code === "rejected" && "border-red-300 text-red-700 dark:text-red-400")}>
@@ -165,7 +125,6 @@ export function QcPage() {
                       </Button>
                     ))}
                   </div>
-                  )}
                   {mode === "photo" && <p className="text-xs text-muted-foreground">From a photo you can judge tags and visible marks; fabric wear needs the garment in hand. Grade what you can see.</p>}
                 </div>
               </div>

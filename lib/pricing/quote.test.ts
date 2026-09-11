@@ -102,8 +102,10 @@ describe("price quote", () => {
     assert.match(r.block_reason!, /manually/i);
   });
 
-  it("rare pieces block even on a regular brand, but a rejected rare piece is just rejected", () => {
-    assert.match(q("smt-men-t-shirt", { brand: "Zara", rare: true }).block_reason!, /rare/i);
+  it("a rare find prices as normal (rare is a flag and a note, decided at grading), and a rejected rare piece is just rejected", () => {
+    const r = q("smt-men-t-shirt", { brand: "Zara", rare: true });
+    assert.equal(r.block_reason, undefined);
+    assert.equal(r.price, q("smt-men-t-shirt", { brand: "Zara" }).price);
     assert.equal(q("smt-men-t-shirt", { brand: "Zara", rare: true, grade: "rejected" }).price, 0);
   });
 

@@ -21,7 +21,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ sku
     supabase
       .from("items")
       .select(
-        "id, sku, brand_id, brand_text, brand_tier, grade_code, is_rare, rare_triggers, flaw_note, season, wearer, size_label, colour, fabric, measurements, weight_kg, adjustment, colour_tag, floored_on, landed_cost, price, price_manual, status, tagged_at, outlet_id, channel, photos, description, online_status, shopify_product_id, shopify_handle, shopify_tags, shopify_synced_at, shopify_error, sub_category_slug, outlets(name), lots(code), sub_categories(name, code, measure_type, market_price, category_slug, categories(name))",
+        "id, sku, brand_id, brand_text, brand_tier, grade_code, is_rare, rare_triggers, rare_note, flaw_note, season, wearer, size_label, colour, fabric, measurements, weight_kg, adjustment, colour_tag, floored_on, landed_cost, price, price_manual, status, tagged_at, outlet_id, channel, photos, description, online_status, shopify_product_id, shopify_handle, shopify_tags, shopify_synced_at, shopify_error, sub_category_slug, outlets(name), lots(code), sub_categories(name, code, measure_type, market_price, category_slug, categories(name))",
       )
       .eq("sku", sku)
       .maybeSingle(),
@@ -70,6 +70,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ sku
       grade: data.grade_code,
       is_rare: data.is_rare,
       rare_triggers: (data as { rare_triggers?: string[] | null }).rare_triggers ?? null,
+      rare_note: (data as { rare_note?: string | null }).rare_note ?? null,
       flaw_note: data.flaw_note,
       season: data.season,
       wearer: data.wearer,

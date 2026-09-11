@@ -42,7 +42,7 @@ Managers add taggers at **Admin → Staff** (name, role, home outlet, PIN, daily
 | Garment | `/items/[sku]` | tagger+ | Channel, destination outlet, photos, listing preview, Shopify push |
 | Print tag | `/items/[sku]/print` · `/print?skus=…` | tagger+ | One tag, or a whole session's tags in one print job |
 | Transfers | `/transfers` | QC senior+ | Ship garments to an outlet (§7) |
-| QC | `/qc` | QC senior+ | Blind regrading of held garments; price rare pieces (§8) |
+| QC | `/qc` | QC senior+ | Blind regrading of held garments (§8) |
 | Lots | `/lots` | manager+ | Purchases, splits, P&L (§6) |
 | Dashboard | `/dashboard` | manager+ | The founder's view (§10) |
 | Pricing | `/admin/pricing` | manager+ | Constants, markdown ladder, selling profiles, grades, sub-categories, history (§4) |
@@ -128,7 +128,7 @@ Order on the full (online) form:
 5. **Brand** — misspellings snap to the listed brand offline (*calvin klien* → Calvin Klein); a brand nobody has listed is cleaned up and **added to the Brands tab as High street** at save, marked *new from tagger*
 6. **Size on label as buttons** — the series follows the garment: collar (14–18) for button-down shirts, waist (26–44) for bottoms, UK numbers for dresses, letters (XS–4XL) otherwise, age bands for kids; a small switch flips to the other series and *Other…* opens a text box for odd labels · **Brand as buttons with logos** — quick-pick lists **per category** (keyed by category name, so one *T-Shirts* list serves every gender), chosen and ordered by hand on the Brands page, with a general fallback list; up to twenty each, optional logo per brand (PNG/JPG/WebP on a 400×200 transparent canvas) shown above the name (first ten under Brand, next ten under *More brands…*); until any are chosen, the most-tagged brands of the last 90 days topped up from a fixed list; typing is for the rare ones · Colour (online only)
 7. **Condition** — five buttons, each showing its price
-8. **Rare find** — hands the garment off (§8.2)
+8. **★ Rare find** button after Brand — decided at grading, before tagging; tap it, pick a reason (Brand · Vintage / year · Fabric quality · Design / style · Handwork · Limited edition · Made in Italy / Japan / USA) or write one; the note prints on the tag and in the Shopify listing. Priced as normal, or by hand at the price the QC head gave
 9. Sleeves (half / full / sleeveless) on shirts, T-shirts, sports tops, outerwear — required
 10. Measured flat, in inches, per garment type (chest & length · waist & length · bust, waist, length · chest, length, sleeve)
 11. *Set the price by hand* sits directly under the Condition buttons, for exceptional pieces (the ±5% stepper was removed on 11 Sep)
@@ -171,8 +171,8 @@ Outlets: Karachi 1, Karachi 2, Islamabad, Lahore 1, Lahore 2, plus Online (renam
 ### 8.1 Random hold-back (the main control)
 Chosen at save, after the tagger has committed, so it cannot be gamed. The senior opens **QC → Held for QC**, scans the tag, and grades **blind** — the tagger's grade is revealed only after choosing. The price the garment *should* have had is computed and the difference stored. The dashboard reports agreed / too low / too high per tagger and the rupees lost to downgrading. A photo-review mode (30 random per week) is available as an extra.
 
-### 8.2 Rare finds
-The tagger ticks **Rare find** (two or more triggers: special fabric, handwork, lined/tailored structure, vintage markings, occasion wear, matching set, statement piece, limited edition). Save prints a **hold tag** — no price — and the garment goes on the Set Aside rail. Ultra-luxury brands take the same route automatically. The senior prices it from **QC → Rare pieces** with the garment in hand, ticking the triggers and giving a reason; the real tag prints. Rare rate per tagger is watched against the spec's 3% cap.
+### 8.2 Rare finds (changed 11 Sep)
+Rare finds are picked out **at grading**, before tagging, and kept in their own basket. The senior QC decides whether a piece is priced as a rare find and, if so, tells the tagger the price. On the form the tagger taps **★ Rare find** after Brand, picks or writes why (brand, vintage year, fabric quality, design, handwork, limited edition, country of make) and prices it — by hand if the senior gave a price. The tag prints a **★ Rare find** band with that reason above the price, for the outlets' rare shelf; the Shopify listing carries the *Rare Find* tag and the reason in its description, for a Rare Finds collection. The earlier hand-off flow (hold tag, Set Aside rail, QC → Rare pieces) is retired; `items.is_rare` and `items.rare_note` are the record.
 
 ---
 
@@ -200,7 +200,7 @@ Presets 7 / 30 / 90 days or a **custom date range**. Sections:
 
 50 × 90 mm, **single-sided**, one page per garment, printed from the tag form (AirPrint / label printer at 100% scale, no margins):
 
-Khazanay wordmark · unmarked space top-right for the month's **colour sticker** · **brand** and garment type · **Size** large · **Price** 24-pt bold · unmarked 42 × 10 mm space for the **markdown sticker** · Code 128 **barcode** and **SKU**. No condition, cost, outlet, tax line, measurements or comparison price. A rare find prints *RARE FIND — set aside, to be priced by a senior* in place of the price.
+Khazanay wordmark · unmarked space top-right for the month's **colour sticker** · **brand** and garment type · **Size** large · **Price** 24-pt bold · unmarked 42 × 10 mm space for the **markdown sticker** · Code 128 **barcode** and **SKU**. No condition, cost, outlet, tax line, measurements or comparison price. A rare find prints a **★ Rare find** band with the reason above the price.
 
 ---
 
@@ -226,7 +226,7 @@ Garment page: channel switch, photos (camera capture, on-device background remov
 
 **API (all under `/api`):** `price`, `items`, `items/[sku]`, `reference`, `brands`, `lots`, `transfers`, `qc`, `photos`, `tags/[sku]/barcode`, `export`, `dashboard`, `auth/*`, `admin/{settings,profiles,grades,sub-categories,categories,brands,brands/logo,brands/quick-picks,staff,reference-prices,pricing/sheet}`, `shopify/push`.
 
-**Migrations (31, all applied):** `pricing_schema` · `pricing_seed` (generated from code by `test/gen-seed.ts`) · `sub_category_codes` · `tagging_support` · `lots_and_weights` · `channels_photos_shopify` · `staff_pins_transfers` · `transfer_seq` · `lot_split` · `lot_description_pieces` · `lot_imported_sequence` · `settings_changed_by` · `categories_flat_gender` · `categories_two_level` · `subcategory_planning_rates` · `price_steps_alerts` · `brands_source` · `qc_and_targets` · `qc_hold` · `standard_cost` · `reference_prices` · `rare_handoff` · `outlet_min_grade` · `outlet_override` · `subcategory_season` · `brand_quick_pick` · `brand_logo` · `brand_quick_picks_by_category` — plus the health check and two POS migrations from a parallel session.
+**Migrations (33, all applied):** `pricing_schema` · `pricing_seed` (generated from code by `test/gen-seed.ts`) · `sub_category_codes` · `tagging_support` · `lots_and_weights` · `channels_photos_shopify` · `staff_pins_transfers` · `transfer_seq` · `lot_split` · `lot_description_pieces` · `lot_imported_sequence` · `settings_changed_by` · `categories_flat_gender` · `categories_two_level` · `subcategory_planning_rates` · `price_steps_alerts` · `brands_source` · `qc_and_targets` · `qc_hold` · `standard_cost` · `reference_prices` · `rare_handoff` · `outlet_min_grade` · `outlet_override` · `subcategory_season` · `brand_quick_pick` · `brand_logo` · `brand_quick_picks_by_category` · `size_labels` · `rare_note` — plus the health check and two POS migrations from a parallel session.
 
 **Environment (Vercel + `.env.local`):** `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (server only; also signs sessions), optional `SESSION_SECRET`, `SHOPIFY_*`.
 
@@ -242,7 +242,7 @@ Garment page: channel switch, photos (camera capture, on-device background remov
 - **Lot numbers never reuse** a deleted number (tried and reverted the same day).
 - **Two-level catalogue per gender** (Category → Sub-category) with type-to-find, after trying flat.
 - **QC by random hold-back at tagging**, not at the outlet or by shipment sample.
-- **Rare pieces are handed off**, never priced by the tagger.
+- **Rare finds are decided at grading**, marked and priced by the tagger (at the senior's price when given); the hand-off flow was retired on 11 Sep.
 - **Cost data is hidden from taggers at the API**, not just the UI.
 - **Fuzzy brand matching skips 4-letter names** (*Zora* is not corrected to *Zara*) — deliberate.
 

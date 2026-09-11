@@ -20,6 +20,8 @@ export type TagItem = {
   measure_fields: string[];
   list_price: number;
   status?: string;
+  is_rare?: boolean;
+  rare_note?: string | null;
   outlet: string | null;
   market_price?: number | null;
   compare?: { new_price: number; saving_pct: number; source: string; confirmed: boolean } | null;
@@ -40,7 +42,7 @@ export function tagCss() {
 }
 
 export function TagFaces({ item }: { item: TagItem }) {
-  const held = item.status === "set_aside" && !item.list_price;
+  const rare = Boolean(item.is_rare);
   return (
     <div className="tag shadow-lg">
       {/* hole */}
@@ -62,19 +64,18 @@ export function TagFaces({ item }: { item: TagItem }) {
           </div>
         </div>
 
-        {held ? (
-          <div className="mt-[5mm] rounded-sm border-2 border-black p-[2mm] text-center">
-            <div className="text-[10pt] font-black uppercase tracking-wide">Rare find</div>
-            <div className="text-[6pt] text-neutral-700">Set aside · to be priced by a senior</div>
-          </div>
-        ) : (
-          <div className="mt-[4mm]">
-            <div className="text-[5.5pt] uppercase tracking-wide text-neutral-500">Price</div>
-            <div className="text-[24pt] font-black leading-none tabular-nums">{rs(item.list_price)}</div>
-            {/* reserved, unmarked: the markdown sticker goes here */}
-            <div className="mt-[2mm] h-[10mm] w-[42mm]" aria-hidden />
+        {rare && (
+          <div className="mt-[2mm] rounded-sm border-2 border-black px-[1.5mm] py-[1mm]">
+            <div className="text-[8pt] font-black uppercase tracking-wide">★ Rare find</div>
+            {item.rare_note && <div className="line-clamp-2 text-[5.5pt] leading-tight text-neutral-800">{item.rare_note}</div>}
           </div>
         )}
+        <div className={rare ? "mt-[2mm]" : "mt-[4mm]"}>
+          <div className="text-[5.5pt] uppercase tracking-wide text-neutral-500">Price</div>
+          <div className="text-[24pt] font-black leading-none tabular-nums">{rs(item.list_price)}</div>
+          {/* reserved, unmarked: the markdown sticker goes here */}
+          <div className={rare ? "mt-[1mm] h-[8mm] w-[42mm]" : "mt-[2mm] h-[10mm] w-[42mm]"} aria-hidden />
+        </div>
       </div>
 
       {/* barcode + SKU */}

@@ -27,6 +27,8 @@ type Body = {
   adjust_pct?: number;
   below_reason?: string | null;
   is_rare?: boolean;
+  /** Why it is rare — printed on the tag and sent to Shopify. Required when is_rare. */
+  rare_note?: string | null;
   is_unsure?: boolean;
   flaw_note?: string | null;
   season?: string;
@@ -90,13 +92,19 @@ export async function POST(request: Request) {
   const rejected = grade === REJECTED;
   // Rare finds and ultra luxury are handed off: saved with no price, set
   // aside, priced later by a senior with the garment in hand.
-  const handoff = !rejected && (Boolean(body.is_rare) || Boolean(q.block_reason));
-  const blocked = handoff;
+  // No hand-off any more: a rare find is priced here (at the senior's price,
+  // by hand, when there is one). An ultra-luxury brand cannot be priced by
+  // the sheet, so it needs a manual price.
+  const isRare = Boolean(body.is_rare);
+  const rareNote = (body.rare_note ?? "").trim().slice(0, 160);
+  if (isRare && !rareNote) return bad("Say why it is a rare find — it prints on the tag.");
+  const blocked = !rejected && Boolean(q.block_reason);
+  if (blocked && body.price_manual == null) return bad(`${q.block_reason} Set the price by hand.`);
 
   // Under-pricing: any final price below the pricing sheet's standard price
   // at this grade needs a reason and is logged with the tagger's name.
-  const manual = !handoff && body.price_manual != null;
-  const finalPrice = rejected ? 0 : handoff ? 0 : manual ? Number(body.price_manual) : q.price ?? 0;
+  const manual = body.price_manual != null;
+  const finalPrice = rejected ? 0 : manual ? Number(body.price_manual) : q.price ?? 0;
   const standardPrice = rejected ? 0 : q.standard_price ?? 0;
   const below = !rejected && !blocked && standardPrice > 0 && finalPrice < standardPrice;
   const belowReason = body.below_reason?.trim() || null;
@@ -142,7 +150,8 @@ export async function POST(request: Request) {
       brand_text: brand.name || null,
       brand_tier: brand.tier,
       grade_code: grade,
-      is_rare: Boolean(body.is_rare),
+      is_rare: isRare,
+      rare_note: isRare ? rareNote : null,
       is_unsure: Boolean(body.is_unsure),
       flaw_note: body.flaw_note?.trim() || null,
       season,
@@ -157,10 +166,10 @@ export async function POST(request: Request) {
       standard_price: rejected ? 0 : q.standard_price,
       below_reason: below ? belowReason : null,
       landed_cost: q.landed_cost,
-      price: blocked ? null : rejected ? 0 : q.price,
+      price: rejected ? 0 : blocked ? null : q.price,
       price_manual: manual ? body.price_manual : null,
       settings_version: ctx.settingsVersion,
-      status: rejected ? "rejected" : handoff ? "set_aside" : "tagged",
+      status: rejected ? "rejected" : "tagged",
       channel,
       outlet_override: outletOverride,
       online_status: channel === "online" ? "draft" : null,
@@ -174,7 +183,7 @@ export async function POST(request: Request) {
 
   // Random QC hold-back: the tagger is told to set this one aside for a
   // blind regrade. Decided here, after the save, so it cannot be gamed.
-  const qcHold = !rejected && !handoff && Math.random() < ctx.settings.qcSampleRate;
+  const qcHold = !rejected && Math.random() < ctx.settings.qcSampleRate;
   if (qcHold) await supabase.from("items").update({ qc_hold: true }).eq("id", item.id);
 
   if (below) {

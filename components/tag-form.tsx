@@ -75,6 +75,9 @@ type Saved = {
   sub_category: string;
 };
 
+/** What sets a rare find apart — quick reasons for the note that prints on the tag. */
+const RARE_WHY = ["Brand", "Vintage / year", "Fabric quality", "Design / style", "Handwork", "Limited edition", "Made in Italy / Japan / USA"];
+
 const GRADE_LABELS: Record<GradeCode, string> = { bnwt: "BNWT", premium: "Premium", excellent: "Excellent", very_good: "Very Good", rejected: "Rejected" };
 const SEASON_OPTIONS: { code: Season; label: string }[] = [{ code: "summer", label: "Summer" }, { code: "winter", label: "Winter" }];
 const WEARER_OPTIONS: { code: Wearer; label: string }[] = [{ code: "men", label: "Men" }, { code: "women", label: "Women" }, { code: "boy", label: "Boy" }, { code: "girl", label: "Girl" }, { code: "infant", label: "Infant" }, { code: "unisex", label: "Unisex" }];
@@ -120,6 +123,8 @@ export function TagForm() {
   const [adjustPct, setAdjustPct] = useState(0);
   const [manualOn, setManualOn] = useState(false);
   const [rareFind, setRareFind] = useState(false);
+  const [rareWhy, setRareWhy] = useState<string[]>([]);
+  const [rareText, setRareText] = useState("");
   const [manualPrice, setManualPrice] = useState("");
   const [belowReason, setBelowReason] = useState("");
 
@@ -286,8 +291,11 @@ export function TagForm() {
   }, [sub, brand, grade, adjustPct, lotId, rareFind]);
 
   const blocked = !rejected && Boolean(price?.block_reason);
-  const handoff = !rejected && (rareFind || blocked);
-  const needsManual = !rejected && !handoff && manualOn;
+  // No hand-off: an ultra-luxury brand (blocked) must be priced by hand; a
+  // rare find prices as normal or by hand at the senior's price.
+  const needsManual = !rejected && (manualOn || blocked);
+  const rareNote = [...rareWhy, rareText.trim()].filter(Boolean).join(" · ").slice(0, 160);
+  const rareOk = !rareFind || rareNote.length > 0;
   const listPrice = rejected ? 0 : needsManual ? Number(manualPrice) || 0 : price?.price ?? 0;
   const standardPrice = price?.standard_price ?? null;
   const below = !rejected && !blocked && standardPrice != null && listPrice > 0 && listPrice < standardPrice;
@@ -308,7 +316,7 @@ export function TagForm() {
   const belowOutletMin = channel === "outlet" && !rejected && ref != null && GRADE_RANK[grade] < GRADE_RANK[ref.outlet_min_grade] && !outletOverride;
   const canSave =
     Boolean(ref?.tagger) && Boolean(sub) && Boolean(selectedLot) && weightOk && sleeveOk && reasonOk && photoOk && !saving && !price?.error && !belowOutletMin &&
-    (rejected ? price?.price === 0 : handoff ? true : needsManual ? listPrice > 0 : Boolean(price?.price));
+    rareOk && (rejected ? price?.price === 0 : needsManual ? listPrice > 0 : Boolean(price?.price));
 
   const resetForNext = useCallback(() => {
     setBrand("");
@@ -322,6 +330,8 @@ export function TagForm() {
     setAdjustPct(0);
     setManualOn(false);
     setRareFind(false);
+    setRareWhy([]);
+    setRareText("");
     setManualPrice("");
     setBelowReason("");
     if (photo) URL.revokeObjectURL(photo.url);
@@ -346,6 +356,7 @@ export function TagForm() {
           grade,
           adjust_pct: adjustPct,
           is_rare: rareFind,
+          rare_note: rareFind ? rareNote : null,
           below_reason: below ? belowReason : null,
           flaw_note: null,
           season,
@@ -567,6 +578,25 @@ export function TagForm() {
                 )}
                 <datalist id="brands">{brandHits.map((b) => <option key={b.name} value={b.name}>{tierLabel(b.tier)}</option>)}</datalist>
               </Field>
+              {!rejected && (
+                <div className={cn("grid min-w-0 content-start gap-2 rounded-md border p-3 sm:col-span-2", rareFind && "border-amber-500 bg-amber-50 dark:bg-amber-950/40")}>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Button type="button" variant={rareFind ? "default" : "outline"} className="h-10" onClick={() => setRareFind((r) => !r)}>★ Rare find{rareFind ? " · on" : ""}</Button>
+                    <span className="text-xs text-muted-foreground">{rareFind ? "Prints a Rare Find band on the tag with the reason, and tags it for the Shopify Rare Finds collection. If the QC head gave a price, set it by hand under Condition." : "Decided at grading — tap only if this piece came from the rare basket."}</span>
+                  </div>
+                  {rareFind && (
+                    <>
+                      <div className="flex flex-wrap gap-1.5">
+                        {RARE_WHY.map((w) => (
+                          <Button key={w} type="button" size="sm" variant={rareWhy.includes(w) ? "secondary" : "outline"} className="h-9 px-3 text-sm md:h-7 md:px-2.5 md:text-xs" onClick={() => setRareWhy((x) => (x.includes(w) ? x.filter((y) => y !== w) : [...x, w]))}>{w}</Button>
+                        ))}
+                      </div>
+                      <Input value={rareText} onChange={(e) => setRareText(e.target.value)} maxLength={120} placeholder="In a few words, what sets it apart — e.g. 1990s Levi's 501, made in USA" className={cn(!rareOk && "border-amber-500")} />
+                      <p className="text-xs text-muted-foreground">{rareNote ? <>On the tag: <span className="font-medium text-foreground">{rareNote}</span></> : "Pick a reason or write one — it prints on the tag so the customer sees why."}</p>
+                    </>
+                  )}
+                </div>
+              )}
               <div className="grid min-w-0 content-start gap-1.5 sm:col-span-2">
                 <div className="flex flex-wrap items-center gap-3">
                   <Label>Size on label {size && <span className="font-normal text-muted-foreground">· {size}</span>}</Label>
@@ -632,21 +662,12 @@ export function TagForm() {
               </p>
             )}
 
-            {!rejected && !handoff && (
+            {!rejected && (
               <div className="grid gap-2">
                 {!blocked && (
                   <label className="flex items-center gap-2 text-sm"><Checkbox checked={manualOn} onCheckedChange={(v) => { setManualOn(v === true); if (v !== true) setManualPrice(""); }} /> Set the price by hand <span className="text-muted-foreground">· exceptional piece; anything below the sheet is logged</span></label>
                 )}
 
-            {!rejected && (
-              <label className={cn("flex items-start gap-3 rounded-md border p-3 text-sm", rareFind && "border-amber-500 bg-amber-50 dark:bg-amber-950/40")}>
-                <Checkbox checked={rareFind} onCheckedChange={(v) => setRareFind(v === true)} className="mt-0.5" />
-                <span>
-                  <span className="font-medium">Rare find — hand off to a senior to price</span>
-                  <span className="block text-xs text-muted-foreground">Two or more of: special fabric (leather, silk, wool, cashmere, linen) · handwork · lined or tailored structure · vintage markings · occasion wear · matching set · statement piece · limited edition. You don&apos;t price it: Save prints a hold tag, and it goes on the Set Aside rail.</span>
-                </span>
-              </label>
-            )}
 
             {rejected && (
               <Note tone="warn">Rejected — price 0. Still saved as an item so the reject rate is measured. Pull buttons and snaps, cut drawstrings, then bin it.</Note>
@@ -699,8 +720,8 @@ export function TagForm() {
           </CardHeader>
           <CardContent className="space-y-3">
             {price?.error && <Note tone="error">{price.error}</Note>}
-            {handoff ? (
-              <Note tone="warn">{rareFind ? "Rare find — no price now. Save prints a hold tag; a senior prices it with the garment in hand." : price?.block_reason}</Note>
+            {blocked && !listPrice ? (
+              <Note tone="warn">{price?.block_reason} Set the price by hand.</Note>
             ) : (
               <div>
                 <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Our price · incl. tax</div>
@@ -759,7 +780,7 @@ export function TagForm() {
             {saved ? (
               <>
                 <Note tone="ok">
-                  Saved <span className="font-mono font-semibold">{saved.sku}</span>{saved.status === "set_aside" ? " · set aside for a senior to price — hold tag printed" : ` · ${pkr(saved.list_price)}`}
+                  Saved <span className="font-mono font-semibold">{saved.sku}</span>{` · ${pkr(saved.list_price)}`}
                 </Note>
                 {photoError && (
                   <Note tone="warn">Garment saved, but the photo didn&apos;t upload ({photoError}). <button type="button" className="underline" onClick={() => photo && uploadPhoto(saved.sku, photo.blob).then(() => setPhotoError(null)).catch((e) => setPhotoError(e.message))}>Retry</button></Note>

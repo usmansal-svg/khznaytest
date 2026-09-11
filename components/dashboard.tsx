@@ -63,7 +63,6 @@ export function Dashboard() {
     a.new_brands.length > 0 && { text: `${a.new_brands.length} new brand${a.new_brands.length === 1 ? "" : "s"} from taggers need a tier`, href: "/admin/brands", tone: "warn" as const },
     a.no_photo > 0 && { text: `${a.no_photo} garment${a.no_photo === 1 ? "" : "s"} without a photo`, href: "/items", tone: "warn" as const },
     a.qc_held > 0 && { text: `${a.qc_held} garment${a.qc_held === 1 ? "" : "s"} on the QC rail waiting for a regrade`, href: "/qc", tone: "warn" as const },
-    a.set_aside > 0 && { text: `${a.set_aside} rare or luxury piece${a.set_aside === 1 ? "" : "s"} waiting for a senior to price`, href: "/qc", tone: "warn" as const },
     a.lots_nearly_done.length > 0 && { text: `Lots nearly finished: ${a.lots_nearly_done.join(", ")} — time to close and true-up`, href: "/lots", tone: "info" as const },
     k.awaiting_floor > 0 && { text: `${k.awaiting_floor} tagged garments not yet on a transfer`, href: "/transfers", tone: "info" as const },
   ].filter(Boolean) as { text: string; href: string; tone: "warn" | "info" }[];

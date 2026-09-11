@@ -110,7 +110,9 @@ export function quote(input: QuoteInput, ctx: PricingContext): Quote {
   // A rare piece is priced by hand even when the brand is priceable — two or
   // more special triggers send it to the Set Aside rail. Rare is a flag, not
   // a grade; a rejected rare piece is still rejected.
-  const blockReason = rejected ? undefined : isRare ? "Rare piece — set aside and price by hand against resale listings." : result.blockReason;
+  // Rare is a flag and a note now, not a hand-off: the piece prices as normal
+  // (or by hand at the senior's price). Only an ultra-luxury brand blocks.
+  const blockReason = rejected ? undefined : result.blockReason;
 
   if (!blockReason && !rejected && result.price > ctx.settings.highValueThreshold) {
     warnings.push(`Above Rs ${ctx.settings.highValueThreshold.toLocaleString()} — goes to the QC review queue.`);
