@@ -1,6 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { connection } from "next/server";
 
+import { listLocations, shopifyConfig } from "@/lib/shopify/client";
+
 // This route must never be served from the prerender cache: every request
 // has to actually run the checks. `instant = false` makes it blocking.
 export const instant = false;
@@ -79,6 +81,18 @@ async function runChecks(): Promise<Check[]> {
     });
   }
 
+  // Shopify: is it connected, and can we read the store? Counts only — no names or IDs on a public page.
+  const cfg = shopifyConfig();
+  if (!cfg) {
+    checks.push({ name: "Shopify", ok: false, detail: "not connected — SHOPIFY_STORE_DOMAIN with SHOPIFY_CLIENT_ID + SHOPIFY_CLIENT_SECRET (or a legacy token) not set" });
+  } else {
+    try {
+      const locations = await listLocations(cfg);
+      checks.push({ name: "Shopify", ok: true, detail: `connected to ${cfg.domain} · ${locations.filter((l) => l.active).length} active location${locations.filter((l) => l.active).length === 1 ? "" : "s"} (${locations.length} total) · auth ${cfg.token ? "fixed token" : "client credentials"}` });
+    } catch (e) {
+      checks.push({ name: "Shopify", ok: false, detail: `configured for ${cfg.domain} but the store refused: ${e instanceof Error ? e.message.slice(0, 200) : "unknown error"}` });
+    }
+  }
   return checks;
 }
 
