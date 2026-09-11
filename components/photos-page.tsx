@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { useHoldDrag } from "@/lib/hold-drag";
 import { applyAdjust, cutoutOnWhite, NO_ADJUST, squareForShopify, type Adjust } from "@/lib/photos";
 import { cn } from "@/lib/utils";
 
@@ -52,23 +53,12 @@ export function PhotosPage() {
   const [search, setSearch] = useState("");
   const [listFilter, setListFilter] = useState<"none" | "done" | "all">("all");
   const touchX = useRef<number | null>(null);
-  // Press-and-hold drag to reorder the thumbnails (pointer events, so it works on iPhone).
-  const [dragId, setDragId] = useState<number | null>(null);
-  const holdTimer = useRef<number | null>(null);
-  const gridRef = useRef<HTMLDivElement>(null);
-  function onTilePointerDown(id: number) {
-    holdTimer.current = window.setTimeout(() => { setDragId(id); if (navigator.vibrate) navigator.vibrate(10); }, 250);
-  }
-  function cancelHold() { if (holdTimer.current) { window.clearTimeout(holdTimer.current); holdTimer.current = null; } }
-  function onGridPointerMove(e: React.PointerEvent) {
-    if (dragId == null) return;
-    e.preventDefault();
-    const el = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>("[data-shot]");
-    const overId = el ? Number(el.dataset.shot) : NaN;
-    if (!Number.isFinite(overId) || overId === dragId) return;
-    setShots((all) => { const from = all.findIndex((x) => x.id === dragId); const to = all.findIndex((x) => x.id === overId); if (from < 0 || to < 0) return all; const c = [...all]; const [m] = c.splice(from, 1); c.splice(to, 0, m); return c; });
-  }
-  function endDrag() { cancelHold(); setDragId(null); }
+  // Press-and-hold drag to reorder the thumbnails; the ghost follows the thumb.
+  const [camOn, setCamOn] = useState(false);
+  const drag = useHoldDrag<number>(
+    shots.map((x) => x.id),
+    (from, to) => setShots((all) => { const a = all.findIndex((x) => x.id === from); const b = all.findIndex((x) => x.id === to); if (a < 0 || b < 0) return all; const c = [...all]; const [m] = c.splice(a, 1); c.splice(b, 0, m); return c; }),
+  );
   const [camInfo, setCamInfo] = useState<string | null>(null);
   const [autoCut, setAutoCut] = useState(true);
   const [flash, setFlash] = useState(false);
@@ -120,6 +110,7 @@ export function PhotosPage() {
     try { await v.play(); } catch { /* iOS may need the tap that already happened; the stream is attached either way */ }
     const s = stream.getVideoTracks()[0]?.getSettings();
     if (s?.width && s?.height) setCamInfo(`${s.width} × ${s.height}`);
+    setCamOn(true);
     return stream;
   }
   function closeCamera() {
@@ -127,6 +118,7 @@ export function PhotosPage() {
     scanStop.current = null;
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
+    setCamOn(false);
     if (videoRef.current) videoRef.current.srcObject = null;
   }
   useEffect(() => () => closeCamera(), []);
@@ -168,7 +160,9 @@ export function PhotosPage() {
     setRetaking(retake || originals.length > 0);
     // A reshoot starts from what is already there: every earlier picture can be kept, adjusted, discarded or joined by new ones.
     if (originals.length) setShots(originals.map((p) => ({ id: ++shotId.current, blob: null, url: p.url, keep: true, adjust: NO_ADJUST, existing: { path: p.path } })));
-    try { await openCamera(); setMode("shoot"); } catch (e) { setError(e instanceof Error ? e.message : "Camera unavailable."); setMode("home"); }
+    // The iPhone only opens the camera on a tap: if one is already running we
+    // keep it; otherwise the shoot screen shows an "Open camera" button.
+    setMode("shoot");
   }
 
   const keptCount = shots.filter((s) => s.keep).length;
@@ -434,7 +428,7 @@ export function PhotosPage() {
       {mode === "home" && data && (
         <>
           <Button type="button" size="lg" className="h-20 w-full text-xl" onClick={startScan}><Camera className="size-7" /> New garment · scan its tag</Button>
-          <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); const s = search.trim().toUpperCase(); if (s) { void pick(s, true); setSearch(""); } }}>
+          <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); const s = search.trim().toUpperCase(); if (s) { void openCamera().catch(() => {}); void pick(s, true); setSearch(""); } }}>
             <div className="relative flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input ref={searchRef} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Find a SKU to retake — type it, or scan with a reader" className="h-12 pl-9 font-mono" autoComplete="off" autoCapitalize="characters" />
@@ -476,7 +470,7 @@ export function PhotosPage() {
                               {data.sees_names && r.photographer && <div className="text-xs text-muted-foreground">{r.photographer} · {when(r.photographed_at)}</div>}
                             </div>
                             {none
-                              ? <Button type="button" size="sm" className="h-9 shrink-0" onClick={() => void pick(r.sku)}>Shoot</Button>
+                              ? <Button type="button" size="sm" className="h-9 shrink-0" onClick={() => { void openCamera().catch(() => {}); void pick(r.sku); }}>Shoot</Button>
                               : <Button asChild type="button" size="sm" variant="outline" className="h-9 shrink-0"><Link href={`/photos/${encodeURIComponent(r.sku)}`}>Review</Link></Button>}
                           </li>
                         );
@@ -501,6 +495,12 @@ export function PhotosPage() {
                 <div className="absolute bottom-3 left-0 right-0 text-center text-sm font-medium text-white drop-shadow">Point at the barcode on the tag</div>
               </>
             )}
+            {mode === "shoot" && !camOn && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center text-white">
+                <Button type="button" size="lg" className="h-14 px-8 text-lg" onClick={() => void openCamera().catch((e) => setError(e instanceof Error ? `Camera: ${e.message}. Allow the camera for this site in Settings → Safari → Camera.` : "Camera unavailable."))}><Camera className="size-5" /> Open camera</Button>
+                <p className="text-xs text-white/70">The phone asks for a tap before it opens the camera.</p>
+              </div>
+            )}
             <button type="button" onClick={goHome} className="absolute right-2 top-2 rounded-full bg-black/60 p-2 text-white" aria-label="Close"><X className="size-5" /></button>
           </div>
           <CardContent className="space-y-3 p-3">
@@ -519,17 +519,17 @@ export function PhotosPage() {
             )}
             {mode === "shoot" && (
               <>
-                <Button type="button" size="lg" className="h-16 w-full text-lg" onClick={snap} disabled={keptCount >= MAX_SHOTS}><Camera className="size-6" /> {keptCount >= MAX_SHOTS ? `${MAX_SHOTS} is the limit — untick one first` : `Take picture ${keptCount + 1}`}</Button>
+                <Button type="button" size="lg" className="h-16 w-full text-lg" onClick={snap} disabled={!camOn || keptCount >= MAX_SHOTS}><Camera className="size-6" /> {keptCount >= MAX_SHOTS ? `${MAX_SHOTS} is the limit — untick one first` : `Take picture ${keptCount + 1}`}</Button>
                 <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={onNative} />
                 <button type="button" onClick={() => fileRef.current?.click()} className="text-xs text-muted-foreground underline">Or take one shot with the phone&apos;s own camera app (full resolution)</button>
                 {camInfo && <p className="text-[11px] text-muted-foreground">Camera {camInfo} · saved square at 2048 px for Shopify, under 1 MB</p>}
                 {shots.length > 0 && <p className="text-xs text-muted-foreground">{retaking ? "Earlier pictures are marked; keep, adjust or discard any of them and add new ones. " : ""}Press and hold a picture, then drag it to change the order — picture 1 is the cover and the order is the order on Shopify. Tap a picture to review and adjust it.</p>}
                 {shots.length > 0 && (
-                  <div ref={gridRef} className="grid grid-cols-3 gap-2 select-none" onPointerMove={onGridPointerMove} onPointerUp={endDrag} onPointerCancel={endDrag} onPointerLeave={endDrag} style={{ touchAction: dragId != null ? "none" : "auto" }}>
+                  <div className="grid grid-cols-3 gap-2 select-none">
                     {shots.map((s, i) => (
-                      <div key={s.id} data-shot={s.id} className={cn("flex flex-col overflow-hidden rounded-md border-2 bg-background", s.keep ? (i === 0 ? "border-amber-500" : "border-green-600") : "border-dashed border-muted-foreground/40 opacity-60", dragId === s.id && "scale-105 shadow-xl ring-2 ring-primary")}>
-                        <div className="relative aspect-square" onPointerDown={() => onTilePointerDown(s.id)} onPointerUp={cancelHold} onPointerCancel={cancelHold} onContextMenu={(e) => e.preventDefault()}>
-                          <button type="button" onClick={() => { if (dragId == null) { setReviewIdx(i); setMode("review"); } }} className="h-full w-full">
+                      <div key={s.id} data-key={s.id} className={cn("flex flex-col overflow-hidden rounded-md border-2 bg-background", s.keep ? (i === 0 ? "border-amber-500" : "border-green-600") : "border-dashed border-muted-foreground/40 opacity-60", drag.dragKey === s.id && "opacity-30")}>
+                        <div className="relative aspect-square" style={{ touchAction: "none" }} onPointerDown={drag.onPointerDown(s.id, s.url)} onPointerMove={drag.onPointerMove} onPointerUp={drag.onPointerUp} onPointerCancel={drag.onPointerCancel} onContextMenu={(e) => e.preventDefault()}>
+                          <button type="button" onClick={() => { if (drag.dragKey == null) { setReviewIdx(i); setMode("review"); } }} className="h-full w-full">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src={s.url} alt={`Picture ${i + 1}`} draggable={false} className="h-full w-full object-cover" style={{ filter: cssFilter(s.adjust), transform: `rotate(${s.adjust.rotate}deg)` }} />
                           </button>
@@ -548,6 +548,10 @@ export function PhotosPage() {
                       </div>
                     ))}
                   </div>
+                )}
+                {drag.ghost && (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={drag.ghost.url} alt="" className="pointer-events-none fixed z-50 rounded-md object-cover shadow-2xl ring-2 ring-primary" style={{ left: drag.ghost.x, top: drag.ghost.y, width: drag.ghost.w, height: drag.ghost.h }} />
                 )}
                 <label className="flex items-center gap-2 text-xs"><Checkbox checked={autoCut} onCheckedChange={(v) => setAuto(v === true)} /> Remove the background from the cover picture (soft shadow on white)</label>
                 <Button type="button" className="h-14 w-full text-base" disabled={!kept.length} onClick={requestSave}><Check className="size-5" /> Save {kept.length || ""} picture{kept.length === 1 ? "" : "s"} &amp; next garment</Button>

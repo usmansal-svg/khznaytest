@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Camera, ChevronLeft, ChevronRight, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useHoldDrag } from "@/lib/hold-drag";
 import { cn } from "@/lib/utils";
 
 /**
@@ -23,8 +24,6 @@ export function PhotoStation({ sku }: { sku: string }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [view, setView] = useState<number | null>(null); // index into originals
-  const [dragPath, setDragPath] = useState<string | null>(null);
-  const holdTimer = useRef<number | null>(null);
   const touchX = useRef<number | null>(null);
 
 
@@ -51,31 +50,22 @@ export function PhotoStation({ sku }: { sku: string }) {
     await fetch("/api/photos", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ sku, order: paths }) });
   }
 
-  // ---- press-and-hold drag to reorder
-  function onTileDown(path: string) { holdTimer.current = window.setTimeout(() => { setDragPath(path); if (navigator.vibrate) navigator.vibrate(10); }, 250); }
-  function cancelHold() { if (holdTimer.current) { window.clearTimeout(holdTimer.current); holdTimer.current = null; } }
-  function onGridMove(e: React.PointerEvent) {
-    if (!dragPath || !item) return;
-    e.preventDefault();
-    const el = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>("[data-path]");
-    const over = el?.dataset.path;
-    if (!over || over === dragPath) return;
-    setItem((it) => {
+  // ---- press-and-hold drag to reorder; the order is saved on drop
+  const originalsNow = item?.photos.filter((p) => p.kind === "original") ?? [];
+  const drag = useHoldDrag<string>(
+    originalsNow.map((p) => p.path),
+    (from, to) => setItem((it) => {
       if (!it) return it;
       const originals = it.photos.filter((p) => p.kind === "original");
       const cutouts = it.photos.filter((p) => p.kind === "cutout");
-      const from = originals.findIndex((p) => p.path === dragPath);
-      const to = originals.findIndex((p) => p.path === over);
-      if (from < 0 || to < 0) return it;
-      const c = [...originals]; const [m] = c.splice(from, 1); c.splice(to, 0, m);
+      const a = originals.findIndex((p) => p.path === from);
+      const b = originals.findIndex((p) => p.path === to);
+      if (a < 0 || b < 0) return it;
+      const c = [...originals]; const [m] = c.splice(a, 1); c.splice(b, 0, m);
       return { ...it, photos: [...c, ...cutouts] };
-    });
-  }
-  function endDrag() {
-    cancelHold();
-    if (dragPath && item) void saveOrder(item.photos.filter((p) => p.kind === "original").map((p) => p.path));
-    setDragPath(null);
-  }
+    }),
+    () => { if (item) void saveOrder(item.photos.filter((p) => p.kind === "original").map((p) => p.path)); },
+  );
 
   if (error) return <div className="mx-auto max-w-3xl space-y-3"><p className="text-destructive">{error}</p><Button asChild variant="outline"><Link href="/photos"><ArrowLeft className="size-4" /> Back</Link></Button></div>;
   if (!item) return <p className="text-muted-foreground">Loading…</p>;
@@ -132,13 +122,13 @@ export function PhotoStation({ sku }: { sku: string }) {
       ) : (
         <>
           <p className="text-xs text-muted-foreground">{originals.length} picture{originals.length === 1 ? "" : "s"} · picture 1 is the cover{cutouts.length ? " (background removed)" : ""}. Tap for the full view; press and hold, then drag, to reorder — the order is the order on Shopify.</p>
-          <div className="grid grid-cols-3 gap-2 select-none" onPointerMove={onGridMove} onPointerUp={endDrag} onPointerCancel={endDrag} onPointerLeave={endDrag} style={{ touchAction: dragPath ? "none" : "auto" }}>
+          <div className="grid grid-cols-3 gap-2 select-none">
             {originals.map((p, i) => {
               const cut = cutFor(p);
               return (
-                <div key={p.path} data-path={p.path} className={cn("flex flex-col overflow-hidden rounded-md border-2 bg-background", i === 0 ? "border-amber-500" : "border-transparent", dragPath === p.path && "scale-105 shadow-xl ring-2 ring-primary")}>
-                  <div className="relative aspect-square" onPointerDown={() => onTileDown(p.path)} onPointerUp={cancelHold} onPointerCancel={cancelHold} onContextMenu={(e) => e.preventDefault()}>
-                    <button type="button" onClick={() => { if (!dragPath) setView(i); }} className="h-full w-full">
+                <div key={p.path} data-key={p.path} className={cn("flex flex-col overflow-hidden rounded-md border-2 bg-background", i === 0 ? "border-amber-500" : "border-transparent", drag.dragKey === p.path && "opacity-30")}>
+                  <div className="relative aspect-square" style={{ touchAction: "none" }} onPointerDown={drag.onPointerDown(p.path, p.url)} onPointerMove={drag.onPointerMove} onPointerUp={drag.onPointerUp} onPointerCancel={drag.onPointerCancel} onContextMenu={(e) => e.preventDefault()}>
+                    <button type="button" onClick={() => { if (drag.dragKey == null) setView(i); }} className="h-full w-full">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={p.url} alt={`Picture ${i + 1}`} draggable={false} className="h-full w-full object-cover" />
                     </button>
@@ -154,6 +144,10 @@ export function PhotoStation({ sku }: { sku: string }) {
               );
             })}
           </div>
+          {drag.ghost && (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src={drag.ghost.url} alt="" className="pointer-events-none fixed z-50 rounded-md object-cover shadow-2xl ring-2 ring-primary" style={{ left: drag.ghost.x, top: drag.ghost.y, width: drag.ghost.w, height: drag.ghost.h }} />
+          )}
         </>
       )}
 
