@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
-type Brand = { id: number; name: string; tier: string; active: boolean; source: string; added_at: string; added_by: string | null; quick_pick_order: number | null };
+type Brand = { id: number; name: string; tier: string; active: boolean; source: string; added_at: string; added_by: string | null; quick_pick_order: number | null; logo_url: string | null };
 const TIERS = [
   { code: "regular", label: "High street", mult: "×1.00", note: "Standard price" },
   { code: "affordable_luxury", label: "Affordable luxury", mult: "×2.00", note: "Roughly double" },
@@ -55,6 +55,23 @@ export function BrandsAdmin() {
     } catch (e) { setMessage({ tone: "error", text: e instanceof Error ? e.message : "Failed." }); } finally { setBusy(false); }
   }
   const quickNames = quick.map((b) => b.name);
+  const [logoFor, setLogoFor] = useState<string | null>(null);
+  const logoRef = useRef<HTMLInputElement>(null);
+  async function uploadLogo(name: string, file: File) {
+    setBusy(true); setMessage(null);
+    const fd = new FormData(); fd.append("name", name); fd.append("file", file);
+    try {
+      const res = await fetch("/api/admin/brands/logo", { method: "POST", body: fd });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error ?? "Upload failed.");
+      setMessage({ tone: "ok", text: `Logo set for ${name}.` });
+      await load();
+    } catch (e) { setMessage({ tone: "error", text: e instanceof Error ? e.message : "Upload failed." }); } finally { setBusy(false); }
+  }
+  async function removeLogo(name: string) {
+    setBusy(true);
+    try { await fetch("/api/admin/brands/logo", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ name }) }); await load(); } finally { setBusy(false); }
+  }
   const move = (i: number, d: -1 | 1) => { const n = [...quickNames]; const j = i + d; if (j < 0 || j >= n.length) return; [n[i], n[j]] = [n[j], n[i]]; void saveQuick(n); };
   const addQuick = () => { const name = quickAdd.trim(); if (!name || quickNames.some((q) => q.toLowerCase() === name.toLowerCase())) return; if (quickNames.length >= 20) { setMessage({ tone: "error", text: "Twenty is the most the form shows — remove one first." }); return; } void saveQuick([...quickNames, name]); setQuickAdd(""); };
   const deactivate = (b: Brand) => window.confirm(`Remove ${b.name} from the list? Garments already tagged keep the name.`) && post({ brands: [{ name: b.name, tier: b.tier, active: false }] });
@@ -78,7 +95,13 @@ export function BrandsAdmin() {
           <ol className="flex flex-wrap gap-2">
             {quick.map((b, i) => (
               <li key={b.id} className={cn("flex items-center gap-1 rounded-md border px-2 py-1 text-sm", i >= 10 && "border-dashed text-muted-foreground")}>
-                <span className="mr-1 text-xs tabular-nums text-muted-foreground">{i + 1}</span>{b.name}
+                <span className="mr-1 text-xs tabular-nums text-muted-foreground">{i + 1}</span>
+                <button type="button" disabled={busy} title={b.logo_url ? "Replace the logo" : "Add a logo"} onClick={() => { setLogoFor(b.name); logoRef.current?.click(); }} className="mr-1 flex h-7 w-10 items-center justify-center overflow-hidden rounded border border-dashed bg-white text-[10px] text-muted-foreground hover:border-solid">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  {b.logo_url ? <img src={b.logo_url} alt="" className="max-h-7 max-w-10 object-contain" /> : "logo"}
+                </button>
+                {b.name}
+                {b.logo_url && <button type="button" disabled={busy} onClick={() => removeLogo(b.name)} className="rounded px-1 text-[10px] text-muted-foreground hover:bg-muted" title="Remove the logo">no logo</button>}
                 <button type="button" disabled={busy || i === 0} onClick={() => move(i, -1)} className="rounded px-1 text-xs text-muted-foreground hover:bg-muted disabled:opacity-30" title="Move earlier">‹</button>
                 <button type="button" disabled={busy || i === quick.length - 1} onClick={() => move(i, 1)} className="rounded px-1 text-xs text-muted-foreground hover:bg-muted disabled:opacity-30" title="Move later">›</button>
                 <button type="button" disabled={busy} onClick={() => saveQuick(quickNames.filter((n) => n !== b.name))} className="rounded px-1 text-xs text-muted-foreground hover:bg-muted" title="Remove from quick picks">×</button>
@@ -86,6 +109,8 @@ export function BrandsAdmin() {
             ))}
             {quick.length === 0 && <li className="text-sm text-muted-foreground">None chosen yet.</li>}
           </ol>
+          <input ref={logoRef} type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f && logoFor) void uploadLogo(logoFor, f); }} />
+          <p className="text-xs text-muted-foreground">Tap the box in front of a brand to add or replace its logo (PNG, JPG, SVG or WebP, under 1 MB; about 200 pixels wide is plenty). It shows above the name on the tag form.</p>
           <form className="flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); addQuick(); }}>
             <Input list="quick-brands" value={quickAdd} onChange={(e) => setQuickAdd(e.target.value)} placeholder="Add a brand from the list…" className="h-9 w-64" autoComplete="off" />
             <datalist id="quick-brands">{(brands ?? []).filter((b) => b.active && b.quick_pick_order == null).map((b) => <option key={b.id} value={b.name} />)}</datalist>

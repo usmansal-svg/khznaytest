@@ -14,10 +14,10 @@ type Tier = (typeof TIERS)[number];
 
 export async function GET() {
   const supabase = await createClient();
-  const { data, error } = await supabase.from("brands").select("id, name, tier, active, source, added_at, quick_pick_order, staff:added_by(name)").order("name");
+  const { data, error } = await supabase.from("brands").select("id, name, tier, active, source, added_at, quick_pick_order, logo_url, staff:added_by(name)").order("name");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   const one = (v: unknown) => (Array.isArray(v) ? v[0] : v) as { name: string } | null | undefined;
-  return NextResponse.json({ brands: (data ?? []).map((b) => ({ id: b.id, name: b.name, tier: b.tier, active: b.active, source: b.source, added_at: b.added_at, quick_pick_order: b.quick_pick_order ?? null, added_by: one(b.staff)?.name ?? null })) });
+  return NextResponse.json({ brands: (data ?? []).map((b) => ({ id: b.id, name: b.name, tier: b.tier, active: b.active, source: b.source, added_at: b.added_at, quick_pick_order: b.quick_pick_order ?? null, logo_url: b.logo_url ?? null, added_by: one(b.staff)?.name ?? null })) });
 }
 
 /**

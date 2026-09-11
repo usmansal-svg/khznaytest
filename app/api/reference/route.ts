@@ -26,7 +26,7 @@ export async function GET() {
     supabase.from("outlets").select("id, name, is_online").eq("active", true).order("id"),
     loadOpenLots(supabase, ctx.settings),
     supabase.from("items").select("brand_text").gte("tagged_at", since).not("brand_text", "is", null).limit(5000),
-    supabase.from("brands").select("name").eq("active", true).not("quick_pick_order", "is", null).order("quick_pick_order").limit(20),
+    supabase.from("brands").select("name, logo_url").eq("active", true).not("quick_pick_order", "is", null).order("quick_pick_order").limit(20),
   ]);
 
   // Quick-pick brands: chosen by hand on the Brands page (Usman's call —
@@ -34,6 +34,7 @@ export async function GET() {
   // any are chosen, fall back to the most tagged in the last 90 days topped
   // up from the brands that come through every bale.
   const chosen = (quickRes.data ?? []).map((b) => b.name);
+  const logos = new Map((quickRes.data ?? []).map((b) => [b.name, b.logo_url ?? null]));
   const counts = new Map<string, number>();
   for (const r of recentRes.data ?? []) { const b = (r.brand_text ?? "").trim(); if (b) counts.set(b, (counts.get(b) ?? 0) + 1); }
   const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([b]) => b);
@@ -59,7 +60,7 @@ export async function GET() {
 
   return NextResponse.json({
     genders: GENDERS.map((g) => ({ code: g, name: GENDER_LABELS[g] })),
-    top_brands: topBrands,
+    top_brands: topBrands.map((name) => ({ name, logo_url: logos.get(name) ?? null })),
     categories: categoriesRes.data ?? [],
     sub_categories: ctx.subCategories
       .filter((s) => s.active)

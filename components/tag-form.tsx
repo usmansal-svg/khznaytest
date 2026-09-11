@@ -21,7 +21,7 @@ import { SLEEVE_TYPES } from "@/lib/pricing/sub-categories";
 
 type Reference = {
   genders: { code: Gender; name: string }[];
-  top_brands: string[];
+  top_brands: { name: string; logo_url: string | null }[];
   categories: { slug: string; name: string; gender: Gender; sort_order: number }[];
   sub_categories: {
     slug: string;
@@ -524,9 +524,20 @@ export function TagForm() {
                 </div>
                 {ref.top_brands.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
-                    {ref.top_brands.slice(0, moreBrands ? 20 : 10).map((b) => (
-                      <Button key={b} type="button" size="sm" variant={brand.trim().toLowerCase() === b.toLowerCase() ? "default" : "outline"} className="h-9 px-3 text-sm md:h-7 md:px-2.5 md:text-xs" onClick={() => { setBrand(b); requestAnimationFrame(() => sizeRef.current?.focus()); }}>{b}</Button>
-                    ))}
+                    {ref.top_brands.slice(0, moreBrands ? 20 : 10).map((b) => {
+                      const on = brand.trim().toLowerCase() === b.name.toLowerCase();
+                      return (
+                        <Button key={b.name} type="button" variant={on ? "default" : "outline"} className={cn("h-auto min-w-[4.5rem] flex-col gap-1 px-2 py-1.5", b.logo_url ? "" : "justify-center")} onClick={() => { setBrand(b.name); requestAnimationFrame(() => sizeRef.current?.focus()); }}>
+                          {b.logo_url && (
+                            <span className="flex h-8 w-14 items-center justify-center overflow-hidden rounded bg-white">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={b.logo_url} alt="" className="max-h-8 max-w-14 object-contain" />
+                            </span>
+                          )}
+                          <span className="text-xs leading-tight">{b.name}</span>
+                        </Button>
+                      );
+                    })}
                     {ref.top_brands.length > 10 && (
                       <Button type="button" size="sm" variant="ghost" className="h-9 px-2 text-sm text-muted-foreground md:h-7 md:text-xs" onClick={() => setMoreBrands((m) => !m)}>{moreBrands ? "Fewer brands" : "More brands…"}</Button>
                     )}
