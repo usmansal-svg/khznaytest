@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Camera, ChevronLeft, ChevronRight, Trash2, X } from "lucide-react";
+import { ArrowLeft, Camera, ChevronLeft, ChevronRight, Scissors, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useHoldDrag } from "@/lib/hold-drag";
+import { cutoutOnWhite, squareForShopify } from "@/lib/photos";
 import { cn } from "@/lib/utils";
 
 /**
@@ -35,6 +36,29 @@ export function PhotoStation({ sku }: { sku: string }) {
     setItem({ sku: it.sku, brand: it.brand ?? null, sub_category: it.sub_category ?? "", category: it.category ?? "", size_label: it.size_label, grade_code: it.grade ?? it.grade_code, colour: it.colour, channel: it.channel, photos: it.photos ?? [] });
   }, [sku]);
   useEffect(() => { void load(); }, [load]);
+
+  // Background removal from the full view only: the picture is cut out on the
+  // phone and lands on white with a soft shadow; an earlier cut-out for this
+  // garment is replaced.
+  async function cutExisting(p: Photo) {
+    if (!item) return;
+    setBusy(p.path); setNote("Removing the background — the first run downloads the model once…");
+    try {
+      const { removeBackground } = await import("@imgly/background-removal");
+      const src = await (await fetch(p.url)).blob();
+      const png = await removeBackground(src, { output: { format: "image/png", quality: 0.9 } });
+      const shadowed = await cutoutOnWhite(png, 2048);
+      const jpg = shadowed.size > 1024 * 1024 ? await squareForShopify(shadowed, 2048, 1024 * 1024) : shadowed;
+      for (const c of item.photos.filter((x) => x.kind === "cutout")) {
+        await fetch("/api/photos", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ sku, path: c.path }) });
+      }
+      const fd = new FormData();
+      fd.append("sku", sku); fd.append("kind", "cutout"); fd.append("file", jpg, "cutout.jpg");
+      const res = await fetch("/api/photos", { method: "POST", body: fd });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Upload failed.");
+      await load(); setNote(null);
+    } catch (err) { setNote(err instanceof Error ? err.message : "Background removal failed."); } finally { setBusy(null); }
+  }
 
   async function remove(p: Photo) {
     if (!window.confirm("Delete this picture?")) return;
@@ -100,8 +124,10 @@ export function PhotoStation({ sku }: { sku: string }) {
               <span>Cover cut-out · background removed</span>
             </div>
           )}
+          {note && <p className="bg-neutral-900 px-4 pt-2 text-xs text-amber-300">{note}</p>}
           <div className="flex gap-2 bg-neutral-900 px-4 pb-6 pt-3 text-sm">
-            <button type="button" disabled={busy != null} onClick={() => remove(current)} className="flex flex-1 items-center justify-center gap-1 rounded border border-red-400 py-3 text-red-300"><Trash2 className="size-4" /> Delete this picture</button>
+            <button type="button" disabled={busy != null} onClick={() => cutExisting(current)} className="flex flex-1 items-center justify-center gap-1 rounded border border-white/40 py-3"><Scissors className="size-4" /> {busy === current.path ? "Working…" : cutFor(current) ? "Redo background" : "Remove background"}</button>
+            <button type="button" disabled={busy != null} onClick={() => remove(current)} className="flex flex-1 items-center justify-center gap-1 rounded border border-red-400 py-3 text-red-300"><Trash2 className="size-4" /> Delete</button>
           </div>
         </div>
       )}
