@@ -442,7 +442,7 @@ export function TagForm() {
               <div className="flex items-center gap-2">
                 <Button type="button" size="sm" variant={channel === "outlet" ? "default" : "outline"} disabled={channelLocked} onClick={() => setChannel("outlet")} className="h-11 md:h-8">Outlet</Button>
                 <Button type="button" size="sm" variant={channel === "online" ? "default" : "outline"} disabled={channelLocked} onClick={() => setChannel("online")} className="h-11 md:h-8">Online store</Button>
-                <label className="ml-auto flex items-center gap-1.5 text-xs"><Checkbox checked={channelLocked} onCheckedChange={(v) => setChannelLocked(v === true)} /> Lock</label>
+                <label className="ml-1 flex items-center gap-1.5 text-xs"><Checkbox checked={channelLocked} onCheckedChange={(v) => setChannelLocked(v === true)} /> Lock</label>
               </div>
             </Field>
 
