@@ -23,16 +23,18 @@ import { cn } from "@/lib/utils";
  * on white. A strip at the top shows what is still in flight.
  */
 
-type Row = { sku: string; brand: string | null; size: string | null; grade: string; tagged_at: string; online_status: string | null; sub_category: string; photos: number };
+type Row = { sku: string; brand: string | null; size: string | null; grade: string; tagged_at: string; online_status: string | null; sub_category: string; photos: number; cutouts: number; photographed_at: string | null; photographer: string | null };
 type Me = { name: string; role: string; today: number; target: number; pct: number };
-type Garment = { sku: string; brand: string | null; sub_category: string; size_label: string | null; grade: string; channel: string; photos: number };
+type Garment = { sku: string; brand: string | null; sub_category: string; size_label: string | null; grade: string; channel: string; photos: number; paths: string[] };
 type Shot = { id: number; blob: Blob; url: string; keep: boolean; w: number; h: number };
 type Job = { sku: string; total: number; done: number; cutout: "pending" | "working" | "done" | "skipped" | "failed"; error?: string; cutoutUrl?: string };
 const GRADE: Record<string, string> = { bnwt: "BNWT", premium: "Premium", excellent: "Excellent", very_good: "Very Good", rejected: "Rejected" };
 const MAX_SHOTS = 6;
 
 export function PhotosPage() {
-  const [data, setData] = useState<{ waiting: Row[]; done: Row[]; total_online: number; me: Me } | null>(null);
+  const [data, setData] = useState<{ waiting: Row[]; done: Row[]; total_online: number; me: Me; sees_names?: boolean } | null>(null);
+  const [listFilter, setListFilter] = useState<"all" | "none" | "done">("all");
+  const [replaceOld, setReplaceOld] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"idle" | "scan" | "shoot">("idle");
   const [garment, setGarment] = useState<Garment | null>(null);
@@ -116,13 +118,14 @@ export function PhotosPage() {
     }
   }
 
-  async function pick(sku: string) {
+  async function pick(sku: string, retake = false) {
     setError(null);
     const r = await fetch(`/api/items/${encodeURIComponent(sku)}`);
     const j = await r.json();
     if (!r.ok) { setError(j.error ?? `No garment ${sku}.`); await startScan(); return; }
     const it = j.item ?? j;
-    setGarment({ sku: it.sku, brand: it.brand ?? null, sub_category: it.sub_category ?? "", size_label: it.size_label, grade: it.grade ?? it.grade_code, channel: it.channel, photos: (it.photos ?? []).length });
+    setGarment({ sku: it.sku, brand: it.brand ?? null, sub_category: it.sub_category ?? "", size_label: it.size_label, grade: it.grade ?? it.grade_code, channel: it.channel, photos: (it.photos ?? []).length, paths: ((it.photos ?? []) as { path: string }[]).map((p) => p.path) });
+    setReplaceOld(retake && (it.photos ?? []).length > 0);
     setShots([]);
     // The same stream becomes the shutter: no navigation, no second screen.
     try { await openCamera(); setMode("shoot"); } catch { setMode("idle"); }
@@ -162,6 +165,7 @@ export function PhotosPage() {
     if (!kept.length) return;
     const sku = garment.sku;
     const wantCut = autoCut;
+    const oldPaths = replaceOld ? garment.paths : [];
     const job: Job = { sku, total: kept.length, done: 0, cutout: wantCut ? "pending" : "skipped" };
     setJobs((j) => [job, ...j.filter((x) => x.sku !== sku)].slice(0, 12));
     // Fire and forget: the photographer scans the next garment meanwhile.
@@ -169,6 +173,10 @@ export function PhotosPage() {
       const update = (patch: Partial<Job>) => setJobs((j) => j.map((x) => (x.sku === sku ? { ...x, ...patch } : x)));
       let firstSquare: Blob | null = null;
       try {
+        // A retake replaces: the old pictures go before the new ones land.
+        for (const path of oldPaths) {
+          await fetch("/api/photos", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ sku, path }) });
+        }
         for (const shot of kept) {
           const square = await squareForShopify(shot.blob, 2048, 1024 * 1024);
           if (!firstSquare) firstSquare = square;
@@ -268,7 +276,9 @@ export function PhotosPage() {
             <div className="absolute left-0 right-0 top-0 bg-black/55 px-3 py-2 text-white">
               <div className="font-mono text-xs">{garment.sku}{garment.channel !== "online" ? " · outlet stock" : ""}</div>
               <div className="text-sm font-semibold">{garment.brand ?? "—"} · {garment.sub_category}{garment.size_label ? ` · ${garment.size_label}` : ""} · {GRADE[garment.grade] ?? garment.grade}</div>
-              {garment.photos > 0 && <div className="text-xs text-amber-300">Already has {garment.photos} picture{garment.photos === 1 ? "" : "s"} — new ones are added</div>}
+              {garment.photos > 0 && (
+                <label className="mt-1 flex items-center gap-2 text-xs text-amber-300"><Checkbox checked={replaceOld} onCheckedChange={(v) => setReplaceOld(v === true)} className="border-white" /> Already has {garment.photos} picture{garment.photos === 1 ? "" : "s"} — {replaceOld ? "replace them with the new ones" : "keep them and add the new ones"}</label>
+              )}
             </div>
           )}
           {mode === "idle" && (
@@ -316,27 +326,66 @@ export function PhotosPage() {
         </CardContent>
       </Card>
 
-      {/* ------------------------------------------------ queue */}
-      {data && (
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm">Waiting for pictures <span className="ml-2 rounded-full border px-2 py-0.5 text-xs font-normal">{data.waiting.length}</span></CardTitle></CardHeader>
-          <CardContent>
-            {data.waiting.length === 0 ? (
-              <p className="py-3 text-center text-sm text-muted-foreground">Nothing waiting.</p>
-            ) : (
-              <ul className="divide-y text-sm">
-                {data.waiting.slice(0, 30).map((r) => (
-                  <li key={r.sku} className="flex items-center justify-between gap-2 py-1.5">
-                    <span className="min-w-0 truncate"><span className="font-mono text-xs">{r.sku}</span> · {r.sub_category} · {r.brand ?? "—"}{r.size ? ` · ${r.size}` : ""}</span>
-                    <Button type="button" size="sm" variant="outline" className="h-8 shrink-0" onClick={() => { scanStop.current?.(); void pick(r.sku); }}>Shoot</Button>
-                  </li>
-                ))}
-                {data.waiting.length > 30 && <li className="py-1.5 text-xs text-muted-foreground">…and {data.waiting.length - 30} more</li>}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      {/* ------------------------------------------------ list */}
+      {data && (() => {
+        const all = [...data.waiting, ...data.done];
+        const rows = listFilter === "none" ? data.waiting : listFilter === "done" ? data.done : all;
+        const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-PK", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "");
+        return (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                <span>Online garments</span>
+                <span className="flex gap-1 rounded-md border p-0.5 text-xs font-normal">
+                  {([["all", `All · ${all.length}`], ["none", `No pictures · ${data.waiting.length}`], ["done", `Done · ${data.done.length}`]] as const).map(([k, label]) => (
+                    <button key={k} type="button" onClick={() => setListFilter(k)} className={cn("rounded px-2 py-1", listFilter === k ? "bg-foreground text-background" : "hover:bg-muted")}>{label}</button>
+                  ))}
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {rows.length === 0 ? (
+                <p className="py-3 text-center text-sm text-muted-foreground">{listFilter === "none" ? "Every online garment has pictures." : "Nothing here yet."}</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-left text-xs uppercase text-muted-foreground">
+                      <tr><th className="pb-2 pr-2">SKU</th><th className="pb-2 pr-2">Garment</th><th className="pb-2 pr-2">Brand</th><th className="pb-2 pr-2 text-right">Pictures</th><th className="pb-2 pr-2">Status</th>{data.sees_names && <th className="pb-2 pr-2">Photographer</th>}<th className="pb-2"></th></tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {rows.map((r) => {
+                        const none = r.photos === 0;
+                        return (
+                          <tr key={r.sku} className={cn(none && "bg-amber-50/60 dark:bg-amber-950/20")}>
+                            <td className="py-1.5 pr-2 font-mono text-xs">{r.sku}</td>
+                            <td className="py-1.5 pr-2">{r.sub_category}{r.size ? <span className="text-muted-foreground"> · {r.size}</span> : null}</td>
+                            <td className="py-1.5 pr-2">{r.brand ?? "—"}</td>
+                            <td className="py-1.5 pr-2 text-right tabular-nums">{r.photos}{r.cutouts ? <span className="text-xs text-muted-foreground"> +{r.cutouts} cut-out</span> : null}</td>
+                            <td className="py-1.5 pr-2">
+                              {none ? <span className="rounded-full border border-amber-500 px-2 py-0.5 text-xs text-amber-700 dark:text-amber-300">None taken</span>
+                                : r.cutouts === 0 && autoCut ? <span className="rounded-full border px-2 py-0.5 text-xs text-muted-foreground">Cut-out pending</span>
+                                : <span className="rounded-full border border-green-600 px-2 py-0.5 text-xs text-green-700 dark:text-green-400">Done</span>}
+                            </td>
+                            {data.sees_names && <td className="py-1.5 pr-2 text-xs text-muted-foreground">{r.photographer ?? "—"}{r.photographed_at ? <span className="block">{when(r.photographed_at)}</span> : null}</td>}
+                            <td className="py-1.5 text-right">
+                              <span className="flex justify-end gap-1">
+                                {none
+                                  ? <Button type="button" size="sm" className="h-8" onClick={() => { scanStop.current?.(); void pick(r.sku); }}>Shoot</Button>
+                                  : <Button type="button" size="sm" variant="outline" className="h-8" onClick={() => { scanStop.current?.(); void pick(r.sku, true); }}>Retake</Button>}
+                                <Button asChild type="button" size="sm" variant="ghost" className="h-8"><Link href={`/photos/${encodeURIComponent(r.sku)}`}>Review</Link></Button>
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })()}
     </div>
   );
 }
