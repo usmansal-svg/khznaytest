@@ -43,6 +43,8 @@ export type DbSubCategory = {
   profileCode: ProfileCode;
   valueIndex: number;
   measureType: MeasureType;
+  /** summer | winter | all — which season's catalogue this belongs to */
+  season: "summer" | "winter" | "all";
   marketCeiling: number | null;
   perPieceCost: number | null;
   perPieceShare: number;
@@ -180,6 +182,7 @@ function defaultsContext(warning: string): PricingContext {
       profileCode: s.profileCode,
       valueIndex: s.valueIndex,
       measureType: s.measureType,
+      season: "all",
       marketCeiling: s.marketCeiling,
       perPieceCost: s.perPieceCost,
       perPieceShare: s.perPieceShare,
@@ -204,7 +207,7 @@ export async function loadPricingContext(supabase: SupabaseClient): Promise<Pric
     supabase.from("profiles").select("code, name, pulled_share, vol_full, vol_promo, vol_md1, vol_md2, vol_md3"),
     supabase
       .from("sub_categories")
-      .select("slug, code, category_slug, gender, name, weight_kg, profile_code, value_index, measure_type, market_ceiling, market_price, per_piece_cost, per_piece_share, standard_cost_pkr, active"),
+      .select("slug, code, category_slug, gender, name, weight_kg, profile_code, value_index, measure_type, season, market_ceiling, market_price, per_piece_cost, per_piece_share, standard_cost_pkr, active"),
   ]);
 
   const firstError = settingsRes.error ?? gradesRes.error ?? profilesRes.error ?? subsRes.error;
@@ -243,6 +246,7 @@ export async function loadPricingContext(supabase: SupabaseClient): Promise<Pric
     profileCode: s.profile_code as ProfileCode,
     valueIndex: num(s.value_index),
     measureType: s.measure_type as MeasureType,
+    season: (s.season === "summer" || s.season === "winter" ? s.season : "all") as "summer" | "winter" | "all",
     marketCeiling: s.market_ceiling == null ? null : num(s.market_ceiling),
     perPieceCost: s.per_piece_cost == null ? null : num(s.per_piece_cost),
     perPieceShare: num(s.per_piece_share),

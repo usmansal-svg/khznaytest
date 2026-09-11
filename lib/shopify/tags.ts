@@ -57,7 +57,13 @@ export function shopifyTags(item: TaggableItem): string[] {
   tags.push(type);
   if (wearer) tags.push(`${wearer} ${type}`); // the collection tag: "Men Hoodie"
   if (kids) tags.push(`Kids ${type}`);
-  if (item.season && SEASON[item.season]) tags.push(SEASON[item.season]);
+  if (item.season && SEASON[item.season]) {
+    // Season on its own, and combined with wearer and type, so a collection
+    // can be built on any of "Summer", "Summer T-Shirt" or "Summer Men T-Shirt".
+    tags.push(SEASON[item.season]);
+    tags.push(`${SEASON[item.season]} ${type}`);
+    if (wearer) tags.push(`${SEASON[item.season]} ${wearer} ${type}`);
+  }
   if (item.brand) tags.push(item.brand.trim());
   if (item.brand_tier && TIER[item.brand_tier]) tags.push(TIER[item.brand_tier]);
   if (item.size_label) tags.push(`Size ${item.size_label.trim()}`);

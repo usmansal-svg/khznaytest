@@ -14,10 +14,10 @@ import { SETTINGS_FIELDS } from "@/lib/pricing/settings-fields";
 export type PricingCtx = Awaited<ReturnType<typeof loadPricingContext>>;
 export type SheetSubRow = {
   slug: string; code: string; gender: string; name: string; weight_kg: number; profile_code: string; value_index: number;
-  market_ceiling: number | null; market_price: number | null; standard_cost_pkr: number | null; active: boolean;
+  market_ceiling: number | null; market_price: number | null; standard_cost_pkr: number | null; active: boolean; season?: string | null;
   categories: { name: string } | { name: string }[] | null;
 };
-export const SUB_SELECT = "slug, code, gender, name, weight_kg, profile_code, value_index, market_ceiling, market_price, standard_cost_pkr, active, categories(name, sort_order)";
+export const SUB_SELECT = "slug, code, gender, name, weight_kg, profile_code, value_index, season, market_ceiling, market_price, standard_cost_pkr, active, categories(name, sort_order)";
 
 const PROFILE_CODES = ["fast", "standard", "slow"];
 const YELLOW = { type: "pattern" as const, pattern: "solid" as const, fgColor: { argb: "FFFFF8DC" } };
@@ -51,6 +51,7 @@ const SUB_COLUMNS: { header: string; key: string; width: number; edit?: boolean 
   { header: "Category", key: "category", width: 22 },
   { header: "Sub-category", key: "name", width: 26, edit: true },
   { header: "Code", key: "code", width: 7 },
+  { header: "Season (summer/winter/all)", key: "season", width: 12, edit: true },
   { header: "Cost per piece Rs (before tax)", key: "standard_cost_pkr", width: 16, edit: true },
   { header: "Profile (fast/standard/slow)", key: "profile_code", width: 14, edit: true },
   { header: "Value index", key: "value_index", width: 11, edit: true },
@@ -134,7 +135,7 @@ export function buildPricingWorkbook(ctx: PricingCtx, subs: SheetSubRow[]): Exce
       landed = Math.round(e.landedCost); premium = e.premiumPrice; gp = Math.round(e.effectiveGpPct * 1000) / 10;
     }
     ss.addRow({
-      slug: r.slug, gender: r.gender, category: cat?.name ?? "", name: r.name, code: r.code,
+      slug: r.slug, gender: r.gender, category: cat?.name ?? "", name: r.name, code: r.code, season: r.season ?? "all",
       standard_cost_pkr: r.standard_cost_pkr == null ? null : Number(r.standard_cost_pkr),
       profile_code: r.profile_code, value_index: Number(r.value_index), weight_kg: Number(r.weight_kg),
       market_ceiling: r.market_ceiling == null ? null : Number(r.market_ceiling),
@@ -153,7 +154,7 @@ export function buildPricingWorkbook(ctx: PricingCtx, subs: SheetSubRow[]): Exce
     "Constants: percentages are written as percentages (18 means 18%). Yes/no settings take yes or no.",
     "Selling profiles: full + 25% off + 50% off + 75% off must add to 100. Never sells is on top.",
     "Grades: Premium stays at 1 and Rejected at 0; the five intake shares must add to 100.",
-    "Sub-categories: cost per piece is what you pay before sales tax, duty included. Leave a cost, ceiling or market price blank to clear it. Profile is fast, standard or slow; Active is yes or no.",
+    "Sub-categories: season is summer, winter or all (the tag form shows only the matching catalogue). Cost per piece is what you pay before sales tax, duty included. Leave a cost, ceiling or market price blank to clear it. Profile is fast, standard or slow; Active is yes or no.",
     "Columns marked (calc) are for reference and are ignored on import. Every change is listed on screen before anything is saved; settings save as a new version, and every edit is audited under your name.",
   ].forEach((t) => notes.addRow([t]));
 
@@ -363,6 +364,14 @@ export function parsePricingWorkbook(wb: ExcelJS.Workbook, ctx: PricingCtx, subs
             case "name":
               if (text && text !== before.name) { patch.name = text; note("Sub-category", before.name, text); }
               break;
+            case "season": {
+              const v = text.toLowerCase().replace(/\s*year$/, "");
+              if (!v) break;
+              if (!["summer", "winter", "all"].includes(v)) { problems.push(`Sub-categories row ${rowNo} (${before.name}): season "${text}" must be summer, winter or all.`); break; }
+              const was = before.season ?? "all";
+              if (v !== was) { patch.season = v; note("Season", was, v); }
+              break;
+            }
             case "profile_code": {
               const p = text.toLowerCase();
               if (!p) break;

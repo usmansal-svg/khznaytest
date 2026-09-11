@@ -52,6 +52,7 @@ export async function GET() {
         gender: s.gender,
         name: s.name,
         measure_type: s.measureType,
+        season: s.season,
         measure_fields: MEASUREMENT_FIELDS[s.measureType],
         asks_sleeve: ASKS_SLEEVE.has(s.measureType),
         weight_kg: s.weightKg,

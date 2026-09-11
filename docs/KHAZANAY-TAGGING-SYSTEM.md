@@ -98,7 +98,7 @@ Defaults give **Fast 3.3947 · Standard 3.9640 · Slow 4.5766**. Recomputed live
 | Markdown ladder | Markdown 1 / 2 / Final depths (validated ascending) |
 | Selling profiles | Never sells, full, 25%, 50%, 75% shares per profile (must sum to 100%) — multiples shown |
 | Grades | Multiplier and intake share per grade (Premium fixed at 1.00, Rejected at 0) |
-| Sub-categories | Cost per piece (before sales tax, duty included), profile, value index → landed, **loaded**, BNWT/Premium/Excellent/Very Good, **effective GP%** (live while typing); market ceiling; market price → Premium; add categories and sub-categories |
+| Sub-categories | Season (summer / winter / all year), cost per piece (before sales tax, duty included), profile, value index → landed, **loaded**, BNWT/Premium/Excellent/Very Good, **effective GP%** (live while typing); market ceiling; market price → Premium; add categories and sub-categories |
 | History | Settings versions with who saved them; every audited change (who, when, before → after) |
 
 **Excel round trip (10 Sep).** *Export Excel* at the top of the Pricing screen downloads one workbook with four sheets — Constants, Selling profiles, Grades, Sub-categories — editable cells in yellow, calc columns for reference, and a How-to sheet. Edit in bulk, then *Import Excel*: the server lists every difference (sheet, row, field, now → after) and refuses the file with readable problems if a value is out of range or the shares do not add to 100%. *Apply* writes through the same endpoints as the screen, so constants become a new settings version noted with the file name and every other edit is audited. Keys, codes and slugs are the row match; unknown rows are ignored.
@@ -117,12 +117,12 @@ Regular high street ×1.00 · Affordable luxury ×2.00 · Ultra luxury → hande
 
 ## 5. The tag form — how a garment is tagged
 
-**Two forms, one screen (11 Sep).** *Tagging for* switches the form. **Outlet** is the short form: wearer, category and sub-category as tap buttons (they set the price and the SKU; the type-to-find box is a shortcut), reference photo, brand, size, condition, price. Season comes from the calendar (November–February winter), and colour, measurements and sleeves are not asked. **Online** is the full form below, minus the photo: pictures are taken afterwards at the photography station (**Photos** in the menu, `/photos`), which lists every online garment without pictures, oldest first; scan the tag, take the pictures on the garment page, next. Works for a dedicated photographer or a tagger doing a photo session.
+**Two forms, one screen (11 Sep).** *Tagging for* switches the form. **Outlet** is the short form: season, wearer, category and sub-category as tap buttons (they set the price and the SKU; the type-to-find box is a shortcut), reference photo, brand, size, condition, price. Colour, measurements and sleeves are not asked. **Online** is the full form below, minus the photo: pictures are taken afterwards at the photography station (**Photos** in the menu, `/photos`), which lists every online garment without pictures, oldest first; scan the tag, take the pictures on the garment page, next. Works for a dedicated photographer or a tagger doing a photo session.
 
 Order on the full (online) form:
 
 1. **Tagging for** Outlet / Online, with a **Lock** · **Lot**, with a **Lock** — set once, tag garment after garment
-2. Season (Summer/Winter) · Wearer (Men, Women, Boy, Girl, Infant, Unisex)
+2. **Season** (Summer/Winter, tap buttons) · Wearer (Men, Women, Boy, Girl, Infant, Unisex). Every sub-category carries a season on the pricing sheet — Summer, Winter or All year — and the form shows only that season's categories and sub-categories (no coats in summer, no shorts in winter). The season also goes into the SKU and into the Shopify tags, on its own and combined: *Summer*, *Summer T-Shirt*, *Summer Men T-Shirt*, so a collection can be built on season, wearer and type together.
 3. **Category → Sub-category as tap buttons** (no keyboard, no picker wheel — fastest on the iPad; categories are per gender: Tops & Blouses, Dresses & Jumpsuits, Jeans, …), with a **Find a garment type** box as a shortcut (type "crop" → *Crop top*). Both stay selected for the next garment, since taggers work through piles.
 4. **Photo — compulsory** (opens the iPad camera; downscaled on device)
 5. **Brand** — misspellings snap to the listed brand offline (*calvin klien* → Calvin Klein); a brand nobody has listed is cleaned up and **added to the Brands tab as High street** at save, marked *new from tagger*
@@ -227,7 +227,7 @@ Garment page: channel switch, photos (camera capture, on-device background remov
 
 **API (all under `/api`):** `price`, `items`, `items/[sku]`, `reference`, `brands`, `lots`, `transfers`, `qc`, `photos`, `tags/[sku]/barcode`, `export`, `dashboard`, `auth/*`, `admin/{settings,profiles,grades,sub-categories,categories,brands,staff,reference-prices,pricing/sheet}`, `shopify/push`.
 
-**Migrations (27, all applied):** `pricing_schema` · `pricing_seed` (generated from code by `test/gen-seed.ts`) · `sub_category_codes` · `tagging_support` · `lots_and_weights` · `channels_photos_shopify` · `staff_pins_transfers` · `transfer_seq` · `lot_split` · `lot_description_pieces` · `lot_imported_sequence` · `settings_changed_by` · `categories_flat_gender` · `categories_two_level` · `subcategory_planning_rates` · `price_steps_alerts` · `brands_source` · `qc_and_targets` · `qc_hold` · `standard_cost` · `reference_prices` · `rare_handoff` · `outlet_min_grade` · `outlet_override` — plus the health check and two POS migrations from a parallel session.
+**Migrations (28, all applied):** `pricing_schema` · `pricing_seed` (generated from code by `test/gen-seed.ts`) · `sub_category_codes` · `tagging_support` · `lots_and_weights` · `channels_photos_shopify` · `staff_pins_transfers` · `transfer_seq` · `lot_split` · `lot_description_pieces` · `lot_imported_sequence` · `settings_changed_by` · `categories_flat_gender` · `categories_two_level` · `subcategory_planning_rates` · `price_steps_alerts` · `brands_source` · `qc_and_targets` · `qc_hold` · `standard_cost` · `reference_prices` · `rare_handoff` · `outlet_min_grade` · `outlet_override` · `subcategory_season` — plus the health check and two POS migrations from a parallel session.
 
 **Environment (Vercel + `.env.local`):** `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (server only; also signs sessions), optional `SESSION_SECRET`, `SHOPIFY_*`.
 

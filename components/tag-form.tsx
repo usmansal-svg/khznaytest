@@ -28,6 +28,7 @@ type Reference = {
     gender: Gender;
     name: string;
     measure_type: string;
+    season: "summer" | "winter" | "all";
     measure_fields: string[];
     asks_sleeve: boolean;
     weight_kg: number;
@@ -69,12 +70,6 @@ type Saved = {
   brand: string;
   sub_category: string;
 };
-
-/** Outlet tags take the season from the calendar: November to February is winter in Karachi. */
-function seasonForMonth(d: Date): Season {
-  const m = d.getMonth();
-  return m >= 10 || m <= 1 ? "winter" : "summer";
-}
 
 const GRADE_LABELS: Record<GradeCode, string> = { bnwt: "BNWT", premium: "Premium", excellent: "Excellent", very_good: "Very Good", rejected: "Rejected" };
 const SEASON_OPTIONS: { code: Season; label: string }[] = [{ code: "summer", label: "Summer" }, { code: "winter", label: "Winter" }];
@@ -177,14 +172,19 @@ export function TagForm() {
   // decides which genders show. A type-to-find box jumps straight to a
   // sub-category and fills the category in.
   const genders = WEARER_GENDERS[wearer] ?? GENDER_ORDER;
+  // Season narrows the catalogue: a summer tagger never sees coats, a winter
+  // tagger never sees shorts. "All year" sub-categories show in both.
+  const inSeason = useCallback((s: { season: "summer" | "winter" | "all" }) => s.season === "all" || s.season === season, [season]);
   const cats = useMemo(
-    () => (ref?.categories ?? []).filter((c) => genders.includes(c.gender)).sort((a, b) => GENDER_ORDER.indexOf(a.gender) - GENDER_ORDER.indexOf(b.gender) || a.sort_order - b.sort_order),
-    [ref, genders],
+    () => (ref?.categories ?? [])
+      .filter((c) => genders.includes(c.gender) && (ref?.sub_categories ?? []).some((s) => s.category_slug === c.slug && inSeason(s)))
+      .sort((a, b) => GENDER_ORDER.indexOf(a.gender) - GENDER_ORDER.indexOf(b.gender) || a.sort_order - b.sort_order),
+    [ref, genders, inSeason],
   );
   useEffect(() => {
     if (cats.length && !cats.some((c) => c.slug === category)) setCategory(cats[0].slug);
   }, [cats, category]);
-  const subs = useMemo(() => (ref?.sub_categories ?? []).filter((s) => s.category_slug === category).sort((a, b) => a.name.localeCompare(b.name)), [ref, category]);
+  const subs = useMemo(() => (ref?.sub_categories ?? []).filter((s) => s.category_slug === category && inSeason(s)).sort((a, b) => a.name.localeCompare(b.name)), [ref, category, inSeason]);
   useEffect(() => {
     if (subs.length && !subs.some((s) => s.slug === sub)) setSub(subs[0].slug);
   }, [subs, sub]);
@@ -193,8 +193,8 @@ export function TagForm() {
   const hits = useMemo(() => {
     const q = find.trim().toLowerCase();
     if (!q) return [];
-    return (ref?.sub_categories ?? []).filter((s) => catSlugs.has(s.category_slug) && s.name.toLowerCase().includes(q)).slice(0, 8);
-  }, [find, ref, catSlugs]);
+    return (ref?.sub_categories ?? []).filter((s) => catSlugs.has(s.category_slug) && inSeason(s) && s.name.toLowerCase().includes(q)).slice(0, 8);
+  }, [find, ref, catSlugs, inSeason]);
   function pick(s: NonNullable<Reference["sub_categories"]>[number]) {
     setCategory(s.category_slug);
     setSub(s.slug);
@@ -316,7 +316,7 @@ export function TagForm() {
           is_rare: rareFind,
           below_reason: below ? belowReason : null,
           flaw_note: null,
-          season: outlet ? seasonForMonth(new Date()) : season,
+          season,
           wearer,
           size_label: size,
           colour: outlet ? null : colour,
@@ -442,13 +442,7 @@ export function TagForm() {
               </div>
             </Field>
 
-            {!outlet && (
-              <Field label="Season">
-                <select className={selectClass} value={season} onChange={(e) => setSeason(e.target.value as Season)}>
-                  {SEASON_OPTIONS.map((s) => <option key={s.code} value={s.code}>{s.label}</option>)}
-                </select>
-              </Field>
-            )}
+            <ButtonGroup label="Season" hint="Shows that season's catalogue; goes into the SKU and the Shopify tags" options={SEASON_OPTIONS} value={season} onChange={setSeason} />
             <Field label="Wearer">
               <select className={selectClass} value={wearer} onChange={(e) => setWearer(e.target.value as Wearer)}>
                 {WEARER_OPTIONS.map((w) => <option key={w.code} value={w.code}>{w.label}</option>)}

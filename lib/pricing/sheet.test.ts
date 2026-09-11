@@ -78,12 +78,13 @@ describe("pricing workbook", () => {
       find(gs, 1, "bnwt").getCell(3).value = 2;
       const ss = wb.getWorksheet("Sub-categories")!;
       const row = find(ss, 1, subs[1].slug);
-      row.getCell(6).value = 750; // cost per piece
-      row.getCell(7).value = "Slow";
-      row.getCell(11).value = 3000; // market price
+      row.getCell(7).value = 750; // cost per piece
+      row.getCell(8).value = "Slow";
+      row.getCell(12).value = 3000; // market price
+      row.getCell(6).value = "Winter"; // season
       const row0 = find(ss, 1, subs[0].slug);
-      row0.getCell(11).value = null; // clear the market price
-      row0.getCell(12).value = "no";
+      row0.getCell(12).value = null; // clear the market price
+      row0.getCell(13).value = "no";
     });
     assert.deepEqual(r.problems, []);
     assert.ok(r.settings);
@@ -97,10 +98,10 @@ describe("pricing workbook", () => {
     assert.equal(r.gradeRows.find((g) => g.code === "bnwt")!.multiplier, 2);
     assert.deepEqual(r.subRows, [
       { slug: subs[0].slug, market_price: null, active: false },
-      { slug: subs[1].slug, standard_cost_pkr: 750, profile_code: "slow", market_price: 3000 },
+      { slug: subs[1].slug, season: "winter", standard_cost_pkr: 750, profile_code: "slow", market_price: 3000 },
     ]);
     const fields = r.changes.map((c) => `${c.sheet}/${c.row}/${c.field}`);
-    assert.equal(fields.length, 12, fields.join("\n"));
+    assert.equal(fields.length, 13, fields.join("\n"));
     assert.ok(fields.includes("Constants/Target gross profit/%"));
     assert.ok(fields.includes(`Sub-categories/${subs[1].name}/Cost per piece`));
   });
@@ -109,8 +110,8 @@ describe("pricing workbook", () => {
     const r = await roundTrip((wb) => {
       const ss = wb.getWorksheet("Sub-categories")!;
       const row = find(ss, 1, subs[2].slug);
-      row.getCell(7).value = "quick";
-      row.getCell(14).value = 99999; // Premium (calc)
+      row.getCell(8).value = "quick";
+      row.getCell(15).value = 99999; // Premium (calc)
       const ps = wb.getWorksheet("Selling profiles")!;
       find(ps, 1, "slow").getCell(4).value = 90; // breaks the 100% sum
     });

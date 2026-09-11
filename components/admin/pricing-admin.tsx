@@ -17,8 +17,9 @@ import { PricingSheetTools } from "@/components/admin/pricing-sheet-tools";
 type SettingsResponse = { settings: Settings; version: number; source: string; history: { version: number; note: string | null; created_at: string; by: string | null }[]; audits: { id: number; table: string; key: string; at: string; by: string; note: string | null; changes: { field: string; from: string; to: string }[] }[]; warning?: string };
 type Preview = { rows: { slug: string; name: string; profile: string; weight_kg: number; current: number; proposed: number; change_pct: number }[]; multiples: { profile: string; current: number; proposed: number }[] };
 type Est = { landed_cost: number; loaded_cost: number; bnwt: number; premium: number; excellent: number; very_good: number; gp_pct: number; effective_gp_pct: number };
-type SubRow = { slug: string; code: string; name: string; gender: string; category_slug: string; category: string; weight_kg: number; profile_code: string; value_index: number; market_ceiling: number | null; market_price: number | null; standard_cost_pkr: number | null; active: boolean; estimate?: Est | null };
+type SubRow = { slug: string; code: string; name: string; gender: string; category_slug: string; category: string; weight_kg: number; profile_code: string; value_index: number; season: "summer" | "winter" | "all"; market_ceiling: number | null; market_price: number | null; standard_cost_pkr: number | null; active: boolean; estimate?: Est | null };
 
+const SEASON_LABEL: Record<string, string> = { summer: "Summer", winter: "Winter", all: "All year" };
 const rs = (n: number) => `Rs ${Math.round(n).toLocaleString("en-PK")}`;
 const pct = (n: number) => `${n >= 0 ? "+" : ""}${(n * 100).toFixed(1)}%`;
 
@@ -336,11 +337,12 @@ function SubCategoryEditor() {
   }
 
   // Excel-style column filters on gender, category and sub-category.
-  const [filters, setFilters] = useState<{ gender: Set<string>; category: Set<string>; name: Set<string> }>({ gender: new Set(), category: new Set(), name: new Set() });
+  const [filters, setFilters] = useState<{ gender: Set<string>; category: Set<string>; name: Set<string>; season: Set<string> }>({ gender: new Set(), category: new Set(), name: new Set(), season: new Set() });
 
   if (!rows) return <p className="text-muted-foreground">Loading…</p>;
   const dirty = Object.keys(edits).length;
-  const pass = (r: SubRow, skip?: "gender" | "category" | "name") =>
+  const pass = (r: SubRow, skip?: "gender" | "category" | "name" | "season") =>
+    (skip === "season" || !filters.season.size || filters.season.has(r.season)) &&
     (skip === "gender" || !filters.gender.size || filters.gender.has(r.gender)) &&
     (skip === "category" || !filters.category.size || filters.category.has(r.category)) &&
     (skip === "name" || !filters.name.size || filters.name.has(r.name));
@@ -349,7 +351,7 @@ function SubCategoryEditor() {
   const genderValues = [...new Set(rows.filter((r) => pass(r, "gender")).map((r) => r.gender))].sort((a, b) => GENDER_OPTIONS.findIndex((g) => g.code === a) - GENDER_OPTIONS.findIndex((g) => g.code === b));
   const categoryValues = [...new Set(rows.filter((r) => pass(r, "category")).map((r) => r.category))].sort();
   const nameValues = [...new Set(rows.filter((r) => pass(r, "name")).map((r) => r.name))].sort();
-  const filtering = filters.gender.size + filters.category.size + filters.name.size > 0;
+  const filtering = filters.gender.size + filters.category.size + filters.name.size + filters.season.size > 0;
 
   return (
     <div className="space-y-6">
@@ -366,7 +368,7 @@ function SubCategoryEditor() {
       </CardHeader>
       <CardContent>
         <p className="mb-3 text-xs text-muted-foreground"><strong>Cost per piece</strong> is what a garment costs you <strong>before sales tax</strong>, duty included — enter it that way whether the vendor charged tax or not. <strong>Landed</strong> adds the non-recoverable part of input tax and the sorting cost. <strong>Loaded</strong> then spreads every constant and the selling profile onto the one garment that sells at Premium — markdowns, grade mix, never-sells, rejects, bulk recovery and the target GP — so Premium ex tax is loaded ÷ (1 − target GP). The value index and grades give the four shelf prices, and <strong>Effective GP</strong> is the real margin per garment bought after all of that (it sits at the target, moved only by rounding and the value index). A <strong>market price</strong> sets the Premium price directly (the other grades follow it); clear it to return to the calculation. Everything updates as you type, in amber until you press Save. Weights are the spec&apos;s open item #1 — weigh 20 pieces per category and replace the estimates. Click a column heading to filter the list the way Excel does. <strong>Effective GP</strong> is green at or above your target gross profit and red below it.</p>
-        {filtering && <p className="mb-2 text-xs"><span className="text-muted-foreground">Showing {visible.length} of {rows.length} sub-categories.</span> <button type="button" className="ml-2 underline" onClick={() => setFilters({ gender: new Set(), category: new Set(), name: new Set() })}>Clear filters</button></p>}
+        {filtering && <p className="mb-2 text-xs"><span className="text-muted-foreground">Showing {visible.length} of {rows.length} sub-categories.</span> <button type="button" className="ml-2 underline" onClick={() => setFilters({ gender: new Set(), category: new Set(), name: new Set(), season: new Set() })}>Clear filters</button></p>}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-left text-xs uppercase text-muted-foreground">
@@ -374,7 +376,7 @@ function SubCategoryEditor() {
                 <th className="pb-2"><HeaderFilter label="Gender" values={genderValues} selected={filters.gender} onChange={(v) => setFilters((f) => ({ ...f, gender: v }))} format={(g) => GENDER_OPTIONS.find((o) => o.code === g)?.name ?? g} /></th>
                 <th className="pb-2"><HeaderFilter label="Category" values={categoryValues} selected={filters.category} onChange={(v) => setFilters((f) => ({ ...f, category: v }))} /></th>
                 <th className="pb-2"><HeaderFilter label="Sub-category" values={nameValues} selected={filters.name} onChange={(v) => setFilters((f) => ({ ...f, name: v }))} /></th>
-                <th className="pb-2">Code</th><th className="pb-2">Cost per piece Rs</th><th className="pb-2">Profile</th><th className="pb-2">Value index</th><th className="pb-2">Market price → Premium</th><th className="pb-2 text-right" title="Real margin per garment bought: revenue after markdowns, grade mix, never-sells and rejects, plus bulk recovery, ex tax, against landed cost.">Effective GP %</th><th className="pb-2 text-right">Landed</th><th className="pb-2 text-right" title="Landed cost with markdowns, grade mix, never-sells, rejects and bulk recovery spread onto the garment that sells at Premium. Premium ex tax = loaded ÷ (1 − target GP).">Loaded</th><th className="pb-2 text-right">BNWT</th><th className="pb-2 text-right">Premium</th><th className="pb-2 text-right">Excellent</th><th className="pb-2 text-right">Very Good</th><th className="pb-2">Active</th></tr>
+                <th className="pb-2">Code</th><th className="pb-2"><HeaderFilter label="Season" values={["summer", "winter", "all"]} selected={filters.season} onChange={(v) => setFilters((f) => ({ ...f, season: v }))} format={(v) => SEASON_LABEL[v] ?? v} /></th><th className="pb-2">Cost per piece Rs</th><th className="pb-2">Profile</th><th className="pb-2">Value index</th><th className="pb-2">Market price → Premium</th><th className="pb-2 text-right" title="Real margin per garment bought: revenue after markdowns, grade mix, never-sells and rejects, plus bulk recovery, ex tax, against landed cost.">Effective GP %</th><th className="pb-2 text-right">Landed</th><th className="pb-2 text-right" title="Landed cost with markdowns, grade mix, never-sells, rejects and bulk recovery spread onto the garment that sells at Premium. Premium ex tax = loaded ÷ (1 − target GP).">Loaded</th><th className="pb-2 text-right">BNWT</th><th className="pb-2 text-right">Premium</th><th className="pb-2 text-right">Excellent</th><th className="pb-2 text-right">Very Good</th><th className="pb-2">Active</th></tr>
             </thead>
             <tbody className="divide-y">
               {visible.map((r) => {
@@ -391,6 +393,11 @@ function SubCategoryEditor() {
                     <td className="py-1.5 pr-2 text-sm">{r.category}</td>
                     <td className="py-1.5 pr-2"><Input value={v.name} onChange={(ev) => edit(r.slug, { name: ev.target.value })} className={cn("h-8 w-44", changed("name") && "border-amber-500")} /></td>
                     <td className="py-1.5 pr-2 font-mono text-xs">{r.code}</td>
+                    <td className="py-1.5 pr-2">
+                      <select value={v.season} onChange={(ev) => edit(r.slug, { season: ev.target.value as SubRow["season"] })} className={cn("h-8 rounded-md border border-input bg-transparent px-2 text-sm", changed("season") && "border-amber-500")}>
+                        <option value="summer">Summer</option><option value="winter">Winter</option><option value="all">All year</option>
+                      </select>
+                    </td>
                     <td className="py-1.5 pr-2"><Input type="number" step="10" min="1" value={v.standard_cost_pkr ?? ""} placeholder="set me" onChange={(ev) => edit(r.slug, { standard_cost_pkr: ev.target.value === "" ? null : Number(ev.target.value) })} className={cn("h-8 w-28", changed("standard_cost_pkr") && "border-amber-500", !v.standard_cost_pkr && "border-amber-500")} /></td>
                     <td className="py-1.5 pr-2">
                       <select value={v.profile_code} onChange={(ev) => edit(r.slug, { profile_code: ev.target.value })} className={cn("h-8 rounded-md border border-input bg-transparent px-2 text-sm", changed("profile_code") && "border-amber-500")}>
@@ -478,7 +485,7 @@ const MEASURE_LABELS: Record<string, string> = { top: "Top · chest, length", bo
 function AddForms({ cats, onAdded, onError }: { cats: { slug: string; name: string; gender: string }[]; onAdded: (text: string) => void; onError: (text: string) => void }) {
   const [open, setOpen] = useState<"sub" | "cat" | null>(null);
   const [busy, setBusy] = useState(false);
-  const [sc, setSc] = useState({ name: "", gender: "men", category_slug: "", standard_cost: "", profile_code: "fast", value_index: "1.00", measure_type: "top", code: "" });
+  const [sc, setSc] = useState({ name: "", gender: "men", category_slug: "", standard_cost: "", profile_code: "fast", value_index: "1.00", measure_type: "top", season: "all", code: "" });
   const [cat, setCat] = useState({ gender: "men", name: "" });
   const catsFor = cats.filter((c) => c.gender === sc.gender);
   useEffect(() => { if (catsFor.length && !catsFor.some((c) => c.slug === sc.category_slug)) setSc((x) => ({ ...x, category_slug: catsFor[0].slug })); }, [catsFor, sc.category_slug]);
@@ -498,7 +505,7 @@ function AddForms({ cats, onAdded, onError }: { cats: { slug: string; name: stri
   async function addSub() {
     setBusy(true);
     try {
-      const res = await fetch("/api/admin/sub-categories", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: sc.name, category_slug: sc.category_slug, standard_cost_pkr: Number(sc.standard_cost), profile_code: sc.profile_code, value_index: Number(sc.value_index), measure_type: sc.measure_type, code: sc.code || undefined }) });
+      const res = await fetch("/api/admin/sub-categories", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: sc.name, category_slug: sc.category_slug, standard_cost_pkr: Number(sc.standard_cost), profile_code: sc.profile_code, value_index: Number(sc.value_index), measure_type: sc.measure_type, season: sc.season, code: sc.code || undefined }) });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error);
       onAdded(`Added ${j.sub_category.name} (code ${j.sub_category.code}) under ${cats.find((c) => c.slug === sc.category_slug)?.name}. It's on the tag form now.`);

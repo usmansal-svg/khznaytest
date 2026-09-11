@@ -13,14 +13,15 @@ import { computePrice } from "@/lib/pricing/engine";
 import { loadPricingContext } from "@/lib/pricing/repo";
 
 const PROFILES = ["fast", "standard", "slow"];
-const EDITABLE = ["category_slug", "gender", "name", "weight_kg", "profile_code", "value_index", "market_ceiling", "market_price", "per_piece_cost", "per_piece_share", "planning_rate_usd_per_kg", "standard_cost_pkr", "active"] as const;
+const EDITABLE = ["category_slug", "gender", "name", "weight_kg", "profile_code", "value_index", "season", "market_ceiling", "market_price", "per_piece_cost", "per_piece_share", "planning_rate_usd_per_kg", "standard_cost_pkr", "active"] as const;
+const SEASONS = ["summer", "winter", "all"];
 const GENDERS = ["men", "women", "teenage", "kid", "toddler", "infant"];
 
 export async function GET() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("sub_categories")
-    .select("slug, code, category_slug, gender, name, weight_kg, profile_code, value_index, measure_type, market_ceiling, market_price, per_piece_cost, per_piece_share, planning_rate_usd_per_kg, standard_cost_pkr, active, categories(name, sort_order)")
+    .select("slug, code, category_slug, gender, name, weight_kg, profile_code, value_index, measure_type, season, market_ceiling, market_price, per_piece_cost, per_piece_share, planning_rate_usd_per_kg, standard_cost_pkr, active, categories(name, sort_order)")
     .order("name");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   const genderOrder = ["men", "women", "teenage", "kid", "toddler", "infant"];
@@ -118,7 +119,7 @@ function suggestCode(name: string, used: Set<string>): string {
 export async function PUT(request: Request) {
   const gate = await requireManager();
   if ("response" in gate) return gate.response;
-  let body: { name?: string; category_slug?: string; weight_kg?: number; standard_cost_pkr?: number; profile_code?: string; value_index?: number; measure_type?: string; code?: string; market_ceiling?: number | null; market_price?: number | null };
+  let body: { name?: string; category_slug?: string; weight_kg?: number; standard_cost_pkr?: number; profile_code?: string; value_index?: number; measure_type?: string; season?: string; code?: string; market_ceiling?: number | null; market_price?: number | null };
   try {
     body = await request.json();
   } catch {
@@ -148,7 +149,7 @@ export async function PUT(request: Request) {
   let slug = `${gender}-${slugify(name)}`;
   for (let i = 2; usedSlugs.has(slug); i++) slug = `${slug}-${i}`;
 
-  const row = { slug, code, category_slug: cat.slug, gender, name, weight_kg: body.weight_kg ?? 0.3, standard_cost_pkr: body.standard_cost_pkr, profile_code: body.profile_code, value_index: body.value_index, measure_type: body.measure_type, market_ceiling: body.market_ceiling ?? null, market_price: body.market_price ?? null, per_piece_share: 0, active: true };
+  const row = { slug, code, category_slug: cat.slug, gender, name, weight_kg: body.weight_kg ?? 0.3, standard_cost_pkr: body.standard_cost_pkr, profile_code: body.profile_code, value_index: body.value_index, measure_type: body.measure_type, season: SEASONS.includes(String(body.season)) ? body.season : "all", market_ceiling: body.market_ceiling ?? null, market_price: body.market_price ?? null, per_piece_share: 0, active: true };
   const { data, error } = await gate.db.from("sub_categories").insert(row).select("slug, code, name").single();
   if (error) return NextResponse.json({ error: error.message }, { status: error.code === "23505" ? 409 : 500 });
   await audit(gate.db, gate.staff.id, "sub_categories", slug, null, row, "created");
@@ -182,7 +183,7 @@ export async function PATCH(request: Request) {
 
     const { data: before } = await supabase
       .from("sub_categories")
-      .select("category_slug, gender, name, weight_kg, profile_code, value_index, market_ceiling, market_price, per_piece_cost, per_piece_share, planning_rate_usd_per_kg, standard_cost_pkr, active")
+      .select("category_slug, gender, name, weight_kg, profile_code, value_index, season, market_ceiling, market_price, per_piece_cost, per_piece_share, planning_rate_usd_per_kg, standard_cost_pkr, active")
       .eq("slug", slug)
       .maybeSingle();
     if (!before) {
@@ -210,6 +211,7 @@ function check(p: Record<string, unknown>): string | null {
   if ("weight_kg" in p && !(typeof p.weight_kg === "number" && p.weight_kg > 0 && p.weight_kg <= 10)) return "weight_kg must be between 0 and 10.";
   if ("value_index" in p && !(typeof p.value_index === "number" && p.value_index > 0 && p.value_index <= 5)) return "value_index must be between 0 and 5.";
   if ("profile_code" in p && !PROFILES.includes(String(p.profile_code))) return "profile_code must be fast, standard or slow.";
+  if ("season" in p && !SEASONS.includes(String(p.season))) return "season must be summer, winter or all.";
   if ("gender" in p && !GENDERS.includes(String(p.gender))) return "gender must be men, women, teenage, kid, toddler or infant.";
   if ("name" in p && !String(p.name ?? "").trim()) return "name cannot be empty.";
   for (const k of ["market_ceiling", "market_price", "per_piece_cost", "planning_rate_usd_per_kg", "standard_cost_pkr"] as const) {

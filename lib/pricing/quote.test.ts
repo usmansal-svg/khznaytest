@@ -17,7 +17,7 @@ const ctx: PricingContext = {
   settings: DEFAULT_SETTINGS,
   settingsVersion: SETTINGS_VERSION,
   refs: { grades: GRADES, profiles: PROFILES, brandTiers: BRAND_TIERS },
-  subCategories: SUB_CATEGORIES.map((s) => ({ ...s, gender: /women/.test(s.categorySlug) ? "women" : /children/.test(s.categorySlug) ? "kid" : "men", standardCost: null, marketPrice: null })),
+  subCategories: SUB_CATEGORIES.map((s) => ({ ...s, gender: /women/.test(s.categorySlug) ? "women" : /children/.test(s.categorySlug) ? "kid" : "men", standardCost: null, marketPrice: null, season: "all" as const })),
   source: "database",
 };
 
