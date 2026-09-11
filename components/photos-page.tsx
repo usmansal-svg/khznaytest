@@ -47,7 +47,6 @@ export function PhotosPage() {
   const [search, setSearch] = useState("");
   const [listFilter, setListFilter] = useState<"none" | "done" | "all">("none");
   const [coverId, setCoverId] = useState<number | null>(null);
-  const [askCover, setAskCover] = useState(false);
   const touchX = useRef<number | null>(null);
   const [camInfo, setCamInfo] = useState<string | null>(null);
   const [autoCut, setAutoCut] = useState(true);
@@ -103,7 +102,7 @@ export function PhotosPage() {
   }
   useEffect(() => () => closeCamera(), []);
 
-  function discardShots() { shots.forEach((s) => { if (s.blob) URL.revokeObjectURL(s.url); }); setShots([]); setCoverId(null); setAskCover(false); }
+  function discardShots() { shots.forEach((s) => { if (s.blob) URL.revokeObjectURL(s.url); }); setShots([]); setCoverId(null); }
 
   async function startScan() {
     setError(null);
@@ -180,8 +179,7 @@ export function PhotosPage() {
   function requestSave() {
     const kept = shots.filter((s) => s.keep);
     if (!kept.length) return;
-    if (kept.length > 1 && (coverId == null || !kept.some((s) => s.id === coverId))) { setAskCover(true); return; }
-    save(coverId ?? kept[0].id);
+    save(coverId != null && kept.some((s) => s.id === coverId) ? coverId : kept[0].id);
   }
 
   function save(chosenCover: number) {
@@ -199,7 +197,6 @@ export function PhotosPage() {
     const coverShot = kept.find((s) => s.id === chosenCover) ?? kept[0];
     const oldCutouts = garment.cutoutPaths;
     const work = kept.map((s) => ({ id: s.id, blob: s.blob, url: s.url, adjust: s.adjust, existing: s.existing, isCover: s.id === coverShot.id }));
-    setAskCover(false);
     void (async () => {
       const update = (patch: Partial<Job>) => setJobs((j) => j.map((x) => (x.sku === sku ? { ...x, ...patch } : x)));
       const del = (path: string) => fetch("/api/photos", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ sku, path }) });
@@ -243,6 +240,11 @@ export function PhotosPage() {
   }
 
   const kept = shots.filter((s) => s.keep);
+  // The first kept picture is the cover unless the photographer moves it.
+  useEffect(() => {
+    if (!kept.length) { if (coverId != null) setCoverId(null); return; }
+    if (coverId == null || !kept.some((s) => s.id === coverId)) setCoverId(kept[0].id);
+  }, [kept, coverId]);
   const me = data?.me;
   const current = shots[reviewIdx];
 
@@ -328,38 +330,15 @@ export function PhotosPage() {
               <img key={s.id} src={s.url} alt="" onClick={() => setReviewIdx(i)} className={cn("h-12 w-12 shrink-0 cursor-pointer rounded object-cover", i === reviewIdx ? "ring-2 ring-white" : "opacity-60", !s.keep && "opacity-20")} style={{ filter: cssFilter(s.adjust) }} />
             ))}
           </div>
-          <p className="text-[11px] text-neutral-400">The cover is the picture that gets its background removed — you are asked to choose it on Save. Brightness and contrast are baked in on save; every picture is cropped square and sized for Shopify.</p>
+          <p className="text-[11px] text-neutral-400">The cover (★) is the picture that gets its background removed — picture 1 unless you move it. Brightness and contrast are baked in on save; every picture is cropped square and sized for Shopify.</p>
         </div>
       </div>
     );
   })();
 
-  const CoverAsk = askCover && (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/70" onClick={() => setAskCover(false)}>
-      <div className="rounded-t-2xl bg-background p-4" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-bold">Which picture is the cover?</h2>
-        <p className="mb-3 text-sm text-muted-foreground">The cover gets its background removed and goes first on Shopify. Tap one.</p>
-        <div className="grid grid-cols-3 gap-2">
-          {kept.map((s, i) => (
-            <button key={s.id} type="button" onClick={() => setCoverId(s.id)} className={cn("relative aspect-square overflow-hidden rounded-md border-4", s.id === coverId ? "border-amber-500" : "border-transparent")}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={s.url} alt={`Picture ${i + 1}`} className="h-full w-full object-cover" style={{ filter: cssFilter(s.adjust), transform: `rotate(${s.adjust.rotate}deg)` }} />
-              {s.id === coverId && <span className="absolute left-1 top-1 rounded bg-amber-500 px-1.5 text-xs font-semibold text-black">★</span>}
-            </button>
-          ))}
-        </div>
-        <div className="mt-4 flex gap-2">
-          <Button type="button" variant="outline" className="h-12" onClick={() => setAskCover(false)}>Back</Button>
-          <Button type="button" className="h-12 flex-1" disabled={coverId == null || !kept.some((s) => s.id === coverId)} onClick={() => save(coverId!)}>Save {kept.length} &amp; next garment</Button>
-        </div>
-      </div>
-    </div>
-  );
-
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       {Review}
-      {CoverAsk}
       {Progress}
       {Jobs}
       {error && <p className="text-sm text-destructive">{error}</p>}
@@ -454,13 +433,11 @@ export function PhotosPage() {
             )}
             {mode === "shoot" && (
               <>
-                <div className="flex items-center gap-2">
-                  <Button type="button" size="lg" className="h-16 flex-1 text-lg" onClick={snap} disabled={keptCount >= MAX_SHOTS}><Camera className="size-6" /> {keptCount >= MAX_SHOTS ? `${MAX_SHOTS} is the limit — discard one first` : `Take picture ${keptCount + 1}`}</Button>
-                  <Button type="button" variant="outline" className="h-16" onClick={() => fileRef.current?.click()} title="Use the phone's own camera app for one shot"><Camera className="size-4" /> App</Button>
-                  <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={onNative} />
-                </div>
+                <Button type="button" size="lg" className="h-16 w-full text-lg" onClick={snap} disabled={keptCount >= MAX_SHOTS}><Camera className="size-6" /> {keptCount >= MAX_SHOTS ? `${MAX_SHOTS} is the limit — untick one first` : `Take picture ${keptCount + 1}`}</Button>
+                <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={onNative} />
+                <button type="button" onClick={() => fileRef.current?.click()} className="text-xs text-muted-foreground underline">Or take one shot with the phone&apos;s own camera app (full resolution)</button>
                 {camInfo && <p className="text-[11px] text-muted-foreground">Camera {camInfo} · saved square at 2048 px for Shopify, under 1 MB</p>}
-                {shots.length > 0 && <p className="text-xs text-muted-foreground">{retaking ? "Earlier pictures are marked; keep, adjust or discard any of them and add new ones. " : ""}Tap a picture to see it full screen and adjust brightness, contrast or rotation; × discards it.</p>}
+                {shots.length > 0 && <p className="text-xs text-muted-foreground">{retaking ? "Earlier pictures are marked; keep, adjust or discard any of them and add new ones. " : ""}Picture 1 is the cover (★) unless you move the star. Tap a picture to review and adjust it; untick the box to leave it out; the bin deletes it.</p>}
                 {shots.length > 0 && (
                   <div className="grid grid-cols-3 gap-2">
                     {shots.map((s, i) => (
@@ -469,18 +446,20 @@ export function PhotosPage() {
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={s.url} alt={`Shot ${i + 1}`} className="h-full w-full object-cover" style={{ filter: cssFilter(s.adjust), transform: `rotate(${s.adjust.rotate}deg)` }} />
                         </button>
-                        <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1 text-[10px] text-white">{i + 1}{s.existing ? " · earlier" : ""}{s.id === coverId ? " · ★ cover" : ""}</span>
-                        <button type="button" onClick={() => (s.keep ? setShot(s.id, { keep: false }) : removeShot(s.id))} className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white" aria-label={s.keep ? "Discard" : "Remove"}><X className="size-3.5" /></button>
-                        {!s.keep && <button type="button" onClick={() => setShot(s.id, { keep: true })} className="absolute inset-x-1 bottom-1 rounded bg-white/90 py-0.5 text-[10px] font-semibold text-black">Keep</button>}
+                        {s.id === coverId && s.keep && <span className="absolute inset-x-0 top-0 bg-amber-500 py-0.5 text-center text-[10px] font-bold uppercase tracking-wide text-black">★ Cover</span>}
+                        <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1 text-[10px] text-white">{i + 1}{s.existing ? " · earlier" : ""}</span>
+                        <label className="absolute bottom-1 right-1 flex items-center rounded bg-white/90 p-1" title={s.keep ? "Untick to leave this picture out" : "Tick to keep it"}><Checkbox checked={s.keep} onCheckedChange={(v) => setShot(s.id, { keep: v === true })} /></label>
+                        <button type="button" onClick={() => removeShot(s.id)} className="absolute right-1 top-6 rounded-full bg-black/60 p-1 text-white" aria-label="Delete this picture"><Trash2 className="size-3.5" /></button>
+                        {s.keep && s.id !== coverId && <button type="button" onClick={() => setCoverId(s.id)} className="absolute left-1 top-6 rounded-full bg-black/60 p-1 text-white" aria-label="Make this the cover"><Star className="size-3.5" /></button>}
                       </div>
                     ))}
                   </div>
                 )}
                 <label className="flex items-center gap-2 text-xs"><Checkbox checked={autoCut} onCheckedChange={(v) => setAuto(v === true)} /> Remove the background from the cover picture (soft shadow on white)</label>
-                <div className="flex gap-2">
-                  <Button type="button" variant="outline" className="h-12" onClick={startScan}><RefreshCw className="size-4" /> Rescan</Button>
-                  <Button type="button" variant="outline" className="h-12" disabled={!shots.length} onClick={() => { setReviewIdx(0); setMode("review"); }}>Review &amp; adjust</Button>
-                  <Button type="button" className="h-12 flex-1 text-base" disabled={!kept.length} onClick={requestSave}><Check className="size-5" /> Save {kept.length || ""} &amp; next</Button>
+                <Button type="button" className="h-14 w-full text-base" disabled={!kept.length} onClick={requestSave}><Check className="size-5" /> Save {kept.length || ""} picture{kept.length === 1 ? "" : "s"} &amp; next garment</Button>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button type="button" variant="outline" className="h-11" disabled={!shots.length} onClick={() => { setReviewIdx(0); setMode("review"); }}>Review &amp; adjust</Button>
+                  <Button type="button" variant="outline" className="h-11" onClick={startScan}><RefreshCw className="size-4" /> Rescan</Button>
                 </div>
               </>
             )}
