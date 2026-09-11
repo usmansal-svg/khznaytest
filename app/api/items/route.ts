@@ -216,7 +216,7 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from("items")
-    .select("id, sku, brand_text, grade_code, size_label, colour_tag, status, channel, online_status, qc_hold, photos, price, price_manual, weight_kg, tagged_at, season, wearer, is_rare, sub_categories(name, gender, categories(name)), lots(code), outlets(name), staff:tagged_by(name), transfer_items(transfers(status, outlets!transfers_to_outlet_id_fkey(name)))")
+    .select("id, sku, brand_text, grade_code, size_label, colour_tag, status, channel, online_status, qc_hold, photos, price, price_manual, weight_kg, tagged_at, season, wearer, is_rare, shopify_product_id, shopify_visibility, shopify_error, sub_categories(name, gender, categories(name)), lots(code), outlets(name), staff:tagged_by(name), transfer_items(transfers(status, outlets!transfers_to_outlet_id_fkey(name)))")
     .order("tagged_at", { ascending: false })
     .limit(q ? 500 : 300);
 
@@ -258,6 +258,8 @@ export async function GET(request: Request) {
         season: r.season,
         wearer: r.wearer,
         rare: r.is_rare,
+        shopify: r.shopify_product_id ? (r.shopify_visibility ?? (r.online_status === "listed" ? "online" : "draft")) : null,
+        shopify_error: r.shopify_error ?? null,
         list_price: r.price_manual ?? r.price,
         tagged_at: r.tagged_at,
       };

@@ -67,7 +67,9 @@ export async function updateSession(request: NextRequest) {
     path.startsWith("/price") ||
     path.startsWith("/api/price") ||
     // Tags print from a plain image URL; the SKU is the only payload.
-    path.startsWith("/api/tags");
+    path.startsWith("/api/tags") ||
+    // Shopify calls this with a signed body; the route verifies the signature itself.
+    path === "/api/shopify/webhook";
 
   if (!user && !staff && !isPublic) {
     // API callers get a 401 they can act on. Redirecting a fetch() to the

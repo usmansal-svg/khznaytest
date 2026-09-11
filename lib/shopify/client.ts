@@ -47,6 +47,8 @@ function userErrors(errs: GqlError[] | undefined, what: string) {
   if (errs?.length) throw new ShopifyError(`${what}: ${errs.map((e) => `${e.field?.join(".") ?? ""} ${e.message}`.trim()).join("; ")}`, errs);
 }
 
+export type Visibility = "draft" | "pos" | "online" | "both";
+
 export type ProductInput = {
   title: string;
   descriptionHtml: string;
@@ -57,6 +59,8 @@ export type ProductInput = {
   price: number;
   imageUrls: string[];
   status: "ACTIVE" | "DRAFT";
+  /** Where the single unit of stock sits; the outlet's Shopify location for outlet stock, else the first active location. */
+  locationId?: string | null;
 };
 
 export type PushResult = { productId: string; handle: string; variantId: string; inventoryItemId: string; adminUrl: string };
@@ -89,7 +93,7 @@ export async function createProduct(cfg: ShopifyConfig, input: ProductInput): Pr
   const product = data.productCreate.product!;
   const variant = product.variants.nodes[0];
   await setVariant(cfg, product.id, variant.id, input.sku, input.price);
-  await setQuantity(cfg, variant.inventoryItem.id, 1);
+  await setQuantity(cfg, variant.inventoryItem.id, 1, input.locationId ?? undefined);
   return { productId: product.id, handle: product.handle, variantId: variant.id, inventoryItemId: variant.inventoryItem.id, adminUrl: adminUrl(cfg, product.id) };
 }
 
@@ -110,8 +114,45 @@ export async function updateProduct(cfg: ShopifyConfig, productId: string, input
   const product = data.productUpdate.product!;
   const variant = product.variants.nodes[0];
   await setVariant(cfg, product.id, variant.id, input.sku, input.price);
+  if (input.status === "ACTIVE") await setQuantity(cfg, variant.inventoryItem.id, 1, input.locationId ?? undefined);
   if (input.imageUrls.length) await addMedia(cfg, product.id, input.imageUrls, input.title);
   return { productId: product.id, handle: product.handle, variantId: variant.id, inventoryItemId: variant.inventoryItem.id, adminUrl: adminUrl(cfg, product.id) };
+}
+
+/** Every location on the store, for mapping outlets to where their Shopify POS pulls stock from. */
+export async function listLocations(cfg: ShopifyConfig): Promise<{ id: string; name: string; active: boolean }[]> {
+  const data = await gql<{ locations: { nodes: { id: string; name: string; isActive: boolean }[] } }>(cfg, `query { locations(first: 50) { nodes { id name isActive } } }`, {});
+  return data.locations.nodes.map((l) => ({ id: l.id, name: l.name, active: l.isActive }));
+}
+
+/** The store's sales channels ("publications"): Online Store and Point of Sale are the two we care about. */
+async function publicationIds(cfg: ShopifyConfig): Promise<{ online: string | null; pos: string | null }> {
+  const data = await gql<{ publications: { nodes: { id: string; name: string }[] } }>(cfg, `query { publications(first: 20) { nodes { id name } } }`, {});
+  const find = (re: RegExp) => data.publications.nodes.find((p) => re.test(p.name))?.id ?? null;
+  return { online: find(/online store/i), pos: find(/point of sale|^pos$/i) };
+}
+
+/**
+ * Which channels a product is on. Shopify POS can only sell an ACTIVE product
+ * published to the Point of Sale channel, so "POS only" means active + POS,
+ * not on the Online Store; "draft" means hidden everywhere.
+ */
+export async function setVisibility(cfg: ShopifyConfig, productId: string, visibility: Visibility): Promise<void> {
+  const pubs = await publicationIds(cfg);
+  const wantOnline = visibility === "online" || visibility === "both";
+  const wantPos = visibility === "pos" || visibility === "both";
+  if (wantPos && !pubs.pos) throw new ShopifyError("This Shopify store has no Point of Sale channel — install the POS sales channel first.");
+  const publish: string[] = [], unpublish: string[] = [];
+  if (pubs.online) (wantOnline ? publish : unpublish).push(pubs.online);
+  if (pubs.pos) (wantPos ? publish : unpublish).push(pubs.pos);
+  if (publish.length) {
+    const d = await gql<{ publishablePublish: { userErrors: GqlError[] } }>(cfg, `mutation pub($id: ID!, $input: [PublicationInput!]!) { publishablePublish(id: $id, input: $input) { userErrors { field message } } }`, { id: productId, input: publish.map((publicationId) => ({ publicationId })) });
+    userErrors(d.publishablePublish.userErrors, "publishablePublish");
+  }
+  if (unpublish.length) {
+    const d = await gql<{ publishableUnpublish: { userErrors: GqlError[] } }>(cfg, `mutation unpub($id: ID!, $input: [PublicationInput!]!) { publishableUnpublish(id: $id, input: $input) { userErrors { field message } } }`, { id: productId, input: unpublish.map((publicationId) => ({ publicationId })) });
+    userErrors(d.publishableUnpublish.userErrors, "publishableUnpublish");
+  }
 }
 
 /** Sold in store or pulled: hide online and zero the stock, keep the record. */
@@ -139,8 +180,8 @@ async function setVariant(cfg: ShopifyConfig, productId: string, variantId: stri
   userErrors(data.productVariantsBulkUpdate.userErrors, "productVariantsBulkUpdate");
 }
 
-async function setQuantity(cfg: ShopifyConfig, inventoryItemId: string, quantity: number) {
-  const locationId = await primaryLocationId(cfg);
+async function setQuantity(cfg: ShopifyConfig, inventoryItemId: string, quantity: number, location?: string) {
+  const locationId = location ?? (await primaryLocationId(cfg));
   const data = await gql<{ inventorySetQuantities: { userErrors: GqlError[] } }>(
     cfg,
     `mutation qty($input: InventorySetQuantitiesInput!) { inventorySetQuantities(input: $input) { userErrors { field message } } }`,

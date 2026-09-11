@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { OutletsCard } from "@/components/admin/outlets-card";
 
 type Staff = { id: number; name: string; role: string; outlet_id: number | null; outlet: string | null; active: boolean; has_pin: boolean; last_login: string | null; daily_target: number | null };
 type Outlet = { id: number; name: string };
@@ -115,6 +116,7 @@ export function StaffAdmin() {
           </CardContent>
         </Card>
       </div>
+      <OutletsCard />
     </div>
   );
 }

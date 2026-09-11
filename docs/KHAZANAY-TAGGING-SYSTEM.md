@@ -174,7 +174,7 @@ Outlets: Karachi 1, Karachi 2, Islamabad, Lahore 1, Lahore 2, plus Online (renam
 ## 8. QC
 
 ### 8.1 Random hold-back, reviewed (changed 12 Sep)
-Chosen at save, after the tagger has committed, so it cannot be gamed. The senior opens **QC → Held for QC**, scans the tag, and sees **everything the tagger entered** — condition, brand, garment type, size, season, wearer, rare find — beside the photo and the garment in hand. Two buttons: **Correct as tagged**, or change the wrong fields and **Save corrections**. Corrections are applied to the garment (repriced when the condition, type or brand tier changes; the screen offers a reprint), recorded in `qc_reviews` against the tagger, and the hold is released. A photo mode reviews 30 random photographed garments a week the same way. The earlier blind regrading was retired as slow and unnecessary: the point is to catch and correct mistakes, and count them.
+Chosen at save, after the tagger has committed, so it cannot be gamed. The senior opens **QC → Held for QC**, scans the tag, and sees **everything the tagger entered** — condition, brand, garment type, size, season, wearer, rare find — beside the photo and the garment in hand. Two buttons: **Correct as tagged**, or change the wrong fields and **Save corrections**. Corrections are applied to the garment (repriced when the condition, type or brand tier changes; the screen offers a reprint), recorded in `qc_reviews` · `shopify_visibility` against the tagger, and the hold is released. A photo mode reviews 30 random photographed garments a week the same way. The earlier blind regrading was retired as slow and unnecessary: the point is to catch and correct mistakes, and count them.
 
 **Tagger scorecard** (**Admin → Taggers**, `/admin/taggers`, monthly): per tagger — days worked, tagged, per day against target, **target achievement** (tagged ÷ days worked × daily target, capped at 100%), reviewed, corrected, **accuracy** (share of reviewed garments needing no correction), under-priced count, and a **score = 60% target achievement + 40% accuracy**. Expanding a row shows which fields QC corrected (condition too low / too high, brand, type, size…), the net price impact, and the recent corrections with the reviewer's notes. A manager **finalises** the month's score with a note into `tagger_scores`. The dashboard's tagger table keeps its live view.
 
@@ -217,9 +217,24 @@ The POS is **not part of this platform**. It was built here on 12 September and 
 
 ---
 
-## 13. Online channel (parked)
+## 13. Shopify — the website and the outlets' Shopify POS
 
-Garment page: channel switch, photos (camera capture, on-device background removal via `@imgly/background-removal`, composited onto white, stored in the public `garments` bucket), automatic Shopify collection tags (`Men`, `Heavy Hoodie`, `Men Heavy Hoodie`, brand, `Size L`, grade, colour, …), **Send to Shopify** (one product per garment, single variant, quantity 1) and **Unlist**. Needs `SHOPIFY_STORE_DOMAIN` and `SHOPIFY_ADMIN_ACCESS_TOKEN` in Vercel; not yet set.
+Until the separate POS exists, the outlets sell on **Shopify POS**, which can only sell products that exist on Shopify. So garments are put on Shopify from here, with a choice of where they appear (12 Sep):
+
+| Visibility | Shopify state | Use |
+|---|---|---|
+| **POS only** | active, published to the Point of Sale channel, not the Online Store | outlet stock the outlets sell on Shopify POS, not shown on the website |
+| **Website + POS** | active, both channels | stock sold in both places |
+| **Website only** | active, Online Store only | the online channel |
+| **Draft** | hidden everywhere | on Shopify but not for sale |
+
+**How.** On **Items**, filter and tick the garments, choose the visibility, press *Upload … to Shopify*. Managers only; 25 at a time in the background with a result per SKU; the Shopify column then shows each garment's state (and an error, if Shopify refused). One product per garment, one unit of stock, the variant SKU = our SKU, price = the tag price, pictures in order (cut-outs standing in), the rare-find text where set. Stock is placed at the **outlet's Shopify location** when the garment is at an outlet with one mapped (Staff → Outlets), else the store's default location. The garment page's *Send to Shopify* does the same for one garment (website + POS).
+
+**Sales come back.** A webhook (`POST /api/shopify/webhook`, topic *orders/paid*, verified with `SHOPIFY_WEBHOOK_SECRET`) marks each garment on the order **sold** here — whether it sold on the website or on a Shopify POS at an outlet — with the price paid, the markdown stage it was at, and an audit line saying which. Shopify itself sets the stock to zero.
+
+**Set-up (Usman):** `SHOPIFY_STORE_DOMAIN`, `SHOPIFY_ADMIN_ACCESS_TOKEN` (a custom app with `write_products`, `write_inventory`, `write_publications`, `read_orders`) and `SHOPIFY_WEBHOOK_SECRET` in Vercel; the webhook created in Shopify admin → Settings → Notifications → Webhooks → *Order payment* → `https://khazanaytest.vercel.app/api/shopify/webhook`; each outlet mapped to its Shopify location on Staff → Outlets.
+
+**Online channel (parked).** The garment page keeps channel, photos, listing preview and *Send to Shopify* / *Unlist*; the photography station feeds it.
 
 ---
 
@@ -237,11 +252,11 @@ Garment page: channel switch, photos (camera capture, on-device background remov
 - `lib/auth/*` — PIN hashing, signed sessions, `requireStaff` / `requireManager`
 - `lib/supabase/proxy.ts` — route gating by session and role
 
-**API (all under `/api`):** `price`, `items`, `items/[sku]`, `reference`, `brands`, `lots`, `transfers`, `qc`, `photos`, `tags/[sku]/barcode`, `export`, `dashboard`, `auth/*`, `admin/{settings,profiles,grades,sub-categories,categories,brands,brands/logo,brands/quick-picks,rare-reasons,staff,reference-prices,pricing/sheet}`, `shopify/push`.
+**API (all under `/api`):** `price`, `items`, `items/[sku]`, `reference`, `brands`, `lots`, `transfers`, `qc`, `photos`, `tags/[sku]/barcode`, `export`, `dashboard`, `auth/*`, `admin/{settings,profiles,grades,sub-categories,categories,brands,brands/logo,brands/quick-picks,rare-reasons,staff,outlets,taggers,reference-prices,pricing/sheet}`, `shopify/{push,push-bulk,webhook}`.
 
-**Migrations (40, all applied):** `pricing_schema` · `pricing_seed` (generated from code by `test/gen-seed.ts`) · `sub_category_codes` · `tagging_support` · `lots_and_weights` · `channels_photos_shopify` · `staff_pins_transfers` · `transfer_seq` · `lot_split` · `lot_description_pieces` · `lot_imported_sequence` · `settings_changed_by` · `categories_flat_gender` · `categories_two_level` · `subcategory_planning_rates` · `price_steps_alerts` · `brands_source` · `qc_and_targets` · `qc_hold` · `standard_cost` · `reference_prices` · `rare_handoff` · `outlet_min_grade` · `outlet_override` · `subcategory_season` · `brand_quick_pick` · `brand_logo` · `brand_quick_picks_by_category` · `size_labels` · `rare_note` · `rare_reasons` · `photographer` · `rare_reasons_table` · `pos_sales` · `pos_anon_temp` · `pos_v2` · `qc_reviews` — plus the health check and two POS migrations from a parallel session.
+**Migrations (41, all applied):** `pricing_schema` · `pricing_seed` (generated from code by `test/gen-seed.ts`) · `sub_category_codes` · `tagging_support` · `lots_and_weights` · `channels_photos_shopify` · `staff_pins_transfers` · `transfer_seq` · `lot_split` · `lot_description_pieces` · `lot_imported_sequence` · `settings_changed_by` · `categories_flat_gender` · `categories_two_level` · `subcategory_planning_rates` · `price_steps_alerts` · `brands_source` · `qc_and_targets` · `qc_hold` · `standard_cost` · `reference_prices` · `rare_handoff` · `outlet_min_grade` · `outlet_override` · `subcategory_season` · `brand_quick_pick` · `brand_logo` · `brand_quick_picks_by_category` · `size_labels` · `rare_note` · `rare_reasons` · `photographer` · `rare_reasons_table` · `pos_sales` · `pos_anon_temp` · `pos_v2` · `qc_reviews` · `shopify_visibility` — plus the health check and two POS migrations from a parallel session.
 
-**Environment (Vercel + `.env.local`):** `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (server only; also signs sessions), optional `SESSION_SECRET`, `SHOPIFY_*`.
+**Environment (Vercel + `.env.local`):** `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (server only; also signs sessions), optional `SESSION_SECRET`, `SHOPIFY_STORE_DOMAIN`, `SHOPIFY_ADMIN_ACCESS_TOKEN`, `SHOPIFY_WEBHOOK_SECRET`, optional `SHOPIFY_API_VERSION`.
 
 **Operating it:** `npm run build` · `npm test` · `npx supabase db push --yes` (migrations) · `npx vercel --prod --yes` (deploy). GitHub → Vercel auto-deploy is connected for previews on push; production deploys come from the CLI while work is on `pricing-engine`. Claude's allow rules live in `.claude/settings.local.json`.
 
@@ -267,7 +282,8 @@ Garment page: channel switch, photos (camera capture, on-device background remov
 - Overwrite *Cost per piece* on the sheet with real purchase costs (seeded values are ~11% high — they were landed costs)
 - Revert two test edits still on the live sheet: *Men Button-down shirt* weight 0.01 (was 0.30) and input tax 5% (spec says 18%) — or confirm them
 - Confirm or correct the 303 research comparison prices when/if they go on tags or online
-- Rename outlets to area names; add Compression Wear and Waistcoat sub-categories
+- Rename outlets to area names (Staff → Outlets) and map each to its Shopify location; add Compression Wear and Waistcoat sub-categories
+- Connect Shopify: the three `SHOPIFY_*` variables in Vercel and the *Order payment* webhook (§13)
 - Delete the three spec-verification lots (`LOT-B-01-S`, `-W`, `LOT-A-01`) and the two POS demo items once real stock arrives
 - Choose a scale (Bluetooth keyboard output) and a station label printer — the two hardware changes that cut the most seconds
 
