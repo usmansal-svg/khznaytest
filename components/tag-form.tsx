@@ -20,6 +20,7 @@ import { SLEEVE_TYPES } from "@/lib/pricing/sub-categories";
 
 type Reference = {
   genders: { code: Gender; name: string }[];
+  top_brands: string[];
   categories: { slug: string; name: string; gender: Gender; sort_order: number }[];
   sub_categories: {
     slug: string;
@@ -103,6 +104,7 @@ export function TagForm() {
   // Cleared after save
   const [brand, setBrand] = useState("");
   const [brandHits, setBrandHits] = useState<{ name: string; tier: string }[]>([]);
+  const [moreBrands, setMoreBrands] = useState(false);
   const [size, setSize] = useState("");
   const [colour, setColour] = useState("");
   const [grade, setGrade] = useState<GradeCode>("premium");
@@ -509,8 +511,18 @@ export function TagForm() {
                 hintTone={price?.brand && brand && (!price.brand.matched || price.brand.corrected_from) ? "warn" : undefined}
               >
                 <div className="flex gap-2">
-                  <Input ref={brandRef} list="brands" value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Start typing…" autoComplete="off" autoFocus onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); sizeRef.current?.focus(); } }} />
+                  <Input ref={brandRef} list="brands" value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Tap a brand below, or type a rarer one" autoComplete="off" autoFocus onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); sizeRef.current?.focus(); } }} />
                 </div>
+                {ref.top_brands.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {ref.top_brands.slice(0, moreBrands ? 20 : 10).map((b) => (
+                      <Button key={b} type="button" size="sm" variant={brand.trim().toLowerCase() === b.toLowerCase() ? "default" : "outline"} className="h-9 px-3 text-sm md:h-7 md:px-2.5 md:text-xs" onClick={() => { setBrand(b); requestAnimationFrame(() => sizeRef.current?.focus()); }}>{b}</Button>
+                    ))}
+                    {ref.top_brands.length > 10 && (
+                      <Button type="button" size="sm" variant="ghost" className="h-9 px-2 text-sm text-muted-foreground md:h-7 md:text-xs" onClick={() => setMoreBrands((m) => !m)}>{moreBrands ? "Fewer brands" : "More brands…"}</Button>
+                    )}
+                  </div>
+                )}
                 <datalist id="brands">{brandHits.map((b) => <option key={b.name} value={b.name}>{tierLabel(b.tier)}</option>)}</datalist>
               </Field>
               <Field label="Size on label" hint={isKids ? kidsHint(size) : undefined}>
