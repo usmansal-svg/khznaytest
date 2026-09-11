@@ -1,7 +1,7 @@
 /**
  * POST /api/pos/shopify-sync — work the sold-out queue. Called by the till
- * after each sale and by the hourly cron (vercel.json), so a garment sold at
- * an outlet never stays live online for long even when a call failed.
+ * after each sale and by the nightly cron (vercel.json), so a garment sold at
+ * an outlet never stays live online past the night even when a call failed.
  */
 import { NextResponse } from "next/server";
 
