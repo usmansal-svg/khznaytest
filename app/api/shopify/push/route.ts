@@ -10,7 +10,7 @@ import { NextResponse } from "next/server";
 
 import { requireStaff } from "@/lib/auth/staff";
 import { createProduct, shopifyConfig, unlistProduct, updateProduct, ShopifyError } from "@/lib/shopify/client";
-import { rareWebParagraphs } from "@/lib/pricing/rare-reasons";
+import { loadRareReasons, rareWebParagraphs } from "@/lib/pricing/rare-reasons";
 import { shopifyTags, shopifyTitle } from "@/lib/shopify/tags";
 
 export async function GET() {
@@ -75,7 +75,7 @@ export async function POST(request: Request) {
     const tags = shopifyTags(taggable);
     const input = {
       title: shopifyTitle(taggable),
-      descriptionHtml: describe(item.description, item.measurements as Record<string, unknown>, item.grade_code, item.size_label, item.is_rare ? rareWebParagraphs((item as { rare_reasons?: string[] | null }).rare_reasons ?? [], (item as { rare_note?: string | null }).rare_note) : null),
+      descriptionHtml: describe(item.description, item.measurements as Record<string, unknown>, item.grade_code, item.size_label, item.is_rare ? rareWebParagraphs((item as { rare_reasons?: string[] | null }).rare_reasons ?? [], (item as { rare_note?: string | null }).rare_note, await loadRareReasons(supabase)) : null),
       vendor: item.brand_text ?? "Khazanay",
       productType: subCategory,
       tags,

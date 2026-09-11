@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 import { GRADE_RANK, type ColourTag, type GradeCode } from "@/lib/pricing/constants";
 import { ADULT_SIZES, KIDS_SIZES } from "@/lib/pricing/kids-sizes";
 import { sizeSeriesFor } from "@/lib/pricing/sizes";
-import { RARE_REASONS, rareTagLine } from "@/lib/pricing/rare-reasons";
+import { rareTagLine } from "@/lib/pricing/rare-reasons";
 import { GENDER_LABELS, type Gender, type Season, type Wearer } from "@/lib/pricing/sku";
 import { SLEEVE_TYPES } from "@/lib/pricing/sub-categories";
 
@@ -24,6 +24,7 @@ type Reference = {
   genders: { code: Gender; name: string }[];
   top_brands: { name: string; logo_url: string | null }[];
   size_extras: Record<string, string[]>;
+  rare_reasons: { code: string; label: string; tag: string; web: string }[];
   brand_picks_by_category: Record<string, { name: string; logo_url: string | null }[]>;
   categories: { slug: string; name: string; gender: Gender; sort_order: number }[];
   sub_categories: {
@@ -293,7 +294,8 @@ export function TagForm() {
   // rare find prices as normal or by hand at the senior's price.
   const needsManual = !rejected && (manualOn || blocked);
   const rareOk = !rareFind || rareWhy.length > 0;
-  const rareLine = rareFind ? rareTagLine(rareWhy, rareText) : "";
+  const rareLine = rareFind ? rareTagLine(rareWhy, rareText, ref?.rare_reasons ?? []) : "";
+  const rareChosen = ref?.rare_reasons.find((r) => r.code === rareWhy[0]);
   const listPrice = rejected ? 0 : needsManual ? Number(manualPrice) || 0 : price?.price ?? 0;
   const standardPrice = price?.standard_price ?? null;
   const below = !rejected && !blocked && standardPrice != null && listPrice > 0 && listPrice < standardPrice;
@@ -586,12 +588,20 @@ export function TagForm() {
                   {rareFind && (
                     <>
                       <div className="flex flex-wrap gap-1.5">
-                        {RARE_REASONS.map((w) => (
-                          <Button key={w.code} type="button" size="sm" variant={rareWhy.includes(w.code) ? "secondary" : "outline"} title={w.tag} className="h-9 px-3 text-sm md:h-7 md:px-2.5 md:text-xs" onClick={() => setRareWhy((x) => (x.includes(w.code) ? x.filter((y) => y !== w.code) : [...x, w.code]))}>{w.label}</Button>
+                        {ref.rare_reasons.map((w) => (
+                          <Button key={w.code} type="button" size="sm" variant={rareWhy[0] === w.code ? "secondary" : "outline"} title={w.tag} className="h-9 px-3 text-sm md:h-7 md:px-2.5 md:text-xs" onClick={() => setRareWhy([w.code])}>{w.label}</Button>
                         ))}
                       </div>
                       <Input value={rareText} onChange={(e) => setRareText(e.target.value)} maxLength={80} placeholder="Optional detail — e.g. 1990s Levi's 501, made in USA" />
-                      <p className="text-xs text-muted-foreground">{rareLine ? <>On the tag: <span className="font-medium text-foreground">{rareLine}</span> · the web listing gets the full description for each reason.</> : "Choose at least one reason — the first one's short line prints on the tag; the online listing gets the fuller text."}</p>
+                      {rareChosen ? (
+                        <div className="grid gap-1 rounded-md border bg-background p-2 text-xs">
+                          <div><span className="text-muted-foreground">On the tag: </span><span className="font-medium">{rareLine}</span></div>
+                          <div><span className="text-muted-foreground">On Shopify: </span>{rareChosen.web}{rareText.trim() ? ` ${rareText.trim()}` : ""}</div>
+                          <div className="text-muted-foreground">Managers can reword these under Pricing → Rare finds.</div>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">Choose the one reason — its short line prints on the tag and its full text goes on the online listing.</p>
+                      )}
                     </>
                   )}
                 </div>

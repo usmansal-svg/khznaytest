@@ -16,7 +16,7 @@ import { audit } from "@/lib/admin/auth";
 import { currentStaff, dbFor, requireStaff } from "@/lib/auth/staff";
 import { REJECTED, type Adjustment, type GradeCode, meetsOutletMinimum } from "@/lib/pricing/constants";
 import { ADJUSTMENTS, GRADE_CODES, quote } from "@/lib/pricing/quote";
-import { rareReason } from "@/lib/pricing/rare-reasons";
+import { loadRareReasons, rareReason } from "@/lib/pricing/rare-reasons";
 import { loadLot, loadPricingContext, resolveBrandDb } from "@/lib/pricing/repo";
 import { SEASONS, WEARERS, buildSku, type Season, type Wearer } from "@/lib/pricing/sku";
 
@@ -100,7 +100,8 @@ export async function POST(request: Request) {
   // by hand, when there is one). An ultra-luxury brand cannot be priced by
   // the sheet, so it needs a manual price.
   const isRare = Boolean(body.is_rare);
-  const rareReasons = isRare ? [...new Set((body.rare_reasons ?? []).filter((c) => rareReason(c)))] : [];
+  const reasonList = isRare ? await loadRareReasons(supabase) : [];
+  const rareReasons = isRare ? [...new Set((body.rare_reasons ?? []).filter((c) => rareReason(c, reasonList)))].slice(0, 1) : [];
   const rareNote = (body.rare_note ?? "").trim().slice(0, 160);
   if (isRare && !rareReasons.length) return bad("Choose why it is a rare find — the reason prints on the tag.");
   const blocked = !rejected && Boolean(q.block_reason);
