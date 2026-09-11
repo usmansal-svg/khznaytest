@@ -43,7 +43,8 @@ Managers add staff at **Admin → Staff** (name, role, home outlet, PIN, daily t
 | Garment | `/items/[sku]` | tagger+ | Channel, destination outlet, photos, listing preview, Shopify push |
 | Print tag | `/items/[sku]/print` · `/print?skus=…` | tagger+ | One tag, or a whole session's tags in one print job |
 | Transfers | `/transfers` | QC senior+ | Ship garments to an outlet (§7) |
-| QC | `/qc` | QC senior+ | Blind regrading of held garments (§8) |
+| QC | `/qc` | QC senior+ | Review held garments: approve or correct the tagging (§8) |
+| Taggers | `/admin/taggers` | manager+ | Monthly scorecard: target achievement, QC accuracy, score, finalise (§8.1) |
 | Lots | `/lots` | manager+ | Purchases, splits, P&L (§6) |
 | Dashboard | `/dashboard` | manager+ | The founder's view (§10) |
 | Pricing | `/admin/pricing` | manager+ | Constants, markdown ladder, selling profiles, grades, sub-categories, history (§4) |
@@ -172,8 +173,10 @@ Outlets: Karachi 1, Karachi 2, Islamabad, Lahore 1, Lahore 2, plus Online (renam
 
 ## 8. QC
 
-### 8.1 Random hold-back (the main control)
-Chosen at save, after the tagger has committed, so it cannot be gamed. The senior opens **QC → Held for QC**, scans the tag, and grades **blind** — the tagger's grade is revealed only after choosing. The price the garment *should* have had is computed and the difference stored. The dashboard reports agreed / too low / too high per tagger and the rupees lost to downgrading. A photo-review mode (30 random per week) is available as an extra.
+### 8.1 Random hold-back, reviewed (changed 12 Sep)
+Chosen at save, after the tagger has committed, so it cannot be gamed. The senior opens **QC → Held for QC**, scans the tag, and sees **everything the tagger entered** — condition, brand, garment type, size, season, wearer, rare find — beside the photo and the garment in hand. Two buttons: **Correct as tagged**, or change the wrong fields and **Save corrections**. Corrections are applied to the garment (repriced when the condition, type or brand tier changes; the screen offers a reprint), recorded in `qc_reviews` against the tagger, and the hold is released. A photo mode reviews 30 random photographed garments a week the same way. The earlier blind regrading was retired as slow and unnecessary: the point is to catch and correct mistakes, and count them.
+
+**Tagger scorecard** (**Admin → Taggers**, `/admin/taggers`, monthly): per tagger — days worked, tagged, per day against target, **target achievement** (tagged ÷ days worked × daily target, capped at 100%), reviewed, corrected, **accuracy** (share of reviewed garments needing no correction), under-priced count, and a **score = 60% target achievement + 40% accuracy**. Expanding a row shows which fields QC corrected (condition too low / too high, brand, type, size…), the net price impact, and the recent corrections with the reviewer's notes. A manager **finalises** the month's score with a note into `tagger_scores`. The dashboard's tagger table keeps its live view.
 
 ### 8.2 Rare finds (changed 11 Sep)
 Rare finds are picked out **at grading**, before tagging, and kept in their own basket. The senior QC decides whether a piece is priced as a rare find and, if so, tells the tagger the price. On the form the tagger taps **★ Rare find** after Brand, chooses one reason (brand, vintage year, fabric quality, design, handwork, limited edition, country of make, or one added later), whose tag line and web paragraph are edited under Pricing → Rare finds, adds free text if useful, and prices it — by hand if the senior gave a price. The tag prints a **★ Rare find** band with that reason above the price, for the outlets' rare shelf; the Shopify listing carries the *Rare Find* tag and the reason in its description, for a Rare Finds collection. The earlier hand-off flow (hold tag, Set Aside rail, QC → Rare pieces) is retired; `items.is_rare`, `items.rare_reasons` and `items.rare_note` are the record.
@@ -249,7 +252,7 @@ Garment page: channel switch, photos (camera capture, on-device background remov
 
 **API (all under `/api`):** `price`, `items`, `items/[sku]`, `reference`, `brands`, `lots`, `transfers`, `qc`, `photos`, `tags/[sku]/barcode`, `export`, `dashboard`, `auth/*`, `admin/{settings,profiles,grades,sub-categories,categories,brands,brands/logo,brands/quick-picks,rare-reasons,staff,reference-prices,pricing/sheet}`, `shopify/push`.
 
-**Migrations (39, all applied):** `pricing_schema` · `pricing_seed` (generated from code by `test/gen-seed.ts`) · `sub_category_codes` · `tagging_support` · `lots_and_weights` · `channels_photos_shopify` · `staff_pins_transfers` · `transfer_seq` · `lot_split` · `lot_description_pieces` · `lot_imported_sequence` · `settings_changed_by` · `categories_flat_gender` · `categories_two_level` · `subcategory_planning_rates` · `price_steps_alerts` · `brands_source` · `qc_and_targets` · `qc_hold` · `standard_cost` · `reference_prices` · `rare_handoff` · `outlet_min_grade` · `outlet_override` · `subcategory_season` · `brand_quick_pick` · `brand_logo` · `brand_quick_picks_by_category` · `size_labels` · `rare_note` · `rare_reasons` · `photographer` · `rare_reasons_table` · `pos_sales` · `pos_anon_temp` · `pos_v2` — plus the health check and two POS migrations from a parallel session.
+**Migrations (40, all applied):** `pricing_schema` · `pricing_seed` (generated from code by `test/gen-seed.ts`) · `sub_category_codes` · `tagging_support` · `lots_and_weights` · `channels_photos_shopify` · `staff_pins_transfers` · `transfer_seq` · `lot_split` · `lot_description_pieces` · `lot_imported_sequence` · `settings_changed_by` · `categories_flat_gender` · `categories_two_level` · `subcategory_planning_rates` · `price_steps_alerts` · `brands_source` · `qc_and_targets` · `qc_hold` · `standard_cost` · `reference_prices` · `rare_handoff` · `outlet_min_grade` · `outlet_override` · `subcategory_season` · `brand_quick_pick` · `brand_logo` · `brand_quick_picks_by_category` · `size_labels` · `rare_note` · `rare_reasons` · `photographer` · `rare_reasons_table` · `pos_sales` · `pos_anon_temp` · `pos_v2` · `qc_reviews` — plus the health check and two POS migrations from a parallel session.
 
 **Environment (Vercel + `.env.local`):** `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (server only; also signs sessions), optional `SESSION_SECRET`, `SHOPIFY_*`.
 
@@ -264,7 +267,7 @@ Garment page: channel switch, photos (camera capture, on-device background remov
 - **Costs are entered before sales tax, duty included.** Some vendors charge tax and local-market ones do not, so the engine adds the non-recoverable input tax itself (never on local lots). Duty per kg applies only to kg lots; adding it to per-piece costs was tried and reverted the same day.
 - **Lot numbers never reuse** a deleted number (tried and reverted the same day).
 - **Two-level catalogue per gender** (Category → Sub-category) with type-to-find, after trying flat.
-- **QC by random hold-back at tagging**, not at the outlet or by shipment sample.
+- **QC by random hold-back at tagging**, not at the outlet or by shipment sample; reviewed with the tagger's entries visible and corrected, not regraded blind (12 Sep).
 - **Rare finds are decided at grading**, marked and priced by the tagger (at the senior's price when given); the hand-off flow was retired on 11 Sep.
 - **Cost data is hidden from taggers at the API**, not just the UI.
 - **Fuzzy brand matching skips 4-letter names** (*Zora* is not corrected to *Zara*) — deliberate.

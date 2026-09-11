@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Activity, ArrowRightLeft, Camera, ClipboardCheck, PanelLeftClose, PanelLeftOpen, Store, LayoutDashboard, Package, Search, SlidersHorizontal, Tag, Tags, Users, type LucideIcon } from "lucide-react";
+import { Activity, ArrowRightLeft, Award, Camera, ClipboardCheck, PanelLeftClose, PanelLeftOpen, Store, LayoutDashboard, Package, Search, SlidersHorizontal, Tag, Tags, Users, type LucideIcon } from "lucide-react";
 
 import { BrandLogo } from "@/components/brand-logo";
 import { ThemeSwitcher } from "@/components/theme-switcher";
@@ -19,7 +19,7 @@ const WORK: NavItem[] = [
   { href: "/items", label: "Items", icon: Search, hint: "Search & reprint" },
   { href: "/photos", label: "Photos", icon: Camera, hint: "Online garments to shoot" },
   { href: "/transfers", label: "Transfers", icon: ArrowRightLeft, hint: "Ship to outlets", min: "qc_senior" },
-  { href: "/qc", label: "QC", icon: ClipboardCheck, hint: "Regrade blind", min: "qc_senior" },
+  { href: "/qc", label: "QC", icon: ClipboardCheck, hint: "Review the tagging", min: "qc_senior" },
   { href: "/lots", label: "Lots", icon: Package, hint: "Bales & P&L", min: "manager" },
 ];
 
@@ -27,6 +27,7 @@ const ADMIN: NavItem[] = [
   { href: "/admin/pricing", label: "Pricing", icon: SlidersHorizontal, hint: "Constants & weights", min: "manager" },
   { href: "/admin/brands", label: "Brands", icon: Tags, hint: "Tiers & import", min: "manager" },
   { href: "/admin/staff", label: "Staff", icon: Users, hint: "Names & PINs", min: "manager" },
+  { href: "/admin/taggers", label: "Taggers", icon: Award, hint: "Monthly scorecard", min: "manager" },
   { href: "/pos", label: "POS", icon: Store, hint: "Outlet tills & sales", min: "manager" },
   { href: "/health", label: "Health", icon: Activity, min: "manager" },
 ];
