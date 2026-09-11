@@ -81,9 +81,12 @@ export function PhotosPage() {
     if (streamRef.current) return streamRef.current;
     const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: "environment" }, width: { ideal: 4096 }, height: { ideal: 4096 } } });
     streamRef.current = stream;
-    const v = videoRef.current!;
+    // The element is always mounted (hidden on the home screen), but give React a frame anyway.
+    let v = videoRef.current;
+    for (let i = 0; i < 10 && !v; i++) { await new Promise((r) => requestAnimationFrame(() => r(null))); v = videoRef.current; }
+    if (!v) throw new Error("camera view not ready — try again");
     v.srcObject = stream;
-    await v.play();
+    try { await v.play(); } catch { /* iOS may need the tap that already happened; the stream is attached either way */ }
     const s = stream.getVideoTracks()[0]?.getSettings();
     if (s?.width && s?.height) setCamInfo(`${s.width} × ${s.height}`);
     return stream;
@@ -243,8 +246,8 @@ export function PhotosPage() {
     </ul>
   );
 
-  // ---- Review: one picture, full screen
-  if (mode === "review" && current) {
+  // ---- Review: one picture, full screen, layered over the page so the camera stays mounted
+  const Review = mode === "review" && current && (() => {
     const a = current.adjust;
     return (
       <div className="fixed inset-0 z-50 flex flex-col bg-black text-white">
@@ -281,10 +284,11 @@ export function PhotosPage() {
         </div>
       </div>
     );
-  }
+  })();
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
+      {Review}
       {Progress}
       {Jobs}
       {error && <p className="text-sm text-destructive">{error}</p>}
@@ -350,9 +354,8 @@ export function PhotosPage() {
         </>
       )}
 
-      {/* ---- Scan / Shoot */}
-      {(mode === "scan" || mode === "shoot") && (
-        <Card className="overflow-hidden">
+      {/* ---- Scan / Shoot — always mounted so the camera stream has somewhere to go */}
+      <Card className={cn("overflow-hidden", (mode === "home" || mode === "review") && "hidden")}>
           <div className="relative aspect-square bg-black">
             <video ref={videoRef} playsInline muted className="h-full w-full object-cover" />
             {flash && <div className="absolute inset-0 bg-white/80" />}
@@ -388,6 +391,7 @@ export function PhotosPage() {
                   <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={onNative} />
                 </div>
                 {camInfo && <p className="text-[11px] text-muted-foreground">Camera {camInfo} · saved square at 2048 px for Shopify, under 1 MB</p>}
+                {shots.length > 0 && <p className="text-xs text-muted-foreground">Tap a picture to see it full screen and adjust brightness, contrast or rotation.</p>}
                 {shots.length > 0 && (
                   <div className="grid grid-cols-3 gap-2">
                     {shots.map((s, i) => (
@@ -409,7 +413,6 @@ export function PhotosPage() {
             )}
           </CardContent>
         </Card>
-      )}
       {mode !== "home" && <Button type="button" variant="ghost" className="w-full" onClick={goHome}><ScanLine className="size-4" /> Back to the list</Button>}
     </div>
   );
