@@ -362,15 +362,6 @@ export function PhotosPage() {
                 <div className="absolute bottom-3 left-0 right-0 text-center text-sm font-medium text-white drop-shadow">Point at the barcode on the tag</div>
               </>
             )}
-            {mode === "shoot" && garment && (
-              <div className="absolute left-0 right-0 top-0 bg-black/55 px-3 py-2 text-white">
-                <div className="font-mono text-xs">{garment.sku}{garment.channel !== "online" ? " · outlet stock" : ""}</div>
-                <div className="text-sm font-semibold">{garment.brand ?? "—"} · {garment.sub_category}{garment.size_label ? ` · ${garment.size_label}` : ""} · {GRADE[garment.grade] ?? garment.grade}</div>
-                {garment.photos > 0 && (
-                  <label className="mt-1 flex items-center gap-2 text-xs text-amber-300"><Checkbox checked={replaceOld} onCheckedChange={(v) => setReplaceOld(v === true)} className="border-white" /> Already has {garment.photos} picture{garment.photos === 1 ? "" : "s"} — {replaceOld ? "replace them with the new ones" : "keep them and add the new ones"}</label>
-                )}
-              </div>
-            )}
             <button type="button" onClick={goHome} className="absolute right-2 top-2 rounded-full bg-black/60 p-2 text-white" aria-label="Close"><X className="size-5" /></button>
           </div>
           <CardContent className="space-y-3 p-3">
@@ -379,6 +370,15 @@ export function PhotosPage() {
                 <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="…or type the SKU" className="h-11 font-mono" autoComplete="off" autoCapitalize="characters" />
                 <Button type="submit" variant="outline" className="h-11">Open</Button>
               </form>
+            )}
+            {mode === "shoot" && garment && (
+              <div className="rounded-md border px-3 py-2">
+                <div className="font-mono text-xs text-muted-foreground">{garment.sku}{garment.channel !== "online" ? " · outlet stock" : ""}</div>
+                <div className="text-sm font-semibold">{garment.brand ?? "—"} · {garment.sub_category}{garment.size_label ? ` · ${garment.size_label}` : ""} · {GRADE[garment.grade] ?? garment.grade}</div>
+                {garment.photos > 0 && (
+                  <label className="mt-1 flex items-center gap-2 text-xs text-amber-700 dark:text-amber-300"><Checkbox checked={replaceOld} onCheckedChange={(v) => setReplaceOld(v === true)} /> Already has {garment.photos} picture{garment.photos === 1 ? "" : "s"} — {replaceOld ? "replace them with the new ones" : "keep them and add the new ones"}</label>
+                )}
+              </div>
             )}
             {mode === "shoot" && (
               <>
