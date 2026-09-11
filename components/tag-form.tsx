@@ -454,7 +454,7 @@ export function TagForm() {
                 {WEARER_OPTIONS.map((w) => <option key={w.code} value={w.code}>{w.label}</option>)}
               </select>
             </Field>
-            <Field label={outlet ? "Garment type" : "Find a garment type"} hint={outlet && selectedSub ? `${selectedSub.name} · ${selectedSub.code}` : "Type a few letters — e.g. crop, jeans, hoodie"}>
+            <Field label="Find a garment type" hint="Shortcut — type a few letters, e.g. crop, jeans, hoodie. Or tap Category then Sub-category below.">
               <div className="relative">
                 <Input value={find} onChange={(e) => setFind(e.target.value)} placeholder="Search sub-categories…" autoComplete="off" onKeyDown={(e) => { if (e.key === "Enter" && hits[0]) { e.preventDefault(); e.stopPropagation(); pick(hits[0]); } }} />
                 {hits.length > 0 && (
@@ -466,23 +466,28 @@ export function TagForm() {
                 )}
               </div>
             </Field>
-            {!outlet && (<>
-            <Field label="Category">
-              <select className={selectClass} value={category} onChange={(e) => setCategory(e.target.value)}>
-                {genders.length > 1
-                  ? GENDER_ORDER.filter((g) => cats.some((c) => c.gender === g)).map((g) => (
-                      <optgroup key={g} label={GENDER_LABELS[g]}>{cats.filter((c) => c.gender === g).map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}</optgroup>
-                    ))
-                  : cats.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}
-                {cats.length === 0 && <option value="">No categories for this wearer yet</option>}
-              </select>
-            </Field>
-            <Field label="Sub-category" hint={selectedSub ? `${selectedSub.code} · ${selectedSub.weight_kg} kg · ${selectedSub.profile_code}` : subs.length ? undefined : "Nothing under this category yet — add it under Pricing"}>
-              <select className={selectClass} value={sub} onChange={(e) => setSub(e.target.value)}>
-                {subs.map((s) => <option key={s.slug} value={s.slug}>{s.name}</option>)}
-              </select>
-            </Field>
-            </>)}
+            <div className="grid gap-2 sm:col-span-2">
+              <Label>Category</Label>
+              <div className="flex flex-wrap gap-2">
+                {cats.map((c) => (
+                  <Button key={c.slug} type="button" size="sm" variant={c.slug === category ? "default" : "outline"} onClick={() => setCategory(c.slug)} className="h-11 px-4 text-sm md:h-8 md:px-3 md:text-xs">
+                    {genders.length > 1 ? `${GENDER_LABELS[c.gender]} · ${c.name}` : c.name}
+                  </Button>
+                ))}
+                {cats.length === 0 && <p className="text-xs text-muted-foreground">No categories for this wearer yet — add one under Pricing.</p>}
+              </div>
+            </div>
+            <div className="grid gap-2 sm:col-span-2">
+              <Label>Sub-category {selectedSub && <span className="font-normal text-muted-foreground">· {selectedSub.code}{outlet ? "" : ` · ${selectedSub.profile_code}`}</span>}</Label>
+              <div className="flex flex-wrap gap-2">
+                {subs.map((sc) => (
+                  <Button key={sc.slug} type="button" size="sm" variant={sc.slug === sub ? "default" : "outline"} onClick={() => { setSub(sc.slug); requestAnimationFrame(() => brandRef.current?.focus()); }} className="h-11 px-4 text-sm md:h-8 md:px-3 md:text-xs">
+                    {sc.name}
+                  </Button>
+                ))}
+                {subs.length === 0 && <p className="text-xs text-muted-foreground">Nothing under this category yet — add it under Pricing.</p>}
+              </div>
+            </div>
           </CardContent>
         </Card>
 
