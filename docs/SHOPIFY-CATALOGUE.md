@@ -5,9 +5,12 @@ website's navigation. Every garment carries tags built from it, Shopify's
 automated collections pick garments up by those tags, and the menu links to
 the collections. Change the catalogue here, and the website follows.
 
-Status: **proposal for Usman to approve.** Nothing below is in the database
-yet. Existing sub-categories are marked *(have)*; everything else is new.
-Broad ones to switch off once the specific ones exist are marked *(retire)*.
+Status: **applied to the database on 12 Sep 2026** by
+`scripts/seed-catalogue-2026-09.mjs` (Usman approved the tree). Everything
+below is live on the Catalogue screen; *(have)* marks what already existed
+(renamed to these names), *(retire)* marks the broad ones now switched off.
+Numbers for the new sub-categories were copied from the dearest sibling in
+the same category and should be tuned in Pricing → Categories.
 
 ## How the tags will work
 
