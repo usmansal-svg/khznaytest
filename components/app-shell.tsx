@@ -10,25 +10,25 @@ import { ThemeSwitcher } from "@/components/theme-switcher";
 import { cn } from "@/lib/utils";
 
 type Role = "tagger" | "qc_senior" | "manager" | "founder" | "photographer" | "cashier" | "outlet_manager";
-type NavItem = { href: string; label: string; icon: LucideIcon; hint?: string; min?: Role };
+type NavItem = { href: string; label: string; icon: LucideIcon; min?: Role };
 const RANK: Record<Role, number> = { tagger: 0, qc_senior: 1, manager: 2, founder: 3, photographer: 0, cashier: 0, outlet_manager: 1 };
 
 const WORK: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, hint: "Master view", min: "manager" },
-  { href: "/tag", label: "Tag item", icon: Tag, hint: "Grade, price, print" },
-  { href: "/items", label: "Items", icon: Search, hint: "Search & reprint" },
-  { href: "/photos", label: "Photos", icon: Camera, hint: "Online garments to shoot" },
-  { href: "/transfers", label: "Transfers", icon: ArrowRightLeft, hint: "Pack, dispatch, receive", min: "qc_senior" },
-  { href: "/floor", label: "Floor stock", icon: Store, hint: "Stockroom to floor", min: "qc_senior" },
-  { href: "/qc", label: "QC", icon: ClipboardCheck, hint: "Review the tagging", min: "qc_senior" },
-  { href: "/lots", label: "Lots", icon: Package, hint: "From the commercial software", min: "manager" },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, min: "manager" },
+  { href: "/tag", label: "Tag item", icon: Tag },
+  { href: "/items", label: "Items", icon: Search },
+  { href: "/photos", label: "Photos", icon: Camera },
+  { href: "/transfers", label: "Transfers", icon: ArrowRightLeft, min: "qc_senior" },
+  { href: "/floor", label: "Floor stock", icon: Store, min: "qc_senior" },
+  { href: "/qc", label: "QC", icon: ClipboardCheck, min: "qc_senior" },
+  { href: "/lots", label: "Lots", icon: Package, min: "manager" },
 ];
 
 const ADMIN: NavItem[] = [
-  { href: "/admin/pricing", label: "Pricing", icon: SlidersHorizontal, hint: "Constants & weights", min: "manager" },
-  { href: "/admin/brands", label: "Brands", icon: Tags, hint: "Tiers & import", min: "manager" },
-  { href: "/admin/scorecard", label: "Scorecard", icon: Award, hint: "Monthly KPIs for everyone", min: "manager" },
-  { href: "/admin/settings", label: "Settings", icon: Settings, hint: "Staff, outlets, Shopify", min: "manager" },
+  { href: "/admin/pricing", label: "Pricing", icon: SlidersHorizontal, min: "manager" },
+  { href: "/admin/brands", label: "Brands", icon: Tags, min: "manager" },
+  { href: "/admin/scorecard", label: "Scorecard", icon: Award, min: "manager" },
+  { href: "/admin/settings", label: "Settings", icon: Settings, min: "manager" },
 ];
 
 /** `auth` is rendered by the server layout — AuthButton is a Server Component and must not be imported here. */
@@ -122,7 +122,6 @@ function NavGroup({ title, items, pathname }: { title: string; items: NavItem[];
               >
                 <item.icon className="size-4 shrink-0" />
                 <span className="flex-1">{item.label}</span>
-                {item.hint && <span className="hidden text-[10px] text-muted-foreground xl:inline">{item.hint}</span>}
               </Link>
             </li>
           );
