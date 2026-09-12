@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ArrowRightLeft, Award, Camera, ClipboardCheck, PanelLeftClose, PanelLeftOpen, LayoutDashboard, Package, Search, Settings, SlidersHorizontal, Store, Tag, Tags, type LucideIcon } from "lucide-react";
+import { ArrowRightLeft, Award, Camera, ClipboardCheck, PanelLeftClose, PanelLeftOpen, LayoutDashboard, Network, Package, Search, Settings, SlidersHorizontal, Store, Tag, Tags, type LucideIcon } from "lucide-react";
 
 import { BrandLogo } from "@/components/brand-logo";
 import { ThemeSwitcher } from "@/components/theme-switcher";
@@ -25,6 +25,7 @@ const WORK: NavItem[] = [
 ];
 
 const ADMIN: NavItem[] = [
+  { href: "/admin/catalogue", label: "Catalogue", icon: Network, min: "manager" },
   { href: "/admin/pricing", label: "Pricing", icon: SlidersHorizontal, min: "manager" },
   { href: "/admin/brands", label: "Brands", icon: Tags, min: "manager" },
   { href: "/admin/scorecard", label: "Scorecard", icon: Award, min: "manager" },

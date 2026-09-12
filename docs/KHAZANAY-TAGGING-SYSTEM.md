@@ -48,6 +48,7 @@ Managers add staff at **Admin → Staff** (name, role, home outlet, PIN, daily t
 | Scorecard | `/admin/scorecard` | manager+ | Daily targets per person, and the monthly KPIs for everyone: taggers, photographers, QC reviewers; finalise scores (§8.1) |
 | Lots | `/lots` | manager+ | Read-only: lot number, description, quantity, tagged so far (§6). Purchasing lives in the commercial software |
 | Dashboard | `/dashboard` | manager+ | The founder's view (§10) |
+| Catalogue | `/admin/catalogue` | manager+ | The catalogue as a tree, gender → category → sub-category, each node showing the Shopify tag it produces (`Men`, `Men Shirts`, `Men Formal Shirt`); add, rename, switch off, delete (delete only when nothing references it). New sub-categories copy cost, weight, profile and value index from a sibling. Added 12 Sep for the website menu |
 | Pricing | `/admin/pricing` | manager+ | Constants, markdown ladder, selling profiles, grades, sub-categories, history (§4) |
 | Brands | `/admin/brands` | manager+ | Quick-pick list for the tag form; three tier columns; new-from-tagger tray |
 | Settings | `/admin/settings` | manager+ | Tabs: **Staff** (names, roles, PINs, home outlet), **Outlets** (names, cities, add, switch off), **Shopify** (connection, outlet → Shopify location, order webhook), **System** (live connection checks; also public at `/health`). Daily targets moved to the Scorecard (12 Sep) |

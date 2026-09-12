@@ -52,19 +52,39 @@ function title(s: string): string {
     .join(" ");
 }
 
+/** The catalogue gender as the website menu names it: men → Men, women → Women, every child gender → Kids. */
+export function menuGender(gender: string | null | undefined): string {
+  return gender === "men" ? "Men" : gender === "women" ? "Women" : "Kids";
+}
+
+/**
+ * The three tags a catalogue node produces, exactly as the Catalogue tree
+ * shows them and as Shopify collections should be built on them:
+ *   gender "Men" · category "Men Shirts" · sub-category "Men Formal Shirt".
+ */
+export function menuTags(gender: string | null | undefined, category: string, subCategory?: string | null) {
+  const g = menuGender(gender);
+  const cat = title(category.trim());
+  return { gender: g, category: `${g} ${cat}`, sub: subCategory ? `${g} ${title(garmentType(subCategory))}` : null, type: subCategory ? title(garmentType(subCategory)) : null };
+}
+
 export function shopifyTags(item: TaggableItem): string[] {
   const tags: string[] = [];
   const wearer = item.wearer ? WEARER[item.wearer] : undefined;
   const type = title(garmentType(item.sub_category));
+  const category = title(item.category.trim());
   const band = item.wearer ? BAND[item.wearer] : undefined;
   const kids = !!item.wearer && !["men", "women", "unisex"].includes(item.wearer);
+  // The menu genders this garment belongs under: Men, Women, Kids — both for a unisex adult piece.
+  const menus = kids ? ["Kids"] : item.wearer === "unisex" ? ["Men", "Women"] : wearer ? [wearer] : [];
 
   if (wearer) tags.push(wearer);
   if (band && band !== wearer) tags.push(band);
   if (kids && band !== "Kids" && wearer !== "Kids") tags.push("Kids");
+  for (const m of menus) { if (!tags.includes(m)) tags.push(m); tags.push(`${m} ${category}`); tags.push(`${m} ${type}`); }
+  tags.push(category);
   tags.push(type);
-  if (wearer) tags.push(`${wearer} ${type}`); // the collection tag: "Men Hoodie"
-  if (kids) tags.push(`Kids ${type}`);
+  if (wearer && !menus.includes(wearer)) tags.push(`${wearer} ${type}`); // "Kids Girls Hoodie"
   if (item.season && SEASON[item.season]) {
     // Season on its own, and combined with wearer and type, so a collection
     // can be built on any of "Summer", "Summer T-Shirt" or "Summer Men T-Shirt".
