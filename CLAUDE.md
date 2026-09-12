@@ -97,7 +97,16 @@ these are unset.
   per-item decisions `items.stage_override` / `items.pull_requested`. The
   floor sweep here honours those two columns (`lib/pricing/floor.ts`).
   All migrations stay in this repo.
-- **POS**: parked in `archive/pos`, to become its own project.
+- **POS** (`../khazanay-pos`, built 13 Sep 2026 from `archive/pos`): the
+  outlets' till, receiving, floor stock (floor / sweep / pull), sales,
+  returns and voids, till sessions, and HQ sales reports. It reads `items`,
+  `transfers`, the pricing `settings`; writes `items.status` (on_floor,
+  sold, pulled, returned_damaged, missing), `floored_on/colour_tag/floored_by`,
+  `pulled_at/pulled_by`, `received_at/outlet_id`, plus `sales`, `sale_items`,
+  `till_sessions`, `shopify_sync_queue`, `admin_audits`. The till and the
+  sweep honour Commercials' `stage_override` / `pull_requested`. Its copies
+  of `lib/pricing/{constants,engine,floor,repo}.ts` and `lib/auth/*` must be
+  kept in step with this repo. `archive/pos` is history only.
 
 ## Known scaffolding (remove as the app takes shape)
 

@@ -1,5 +1,9 @@
 # POS — parked here for its own project
 
+**Lifted on 13 September 2026** into its own project at `../khazanay-pos`
+(GitHub `usmansal-svg/khazanay-pos`, live at https://khazanay-pos.vercel.app).
+This folder is history only: change the POS there, not here.
+
 Built 12 September 2026 inside the tagging repo, then moved out of the app the same day because the POS is to be separate software. Nothing in this folder is compiled or deployed.
 
 What is here:

@@ -158,7 +158,7 @@ export function CatalogueTree() {
                     </select>
                     <div className="text-right text-xs text-muted-foreground tabular-nums" title="Garments tagged under it">{s.items ? `${s.items} tagged` : ""}</div>
                     <div className="flex items-center justify-end gap-1">
-                      <IconButton title="Try this garment: see every tag it would get" onClick={() => { setPreview((p) => ({ ...p, cat: current.slug, sub: s.slug, wearer: DEFAULT_WEARER[gender] ?? "men" })); window.scrollTo({ top: 0, behavior: "smooth" }); }}><FlaskConical className="size-3.5" /></IconButton>
+                      <IconButton title="Try this garment: see every tag it would get" onClick={() => { setPreview((p) => ({ ...p, cat: current.slug, sub: s.slug, wearer: DEFAULT_WEARER[gender] ?? "men", season: s.season === "winter" ? "winter" : s.season === "summer" ? "summer" : p.season })); window.scrollTo({ top: 0, behavior: "smooth" }); }}><FlaskConical className="size-3.5" /></IconButton>
                       {!s.active && <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy} onClick={() => act({ action: "toggle", kind: "sub", slug: s.slug, active: true }, `${s.name} restored.`)}>Restore</Button>}
                       <IconButton title={s.items ? `Delete (${s.items} garments use it, so it will be hidden and kept for them)` : "Delete"} danger disabled={busy} onClick={() => { if (window.confirm(`Delete “${s.name}”?${s.items ? ` ${s.items} garments were tagged under it, so it will be hidden and kept for them.` : ""}`)) void act({ action: "delete", kind: "sub", slug: s.slug }, `${s.name} deleted.`); }}><Trash2 className="size-3.5" /></IconButton>
                     </div>
