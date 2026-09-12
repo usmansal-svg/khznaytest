@@ -166,7 +166,7 @@ export function ItemSearch() {
                   <tr>
                     <th className="pb-2 pr-2"><Checkbox checked={allVisiblePicked} onCheckedChange={toggleAll} aria-label="Select all shown" /></th>
                     <th className="pb-2 pr-2">SKU</th>
-                    {COLS.map((c) => <th key={c.key} className="pb-2 pr-2"><HeaderFilter label={c.label} values={valuesFor(c.key)} selected={filters[c.key]} onChange={(v) => setFilters((f) => ({ ...f, [c.key]: v }))} format={c.format} /></th>)}
+                    {COLS.map((c) => <th key={c.key} className="whitespace-nowrap pb-2 pr-2"><HeaderFilter label={c.label} values={valuesFor(c.key)} selected={filters[c.key]} onChange={(v) => setFilters((f) => ({ ...f, [c.key]: v }))} format={c.format} /></th>)}
                     <th className="pb-2 text-right">Price</th>
                     <th className="pb-2"></th>
                   </tr>
@@ -175,16 +175,16 @@ export function ItemSearch() {
                   {visible.map((r) => (
                     <tr key={r.id} className={cn(picked.has(r.sku) && "bg-muted/40")}>
                       <td className="py-2 pr-2"><Checkbox checked={picked.has(r.sku)} onCheckedChange={(v) => setPicked((p) => { const n = new Set(p); if (v === true) n.add(r.sku); else n.delete(r.sku); return n; })} aria-label={`Select ${r.sku}`} /></td>
-                      <td className="py-2 pr-2 font-mono text-xs"><a href={`/items/${r.sku}`} className="underline-offset-2 hover:underline">{r.sku}</a>{r.rare ? " ★" : ""}</td>
+                      <td className="whitespace-nowrap py-2 pr-2 font-mono text-xs"><a href={`/items/${r.sku}`} className="underline-offset-2 hover:underline">{r.sku}</a>{r.rare ? " ★" : ""}</td>
                       <td className="py-2 pr-2 font-mono text-xs">{r.lot ?? "—"}</td>
                       <td className="py-2 pr-2">{r.brand || <span className="text-muted-foreground">—</span>}</td>
                       <td className="py-2 pr-2">{r.sub_category}</td>
                       <td className="py-2 pr-2">{GRADE[r.grade] ?? r.grade}</td>
                       <td className="py-2 pr-2">{r.size_label ?? "—"}</td>
-                      <td className="py-2 pr-2"><span className={cn("rounded-full border px-2 py-0.5 text-xs", /^On floor|Online shelf|^Sold$/.test(r.station) ? "border-green-600 text-green-700 dark:text-green-400" : /^Missing/.test(r.station) ? "border-red-500 text-red-700 dark:text-red-300" : /transit|Packing|Receiving|Stockroom/.test(r.station) ? "border-sky-500 text-sky-700 dark:text-sky-300" : /QC|Set aside|Pulled|damaged|Rejected|Unlisted/.test(r.station) ? "border-amber-500 text-amber-700 dark:text-amber-300" : "text-muted-foreground")}>{r.station}</span></td>
-                      <td className="py-2 pr-2 text-xs text-muted-foreground">{r.channel === "online" ? "Online store" : "Outlet"}</td>
+                      <td className="whitespace-nowrap py-2 pr-2"><span className={cn("inline-block whitespace-nowrap rounded-full border px-2 py-0.5 text-xs", /^On floor|Online shelf|^Sold$/.test(r.station) ? "border-green-600 text-green-700 dark:text-green-400" : /^Missing/.test(r.station) ? "border-red-500 text-red-700 dark:text-red-300" : /transit|Packing|Receiving|Stockroom/.test(r.station) ? "border-sky-500 text-sky-700 dark:text-sky-300" : /QC|Set aside|Pulled|damaged|Rejected|Unlisted/.test(r.station) ? "border-amber-500 text-amber-700 dark:text-amber-300" : "text-muted-foreground")}>{r.station}</span></td>
+                      <td className="whitespace-nowrap py-2 pr-2 text-xs text-muted-foreground">{r.channel === "online" ? "Online store" : "Outlet"}</td>
                       <td className="py-2 pr-2 text-xs text-muted-foreground">{r.tagged_by ?? "—"}</td>
-                      <td className="py-2 pr-2 text-xs">{r.shopify ? <span className={cn("rounded-full border px-2 py-0.5", r.shopify_error ? "border-red-400 text-red-700 dark:text-red-300" : r.shopify === "draft" ? "text-muted-foreground" : "border-sky-500 text-sky-700 dark:text-sky-300")} title={r.shopify_error ?? undefined}>{SHOPIFY_LABEL[r.shopify] ?? r.shopify}{r.shopify_error ? " ⚠" : ""}</span> : <span className="text-muted-foreground">—</span>}{r.shopify_error && <div className="mt-0.5 max-w-[16rem] text-[10px] leading-tight text-red-700 dark:text-red-300">{r.shopify_error.slice(0, 140)}</div>}</td>
+                      <td className="py-2 pr-2 text-xs">{r.shopify ? <span className={cn("inline-block whitespace-nowrap rounded-full border px-2 py-0.5", r.shopify_error ? "border-red-400 text-red-700 dark:text-red-300" : r.shopify === "draft" ? "text-muted-foreground" : "border-sky-500 text-sky-700 dark:text-sky-300")} title={r.shopify_error ?? undefined}>{SHOPIFY_LABEL[r.shopify] ?? r.shopify}{r.shopify_error ? " ⚠" : ""}</span> : <span className="text-muted-foreground">—</span>}{r.shopify_error && <div className="mt-0.5 max-w-[16rem] text-[10px] leading-tight text-red-700 dark:text-red-300">{r.shopify_error.slice(0, 140)}</div>}</td>
                       <td className="py-2 text-right tabular-nums">{r.list_price != null ? pkr(r.list_price) : "—"}</td>
                       <td className="py-2 text-right"><Button asChild size="sm" variant="outline"><a href={`/items/${r.sku}/print`} target="_blank" rel="noreferrer"><Printer className="size-4" /> Tag</a></Button></td>
                     </tr>
