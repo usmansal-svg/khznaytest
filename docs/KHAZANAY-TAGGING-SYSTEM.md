@@ -152,7 +152,7 @@ Taggers see only the shelf price and the grade prices — no cost, margin or lad
 
 ## 6. Lots (read-only here since 12 Sep)
 
-A **lot** is a purchase, and purchasing is **commercial**: supplier, basis, rate, kg or pieces, duty and tax treatment, splits, closing with true-up and the lot P&L all moved to Usman's commercial software (the code is kept in `archive/lots/` with the table contract). Both systems share one database; the commercial software **owns** `public.lots` and this app **reads** five columns only: `id`, `code`, `description`, `pieces` (quantity expected) and `status`. Financial columns are never selected.
+A **lot** is a purchase, and purchasing is **commercial**: supplier, basis, rate, kg or pieces, duty and tax treatment, splits, closing with true-up and the lot P&L all moved to **Khazanay Commercials** (khazanay-commercials.vercel.app → Lots → *Record & manage*; the original code is kept in `archive/lots/` with the table contract). Both systems share one database; the commercial software **owns** `public.lots` and this app **reads** five columns only: `id`, `code`, `description`, `pieces` (quantity expected) and `status`. Financial columns are never selected.
 
 In this app: **Lots** (`/lots`, manager+) lists each lot's number, description, quantity, garments tagged so far, rejects, progress and status. The tag form's lot picker offers the **open** lots as `LOT-0001 · description` with *n of pieces tagged*; a garment must be tagged against a lot (provenance), and the lot's code goes on the Items screen, the export and the dashboard's progress bars. Closing a lot is done in the commercial software; a closed or split lot is refused on the tag form.
 
