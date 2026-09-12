@@ -20,14 +20,14 @@ import { cn } from "@/lib/utils";
 type Row = { id: number; sku: string; brand: string; sub_category: string; category: string; gender: string; lot: string | null; grade: string; size_label: string | null; station: string; outlet: string | null; tagged_by: string | null; season: string | null; wearer: string | null; rare: boolean; list_price: number | null; tagged_at: string; channel: string; shopify: string | null; shopify_error: string | null };
 const GRADE: Record<string, string> = { bnwt: "BNWT", premium: "Premium", excellent: "Excellent", very_good: "Very Good", rejected: "Rejected" };
 const pkr = (n: number) => `Rs ${Math.round(n).toLocaleString("en-PK")}`;
-type Key = "lot" | "brand" | "sub_category" | "grade" | "size_label" | "station" | "channel" | "tagged_by" | "shopify";
+type Key = "lot" | "brand" | "sub_category" | "grade" | "size_label" | "station" | "channel" | "shopify";
 const COLS: { key: Key; label: string; format?: (v: string) => string }[] = [
   { key: "lot", label: "Lot" }, { key: "brand", label: "Brand" }, { key: "sub_category", label: "Item" }, { key: "grade", label: "Grade", format: (g) => GRADE[g] ?? g },
-  { key: "size_label", label: "Size" }, { key: "station", label: "Station" }, { key: "channel", label: "Channel", format: (c) => (c === "online" ? "Online store" : "Outlet") }, { key: "tagged_by", label: "Tagger" },
+  { key: "size_label", label: "Size" }, { key: "station", label: "Station" }, { key: "channel", label: "Channel", format: (c) => (c === "online" ? "Online store" : "Outlet") },
   { key: "shopify", label: "Shopify", format: (v) => SHOPIFY_LABEL[v] ?? v },
 ];
 const SHOPIFY_LABEL: Record<string, string> = { "—": "Not on Shopify", pos: "POS only", online: "Website only", both: "Website + POS", draft: "Draft (hidden)" };
-const empty = (): Record<Key, Set<string>> => ({ lot: new Set(), brand: new Set(), sub_category: new Set(), grade: new Set(), size_label: new Set(), station: new Set(), channel: new Set(), tagged_by: new Set(), shopify: new Set() });
+const empty = (): Record<Key, Set<string>> => ({ lot: new Set(), brand: new Set(), sub_category: new Set(), grade: new Set(), size_label: new Set(), station: new Set(), channel: new Set(), shopify: new Set() });
 const valueOf = (r: Row, k: Key) => String(r[k] ?? "—");
 
 export function ItemSearch() {
@@ -199,13 +199,12 @@ export function ItemSearch() {
                       <td className="py-2 pr-2">{r.size_label ?? "—"}</td>
                       <td className="whitespace-nowrap py-2 pr-2"><span className={cn("inline-block whitespace-nowrap rounded-full border px-2 py-0.5 text-xs", /^On floor|Online shelf|^Sold$/.test(r.station) ? "border-green-600 text-green-700 dark:text-green-400" : /^Missing/.test(r.station) ? "border-red-500 text-red-700 dark:text-red-300" : /transit|Packing|Receiving|Stockroom/.test(r.station) ? "border-sky-500 text-sky-700 dark:text-sky-300" : /QC|Set aside|Pulled|damaged|Rejected|Unlisted/.test(r.station) ? "border-amber-500 text-amber-700 dark:text-amber-300" : "text-muted-foreground")}>{r.station}</span></td>
                       <td className="whitespace-nowrap py-2 pr-2 text-xs text-muted-foreground">{r.channel === "online" ? "Online store" : "Outlet"}</td>
-                      <td className="py-2 pr-2 text-xs text-muted-foreground">{r.tagged_by ?? "—"}</td>
                       <td className="py-2 pr-2 text-xs">{r.shopify ? <span className={cn("inline-block whitespace-nowrap rounded-full border px-2 py-0.5", r.shopify_error ? "border-red-400 text-red-700 dark:text-red-300" : r.shopify === "draft" ? "text-muted-foreground" : "border-sky-500 text-sky-700 dark:text-sky-300")} title={r.shopify_error ?? undefined}>{SHOPIFY_LABEL[r.shopify] ?? r.shopify}{r.shopify_error ? " ⚠" : ""}</span> : <span className="text-muted-foreground">—</span>}{r.shopify_error && <div className="mt-0.5 max-w-[16rem] text-[10px] leading-tight text-red-700 dark:text-red-300">{r.shopify_error.slice(0, 140)}</div>}</td>
                       <td className="py-2 text-right tabular-nums">{r.list_price != null ? pkr(r.list_price) : "—"}</td>
                       <td className="py-2 text-right"><Button asChild size="sm" variant="outline"><a href={`/items/${r.sku}/print`} target="_blank" rel="noreferrer"><Printer className="size-4" /> Tag</a></Button></td>
                     </tr>
                   ))}
-                  {visible.length === 0 && <tr><td colSpan={13} className="py-6 text-center text-muted-foreground">Nothing matches these filters.</td></tr>}
+                  {visible.length === 0 && <tr><td colSpan={12} className="py-6 text-center text-muted-foreground">Nothing matches these filters.</td></tr>}
                 </tbody>
               </table>
             </div>
