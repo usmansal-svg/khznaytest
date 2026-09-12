@@ -486,13 +486,22 @@ export function TagForm() {
             </Field>
 
             <ButtonGroup label="Season" hint="Shows that season's catalogue; goes into the SKU and the Shopify tags" options={SEASON_OPTIONS} value={season} onChange={setSeason} />
-            {asksSleeve && <ButtonGroup label="Sleeves" hint="Goes to Shopify as a filter tag; the same garment type covers every sleeve length" options={SLEEVE_TYPES.map((t) => ({ code: t, label: t }))} value={sleeve as (typeof SLEEVE_TYPES)[number]} onChange={(v) => setSleeve(v)} />}
-            {selectedSub?.has_heavy && <ButtonGroup label="Weight" hint="This garment type has a heavy version: a heavy piece prices from its heavy cost. Same tag on the website." options={[{ code: "light", label: "Regular" }, { code: "heavy", label: "Heavy" }]} value={heavy ? "heavy" : "light"} onChange={(v) => setHeavy(v === "heavy")} />}
             <Field label="Wearer">
               <select className={selectClass} value={wearer} onChange={(e) => setWearer(e.target.value as Wearer)}>
                 {WEARER_OPTIONS.map((w) => <option key={w} value={w}>{WEARER_LABELS[w]}</option>)}
               </select>
             </Field>
+            <div className="grid gap-2 sm:col-span-2">
+              <Label>Category</Label>
+              <div className="flex flex-wrap gap-2">
+                {cats.map((c) => (
+                  <Button key={c.slug} type="button" size="sm" variant={c.slug === category ? "default" : "outline"} onClick={() => setCategory(c.slug)} className="h-11 px-4 text-sm md:h-8 md:px-3 md:text-xs">
+                    {genders.length > 1 ? `${GENDER_LABELS[c.gender]} · ${c.name}` : c.name}
+                  </Button>
+                ))}
+                {cats.length === 0 && <p className="text-xs text-muted-foreground">No categories for this wearer yet — add one under Pricing.</p>}
+              </div>
+            </div>
             <Field label="Find a garment type" hint="Shortcut — type a few letters, e.g. crop, jeans">
               <div className="relative">
                 <Input value={find} onChange={(e) => setFind(e.target.value)} placeholder="Search sub-categories…" autoComplete="off" onKeyDown={(e) => { if (e.key === "Enter" && hits[0]) { e.preventDefault(); e.stopPropagation(); pick(hits[0]); } }} />
@@ -506,17 +515,6 @@ export function TagForm() {
               </div>
             </Field>
             <div className="grid gap-2 sm:col-span-2">
-              <Label>Category</Label>
-              <div className="flex flex-wrap gap-2">
-                {cats.map((c) => (
-                  <Button key={c.slug} type="button" size="sm" variant={c.slug === category ? "default" : "outline"} onClick={() => setCategory(c.slug)} className="h-11 px-4 text-sm md:h-8 md:px-3 md:text-xs">
-                    {genders.length > 1 ? `${GENDER_LABELS[c.gender]} · ${c.name}` : c.name}
-                  </Button>
-                ))}
-                {cats.length === 0 && <p className="text-xs text-muted-foreground">No categories for this wearer yet — add one under Pricing.</p>}
-              </div>
-            </div>
-            <div className="grid gap-2 sm:col-span-2">
               <Label>Sub-category {selectedSub && <span className="font-normal text-muted-foreground">· {selectedSub.code}{outlet ? "" : ` · ${selectedSub.profile_code}`}</span>}</Label>
               <div className="flex flex-wrap gap-2">
                 {subs.map((sc) => (
@@ -527,6 +525,8 @@ export function TagForm() {
                 {subs.length === 0 && <p className="text-xs text-muted-foreground">Nothing under this category yet — add it under Pricing.</p>}
               </div>
             </div>
+            {asksSleeve && <ButtonGroup label="Sleeves" hint="Goes to Shopify as a filter tag; the same garment type covers every sleeve length" options={SLEEVE_TYPES.map((t) => ({ code: t, label: t }))} value={sleeve as (typeof SLEEVE_TYPES)[number]} onChange={(v) => setSleeve(v)} />}
+            {selectedSub?.has_heavy && <ButtonGroup label="Weight" hint="This garment type has a heavy version: a heavy piece prices from its heavy cost. Same tag on the website." options={[{ code: "light", label: "Regular" }, { code: "heavy", label: "Heavy" }]} value={heavy ? "heavy" : "light"} onChange={(v) => setHeavy(v === "heavy")} />}
           </CardContent>
         </Card>
 
