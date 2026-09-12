@@ -40,7 +40,14 @@ export async function pushItem(db: SupabaseClient, sku: string, visibility: Visi
   const imageUrls = originals.length ? originals.map((p) => cutFor(p)?.url ?? p.url) : cutouts.map((c) => c.url);
   const taggable = { wearer: item.wearer, season: item.season, category, sub_category: subCategory, brand: item.brand_text, brand_tier: item.brand_tier, grade: item.grade_code, size_label: item.size_label, colour: item.colour, fabric: item.fabric, is_rare: item.is_rare };
   const tags = shopifyTags(taggable);
-  const locationId = one<{ shopify_location_id: string | null }>(item.outlets)?.shopify_location_id ?? null;
+  // Received at an outlet: its own location. Otherwise the warehouse — the location mapped to the Online outlet —
+  // rather than whichever location Shopify happens to list first.
+  const receivedAt = one<{ shopify_location_id: string | null }>(item.outlets)?.shopify_location_id ?? null;
+  let locationId = receivedAt;
+  if (!locationId) {
+    const { data: online } = await db.from("outlets").select("shopify_location_id").eq("is_online", true).not("shopify_location_id", "is", null).limit(1).maybeSingle();
+    locationId = online?.shopify_location_id ?? null;
+  }
 
   try {
     const input = {
@@ -52,7 +59,7 @@ export async function pushItem(db: SupabaseClient, sku: string, visibility: Visi
       // else the store's default), and "continue selling when out of stock" so any outlet's POS can bill it.
       // Shopify shows "1 in stock" until it sells; the order webhook then takes it off Shopify.
       untracked: false,
-      sellAnywhere: !locationId,
+      sellAnywhere: !receivedAt,
       options: [{ name: "Size", value: item.size_label?.trim() || "One size" }, { name: "Condition", value: GRADE_NAME[item.grade_code] ?? item.grade_code }],
     };
     // Reuse a product that already exists for this SKU (a half-finished earlier upload) rather than making a second one.
