@@ -12,9 +12,12 @@ describe("station", () => {
   });
   it("walks an outlet garment from tagging to the outlet", () => {
     assert.equal(stationOf({ status: "tagged", channel: "outlet", online_status: null }), "Tagging station");
-    assert.equal(stationOf({ status: "tagged", channel: "outlet", online_status: null, transfer: { status: "open", outlet: "Lahore 1" } }), "To be dispatched · Lahore 1");
-    assert.equal(stationOf({ status: "tagged", channel: "outlet", online_status: null, transfer: { status: "sent", outlet: "Lahore 1" } }), "In transit · Lahore 1");
-    assert.equal(stationOf({ status: "on_floor", channel: "outlet", online_status: null, outlet: "Lahore 1", transfer: { status: "received", outlet: "Lahore 1" } }), "Received · Lahore 1");
+    assert.equal(stationOf({ status: "tagged", channel: "outlet", online_status: null, transfer: { status: "packing", outlet: "Lahore 1" } }), "Packing · Lahore 1");
+    assert.equal(stationOf({ status: "tagged", channel: "outlet", online_status: null, transfer: { status: "dispatched", outlet: "Lahore 1" } }), "In transit · Lahore 1");
+    assert.equal(stationOf({ status: "tagged", channel: "outlet", online_status: null, transfer: { status: "receiving", outlet: "Lahore 1" } }), "Receiving · Lahore 1");
+    assert.equal(stationOf({ status: "tagged", channel: "outlet", online_status: null, outlet: "Lahore 1", received_at: "2026-01-01T09:00:00Z", transfer: { status: "received", outlet: "Lahore 1" } }), "Stockroom · Lahore 1");
+    assert.equal(stationOf({ status: "missing", channel: "outlet", online_status: null, transfer: { status: "received", outlet: "Lahore 1" } }), "Missing · Lahore 1");
+    assert.equal(stationOf({ status: "on_floor", channel: "outlet", online_status: null, outlet: "Lahore 1", transfer: { status: "received", outlet: "Lahore 1" } }), "On floor · Lahore 1");
   });
   it("holds and exceptions come first", () => {
     assert.equal(stationOf({ status: "tagged", channel: "outlet", online_status: null, qc_hold: true }), "QC rail");

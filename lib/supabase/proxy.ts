@@ -109,7 +109,7 @@ export async function updateSession(request: NextRequest) {
     }
     const managerOnly = ["/dashboard", "/lots", "/admin", "/api/dashboard", "/api/lots", "/api/admin", "/api/export"];
     const seniorUp = ["/floor", "/transfers", "/qc", "/api/floor", "/api/transfers", "/api/qc"];
-    const rank = { tagger: 0, qc_senior: 1, manager: 2, founder: 3, photographer: 0, cashier: 0, outlet_manager: 0 }[staff.role] ?? 0;
+    const rank = { tagger: 0, qc_senior: 1, manager: 2, founder: 3, photographer: 0, cashier: 0, outlet_manager: 1 }[staff.role] ?? 0;
     const need = managerOnly.some((p) => path.startsWith(p)) ? 2 : seniorUp.some((p) => path.startsWith(p)) ? 1 : 0;
     if (rank < need) {
       if (path.startsWith("/api/")) {

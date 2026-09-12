@@ -1,14 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Printer } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Globe, Printer, ScanLine } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
-type Row = { id: number; sku: string; brand: string; sub_category: string; size_label: string | null; list_price: number; colour_tag?: string | null; stage?: string; sticker?: string; price_today?: number; floored_on?: string | null };
-type Floor = { colour: string; pending: Row[]; stickers: Row[]; to_pull: Row[]; on_floor: number };
+type Row = { id: number; sku: string; brand: string; sub_category: string; size_label: string | null; list_price: number; colour_tag?: string | null; stage?: string; sticker?: string; price_today?: number; floored_on?: string | null; received_at?: string | null; on_shopify?: boolean };
+type Floor = { colour: string; today: string; pending: Row[]; floored_today: Row[]; in_transit: number; stickers: Row[]; to_pull: Row[]; on_floor: number };
 type Outlet = { id: number; name: string; is_online: boolean };
 
 const COLOUR: Record<string, string> = { red: "bg-red-500", blue: "bg-blue-500", green: "bg-green-500", yellow: "bg-yellow-400" };
@@ -16,9 +17,11 @@ const STICKER_CLASS: Record<string, string> = { md1: "bg-blue-100 text-blue-900 
 const rs = (n: number) => `Rs ${Math.round(n).toLocaleString("en-PK")}`;
 
 /**
- * Drop day (the 1st): floor everything tagged for this outlet in this
- * month's colour. Monthly sweep: the sticker list, one type at a time, then
- * pull four-colour-old stock.
+ * Flooring is its own step after receiving (12 Sep). The stockroom lists what
+ * has been received and not yet put out; scanning a tag floors that garment
+ * today, in this month's colour, under the scanner's name — or the whole
+ * stockroom goes out at once on drop day. Monthly sweep: the sticker list,
+ * one type at a time, then pull four-colour-old stock.
  */
 export function FloorPage() {
   const [outlets, setOutlets] = useState<Outlet[]>([]);
@@ -26,6 +29,10 @@ export function FloorPage() {
   const [floor, setFloor] = useState<Floor | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [scan, setScan] = useState("");
+  const [canPush, setCanPush] = useState(false);
+  const [pushing, setPushing] = useState<{ total: number; done: number; failed: string[] } | null>(null);
+  const scanRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async (id: string) => {
     if (!id) return;
@@ -40,7 +47,45 @@ export function FloorPage() {
       const first = j.tagger?.outlet_id ?? list[0]?.id;
       if (first) { setOutletId(String(first)); void load(String(first)); }
     });
+    fetch("/api/auth/me").then((r) => r.json()).then((j) => setCanPush(["manager", "founder"].includes(j.staff?.role))).catch(() => {});
   }, [load]);
+
+  async function floorScan() {
+    const sku = scan.trim().toUpperCase();
+    setScan("");
+    if (!sku) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/floor", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "floor", outlet_id: Number(outletId), skus: [sku] }) });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error);
+      setMessage(j.floored ? `${sku} is on the floor · ${j.colour} tag.` : j.refused?.[0] ?? `${sku} was not floored.`);
+      await load(outletId);
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Failed.");
+    } finally {
+      setBusy(false);
+      scanRef.current?.focus();
+    }
+  }
+
+  async function pushFloored() {
+    const skus = (floor?.floored_today ?? []).filter((r) => !r.on_shopify).map((r) => r.sku);
+    const name = outlets.find((o) => String(o.id) === outletId)?.name ?? "this outlet";
+    if (!skus.length || !window.confirm(`Upload ${skus.length} garments floored today to the Shopify POS for ${name}? They will be stocked at that outlet's Shopify location only.`)) return;
+    setPushing({ total: skus.length, done: 0, failed: [] });
+    for (let i = 0; i < skus.length; i += 25) {
+      const batch = skus.slice(i, i + 25);
+      try {
+        const res = await fetch("/api/shopify/push-bulk", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ skus: batch, visibility: "pos" }) });
+        const j = await res.json();
+        const bad = res.ok ? (j.results as { ok: boolean; sku: string; error?: string }[]).filter((r) => !r.ok).map((r) => `${r.sku}: ${r.error}`) : batch.map((s) => `${s}: ${j.error ?? "failed"}`);
+        setPushing((p) => p && { ...p, done: p.done + batch.length, failed: [...p.failed, ...bad] });
+      } catch (e) { setPushing((p) => p && { ...p, done: p.done + batch.length, failed: [...p.failed, ...batch.map((s) => `${s}: ${e instanceof Error ? e.message : "failed"}`)] }); }
+    }
+    setPushing((p) => { if (p) setMessage(p.failed.length ? `${p.total - p.failed.length} uploaded to Shopify POS · ${p.failed.length} failed: ${p.failed.slice(0, 3).join("; ")}` : `${p.total} garments uploaded to the Shopify POS for ${name}.`); return null; });
+    await load(outletId);
+  }
 
   async function act(action: "floor" | "pull") {
     setBusy(true);
@@ -64,8 +109,8 @@ export function FloorPage() {
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3 print:hidden">
         <div>
-          <h1 className="text-2xl font-bold">Floor</h1>
-          <p className="text-sm text-muted-foreground">Drop day on the 1st, sticker sweep once a month, pull what&apos;s four colours old.</p>
+          <h1 className="text-2xl font-bold">Floor stock</h1>
+          <p className="text-sm text-muted-foreground">Scan a received garment to put it on the floor today. Its colour and markdown clock start from the day it is floored, not the day it arrived. Sticker sweep once a month; pull what&apos;s four colours old.</p>
         </div>
         <div className="flex items-center gap-3">
           <select value={outletId} onChange={(e) => { setOutletId(e.target.value); setFloor(null); void load(e.target.value); }} className="h-11 rounded-md border border-input bg-transparent px-3 text-base">
@@ -79,21 +124,49 @@ export function FloorPage() {
         <>
           <div className="grid gap-3 sm:grid-cols-4 print:hidden">
             <Stat label="This month's colour" value={<span className="flex items-center gap-2 capitalize"><span className={cn("inline-block size-5 rounded-full", COLOUR[floor.colour])} />{floor.colour}</span>} />
-            <Stat label="Awaiting drop day" value={String(floor.pending.length)} />
-            <Stat label="On floor" value={String(floor.on_floor)} />
+            <Stat label="In the stockroom" value={String(floor.pending.length)} />
+            <Stat label="On floor" value={<>{floor.on_floor}{floor.in_transit ? <span className="ml-2 text-sm font-normal text-muted-foreground">· {floor.in_transit} box{floor.in_transit === 1 ? "" : "es"} on the way</span> : null}</>} />
             <Stat label="Stickers this month" value={String(floor.stickers.length)} />
           </div>
 
           <Card className="print:hidden">
             <CardHeader className="pb-3">
-              <CardTitle className="flex items-center justify-between text-base">
-                <span>Drop day · {floor.pending.length} tagged, not yet on the floor</span>
-                <Button disabled={busy || floor.pending.length === 0} onClick={() => act("floor")}>Floor all in {floor.colour}</Button>
+              <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
+                <span>Put on the floor · <span className="capitalize">{floor.colour}</span> tag today</span>
+                <Button variant="outline" disabled={busy || floor.pending.length === 0} onClick={() => { if (window.confirm(`Floor all ${floor.pending.length} garments in the stockroom today in ${floor.colour}?`)) void act("floor"); }}>Floor the whole stockroom ({floor.pending.length})</Button>
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              {floor.pending.length === 0 ? <p className="text-sm text-muted-foreground">Nothing waiting. Garments tagged for this outlet appear here until drop day.</p> : (
-                <p className="text-sm text-muted-foreground">Attach a <span className="font-semibold capitalize">{floor.colour}</span> sticker to each of these as it goes out, then press Floor all. {floor.pending.slice(0, 8).map((p) => p.sku).join(", ")}{floor.pending.length > 8 ? "…" : ""}</p>
+            <CardContent className="space-y-4">
+              <form onSubmit={(e) => { e.preventDefault(); void floorScan(); }} className="flex gap-2">
+                <div className="relative flex-1">
+                  <ScanLine className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
+                  <Input ref={scanRef} value={scan} onChange={(e) => setScan(e.target.value)} placeholder="Scan the tag as the garment goes out, then Enter" className="h-12 pl-10 text-base" autoComplete="off" autoCapitalize="characters" />
+                </div>
+                <Button type="submit" size="lg" disabled={busy || !scan.trim()}>Floor</Button>
+              </form>
+              <p className="text-xs text-muted-foreground">Attach a <span className="font-semibold capitalize">{floor.colour}</span> sticker to each garment as you scan it. Only received garments can be floored; anything still in transit is refused.</p>
+              {floor.floored_today.length > 0 && (
+                <div className="rounded-md border bg-muted/40 p-3 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-semibold">Floored today · {floor.floored_today.length}</span>
+                    {canPush && floor.floored_today.some((r) => !r.on_shopify) && (
+                      <Button size="sm" disabled={busy || pushing != null} onClick={pushFloored}><Globe className="size-4" /> {pushing ? `Uploading ${pushing.done}/${pushing.total}…` : `Upload ${floor.floored_today.filter((r) => !r.on_shopify).length} to Shopify POS`}</Button>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">{floor.floored_today.slice(0, 12).map((r) => r.sku).join(", ")}{floor.floored_today.length > 12 ? "…" : ""}</p>
+                </div>
+              )}
+              {floor.pending.length === 0 ? <p className="text-sm text-muted-foreground">The stockroom is empty. Garments appear here once a transfer to this outlet has been received.</p> : (
+                <div>
+                  <div className="mb-1 text-xs font-semibold uppercase text-muted-foreground">Stockroom · {floor.pending.length} received, not yet on the floor</div>
+                  <table className="w-full text-sm">
+                    <tbody className="divide-y">
+                      {floor.pending.map((l) => (
+                        <tr key={l.id}><td className="py-1 font-mono text-xs">{l.sku}</td><td className="py-1">{l.brand || "Unbranded"} · {l.sub_category}</td><td className="py-1">{l.size_label ?? "—"}</td><td className="py-1 text-right tabular-nums">{rs(l.list_price)}</td><td className="py-1 text-right text-xs text-muted-foreground">received {l.received_at ? new Date(l.received_at).toLocaleDateString("en-PK") : "—"}</td></tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </CardContent>
           </Card>

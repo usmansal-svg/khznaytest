@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 
-type Line = { sku: string; brand: string; sub_category: string; grade: string; size_label: string | null; list_price: number | null; qc?: boolean };
-type Transfer = { id: number; code: string; to_outlet: string; status: string; created_at: string; note: string | null; items: Line[] };
+type Line = { sku: string; brand: string; sub_category: string; grade: string; size_label: string | null; list_price: number | null; qc?: boolean; received_at: string | null; missing: boolean; unexpected: boolean };
+type Transfer = { id: number; code: string; to_outlet: string; status: string; created_at: string; created_by: string; sent_at: string | null; dispatched_by: string; boxes: number | null; carrier: string | null; received_at: string | null; received_by: string; missing_count: number | null; unexpected_count: number | null; note: string | null; items: Line[] };
+const LABEL: Record<string, string> = { packing: "Packing", dispatched: "In transit", receiving: "Receiving", received: "Received" };
 
 const rs = (n: number) => `Rs ${Math.round(n).toLocaleString("en-PK")}`;
 
@@ -24,11 +25,11 @@ export function TransferSheet({ id }: { id: number }) {
       <style>{`@page { size: A4; margin: 14mm; } @media print { .no-print { display: none } }`}</style>
       <div className="no-print mb-4 flex gap-3 text-sm"><button onClick={() => window.print()} className="rounded-md bg-black px-4 py-2 font-semibold text-white">Print</button><a href="/transfers" className="self-center underline">Back</a></div>
       <div className="flex items-start justify-between border-b pb-4">
-        <div><div className="text-2xl font-black">Khazanay · Transfer</div><div className="font-mono text-lg">{t.code}</div></div>
+        <div><div className="text-2xl font-black">Khazanay · Packing list</div><div className="font-mono text-lg">{t.code} <span className="ml-2 rounded-full border px-2 py-0.5 font-sans text-xs">{LABEL[t.status] ?? t.status}</span></div><div className="text-xs text-neutral-600">Packed by {t.created_by}{t.sent_at ? ` · dispatched ${new Date(t.sent_at).toLocaleDateString("en-PK")} by ${t.dispatched_by}` : ""}{t.boxes ? ` · ${t.boxes} box${t.boxes === 1 ? "" : "es"}` : ""}{t.carrier ? ` · ${t.carrier}` : ""}</div></div>
         <div className="text-right text-sm"><div className="text-xl font-bold">→ {t.to_outlet}</div><div>{new Date(t.created_at).toLocaleDateString("en-PK")}</div>{t.note && <div className="text-neutral-600">{t.note}</div>}</div>
       </div>
       <table className="mt-4 w-full text-sm">
-        <thead className="text-left text-xs uppercase text-neutral-500"><tr><th className="py-1">#</th><th className="py-1">SKU</th><th className="py-1">Garment</th><th className="py-1">Size</th><th className="py-1 text-right">Price</th><th className="py-1 text-center">✓</th></tr></thead>
+        <thead className="text-left text-xs uppercase text-neutral-500"><tr><th className="py-1">#</th><th className="py-1">SKU</th><th className="py-1">Garment</th><th className="py-1">Size</th><th className="py-1 text-right">Price</th><th className="py-1 text-center">{t.status === "received" ? "Received" : "✓"}</th></tr></thead>
         <tbody className="divide-y">
           {t.items.map((l, i) => (
             <tr key={l.sku}>
@@ -40,12 +41,13 @@ export function TransferSheet({ id }: { id: number }) {
               <td className="py-1.5">{l.brand || "Unbranded"} · {l.sub_category}</td>
               <td className="py-1.5">{l.size_label ?? "—"}</td>
               <td className="py-1.5 text-right tabular-nums">{l.list_price != null ? rs(l.list_price) : "—"}</td>
-              <td className="py-1.5 text-center"><span className="inline-block size-4 border" /></td>
+              <td className="py-1.5 text-center">{t.status === "received" ? (l.received_at ? "✓" : <span className="font-bold text-red-600">MISSING</span>) : <span className="inline-block size-4 border" />}{l.unexpected && <span className="ml-1 text-xs text-neutral-500">(not on list)</span>}</td>
             </tr>
           ))}
         </tbody>
       </table>
       <div className="mt-4 flex justify-between border-t pt-3 text-sm"><span>{t.items.length} garments</span><span className="font-semibold">{rs(t.items.reduce((s, l) => s + (l.list_price ?? 0), 0))} at list price</span></div>
+      {t.status === "received" && <div className="mt-3 text-sm">Received {t.received_at ? new Date(t.received_at).toLocaleString("en-PK") : ""} by {t.received_by} · {t.items.filter((l) => l.received_at).length} checked in · <span className={t.missing_count ? "font-bold text-red-600" : ""}>{t.missing_count ?? 0} missing</span>{t.unexpected_count ? ` · ${t.unexpected_count} not on the list` : ""}</div>}
       <div className="mt-10 grid grid-cols-2 gap-8 text-sm"><div className="border-t pt-2">Packed by</div><div className="border-t pt-2">Received by · date</div></div>
     </div>
   );

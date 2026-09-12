@@ -216,7 +216,7 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from("items")
-    .select("id, sku, brand_text, grade_code, size_label, colour_tag, status, channel, online_status, qc_hold, photos, price, price_manual, weight_kg, tagged_at, season, wearer, is_rare, shopify_product_id, shopify_visibility, shopify_error, sub_categories(name, gender, categories(name)), lots(code), outlets(name), staff:tagged_by(name), transfer_items(transfers(status, outlets!transfers_to_outlet_id_fkey(name)))")
+    .select("id, sku, brand_text, grade_code, size_label, colour_tag, status, channel, online_status, qc_hold, photos, price, price_manual, weight_kg, tagged_at, season, wearer, is_rare, shopify_product_id, shopify_visibility, shopify_error, received_at, sub_categories(name, gender, categories(name)), lots(code), outlets(name), staff:tagged_by(name), transfer_items(transfers(status, outlets!transfers_to_outlet_id_fkey(name)))")
     .order("tagged_at", { ascending: false })
     .limit(q ? 500 : 300);
 
@@ -252,7 +252,7 @@ export async function GET(request: Request) {
         colour_tag: r.colour_tag,
         status: r.status,
         channel: r.channel,
-        station: stationOf({ status: r.status, channel: r.channel, online_status: r.online_status, qc_hold: r.qc_hold, photos: r.photos as unknown[] | null, outlet, transfer: last ? { status: last.status, outlet: one<{ name: string }>(last.outlets)?.name ?? null } : null }),
+        station: stationOf({ status: r.status, channel: r.channel, online_status: r.online_status, qc_hold: r.qc_hold, photos: r.photos as unknown[] | null, outlet, received_at: r.received_at, transfer: last ? { status: last.status, outlet: one<{ name: string }>(last.outlets)?.name ?? null } : null }),
         outlet,
         tagged_by: one<{ name: string }>(r.staff)?.name ?? null,
         season: r.season,

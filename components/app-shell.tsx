@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Activity, ArrowRightLeft, Award, Camera, ClipboardCheck, PanelLeftClose, PanelLeftOpen, LayoutDashboard, Package, Search, SlidersHorizontal, Tag, Tags, Users, type LucideIcon } from "lucide-react";
+import { Activity, ArrowRightLeft, Award, Camera, ClipboardCheck, PanelLeftClose, PanelLeftOpen, LayoutDashboard, Package, Search, SlidersHorizontal, Store, Tag, Tags, Users, type LucideIcon } from "lucide-react";
 
 import { BrandLogo } from "@/components/brand-logo";
 import { ThemeSwitcher } from "@/components/theme-switcher";
@@ -11,14 +11,15 @@ import { cn } from "@/lib/utils";
 
 type Role = "tagger" | "qc_senior" | "manager" | "founder" | "photographer" | "cashier" | "outlet_manager";
 type NavItem = { href: string; label: string; icon: LucideIcon; hint?: string; min?: Role };
-const RANK: Record<Role, number> = { tagger: 0, qc_senior: 1, manager: 2, founder: 3, photographer: 0, cashier: 0, outlet_manager: 0 };
+const RANK: Record<Role, number> = { tagger: 0, qc_senior: 1, manager: 2, founder: 3, photographer: 0, cashier: 0, outlet_manager: 1 };
 
 const WORK: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, hint: "Master view", min: "manager" },
   { href: "/tag", label: "Tag item", icon: Tag, hint: "Grade, price, print" },
   { href: "/items", label: "Items", icon: Search, hint: "Search & reprint" },
   { href: "/photos", label: "Photos", icon: Camera, hint: "Online garments to shoot" },
-  { href: "/transfers", label: "Transfers", icon: ArrowRightLeft, hint: "Ship to outlets", min: "qc_senior" },
+  { href: "/transfers", label: "Transfers", icon: ArrowRightLeft, hint: "Pack, dispatch, receive", min: "qc_senior" },
+  { href: "/floor", label: "Floor stock", icon: Store, hint: "Stockroom to floor", min: "qc_senior" },
   { href: "/qc", label: "QC", icon: ClipboardCheck, hint: "Review the tagging", min: "qc_senior" },
   { href: "/lots", label: "Lots", icon: Package, hint: "Bales & P&L", min: "manager" },
 ];

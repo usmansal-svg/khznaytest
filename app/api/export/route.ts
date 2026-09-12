@@ -60,7 +60,7 @@ async function run(p: { what: string; format: string | null; from: string | null
       const m = (i.measurements ?? {}) as Record<string, unknown>;
       const tr = (i.transfer_items as { transfers: unknown }[] | null)?.map((t) => one<{ code: string; sent_at: string | null; received_at: string | null; status: string; outlets: unknown }>(t.transfers)).filter(Boolean).at(-1) ?? null;
       const outletName = one<{ name: string }>(i.outlets)?.name ?? "";
-      const station = stationOf({ status: i.status, channel: i.channel, online_status: i.online_status, qc_hold: i.qc_hold, photos: i.photos as unknown[] | null, outlet: outletName || null, transfer: tr ? { status: tr.status, outlet: one<{ name: string }>(tr.outlets)?.name ?? null } : null });
+      const station = stationOf({ status: i.status, channel: i.channel, online_status: i.online_status, qc_hold: i.qc_hold, photos: i.photos as unknown[] | null, outlet: outletName || null, received_at: i.received_at, transfer: tr ? { status: tr.status, outlet: one<{ name: string }>(tr.outlets)?.name ?? null } : null });
       return {
         sku: i.sku, station, tagged_at: pk(i.tagged_at), tagger: one<{ name: string }>(i.staff)?.name ?? "", lot: one<{ code: string; supplier: string }>(i.lots)?.code ?? "", supplier: one<{ code: string; supplier: string }>(i.lots)?.supplier ?? "",
         category: one<{ name: string }>(sub?.categories)?.name ?? "", sub_category: sub?.name ?? "", code: sub?.code ?? "",

@@ -42,7 +42,8 @@ Managers add staff at **Admin → Staff** (name, role, home outlet, PIN, daily t
 | Items | `/items` | tagger+ | Every garment with Lot, Brand, Item, Grade, Size, **Station**, Channel, Tagger; Excel-style filters on every column; tick boxes with Select all; export exactly the ticked rows or all shown, or by date range (managers) |
 | Garment | `/items/[sku]` | tagger+ | Channel, destination outlet, photos, listing preview, Shopify push |
 | Print tag | `/items/[sku]/print` · `/print?skus=…` | tagger+ | One tag, or a whole session's tags in one print job |
-| Transfers | `/transfers` | QC senior+ | Ship garments to an outlet (§7) |
+| Transfers | `/transfers` | QC senior+, outlet manager | Pack → dispatch → receive (scan-check) → reconcile (§7) |
+| Floor stock | `/floor` | QC senior+, outlet manager | Stockroom to floor by scan; colour, sweep, pull (§7) |
 | QC | `/qc` | QC senior+ | Review held garments: approve or correct the tagging (§8) |
 | Taggers | `/admin/taggers` | manager+ | Monthly scorecard: target achievement, QC accuracy, score, finalise (§8.1) |
 | Lots | `/lots` | manager+ | Purchases, splits, P&L (§6) |
@@ -51,7 +52,7 @@ Managers add staff at **Admin → Staff** (name, role, home outlet, PIN, daily t
 | Brands | `/admin/brands` | manager+ | Quick-pick list for the tag form; three tier columns; new-from-tagger tray |
 | Staff | `/admin/staff` | manager+ | Names, roles, PINs, targets |
 
-The Floor screen (drop day / monthly sweep) is not in this platform; it belongs to the POS. The public pricing demo at `/price` remains open and should be closed before real stock.
+The public pricing demo at `/price` remains open and should be closed before real stock.
 
 ---
 
@@ -147,7 +148,7 @@ Taggers see only the shelf price and the grade prices — no cost, margin or lad
 
 ---
 
-**Station** (`lib/pricing/station.ts`) says where a garment is in the words the floor uses, and is the same on the Items screen and in the export. Online: *Tagging → Photography station → Packing station → Online shelf → Sold*. Outlet: *Tagging station → To be dispatched · X → In transit · X → Received · X → Sold* (the wording of the previous system, matched 12 Sep). A received transfer has *Upload N to Shopify POS · outlet* for managers: the whole box goes up tracked at that outlet's Shopify location only. Either: *QC rail · Set aside · Pulled · Returned damaged · Rejected · Unlisted*.
+**Station** (`lib/pricing/station.ts`) says where a garment is in the words the floor uses, and is the same on the Items screen and in the export. Online: *Tagging → Photography station → Packing station → Online shelf → Sold*. Outlet: *Tagging station → Packing · X → In transit · X → Receiving · X → Stockroom · X → On floor · X → Sold*, and *Missing · X* for a garment never scanned in at the outlet (§7). Either: *QC rail · Set aside · Pulled · Returned damaged · Rejected · Unlisted*.
 
 ## 6. Lots
 
@@ -163,9 +164,20 @@ A **lot** is a purchase. Numbers are issued in sequence (`LOT-0001`, …) and ne
 
 ---
 
-## 7. Transfers (destination is decided by the supervisor)
+## 7. Transfers and flooring (changed 12 Sep)
 
-The tagger never chooses an outlet. A supervisor opens a transfer to an outlet, **scans tags onto it**, prints an A4 sheet with a barcode per line, marks it **sent**, and the outlet marks it **received** — which sets each garment's outlet and received time. Held-for-QC and set-aside garments are refused. The dashboard shows every shipment with created / dispatched / received times and transit hours.
+The tagger never chooses an outlet. A supervisor packs a box for an outlet and the outlet checks it in garment by garment, so every transfer reconciles what was sent against what arrived. Four steps, each stamped with who and when:
+
+| Step | Who | What happens | Station on Items |
+|---|---|---|---|
+| **Packing** | QC senior+ at the warehouse | *Start packing* opens a transfer to an outlet (`TRF-YYYYMMDD-0001`). Every tag is scanned into the box; held-for-QC, set-aside, online-channel, sold and below-minimum-grade garments are refused, as is a garment already on another open transfer. A garment can be scanned off again while packing. | *Packing · outlet* |
+| **In transit** | same | *Dispatch* (with an optional box count and carrier / driver) closes the list; nothing can be added after. The A4 **packing list** carries a barcode per line, the dispatch details and a tick column. | *In transit · outlet* |
+| **Receiving** | the outlet (QC senior+, or an outlet manager) | *Start receiving* when the box arrives, then scan every garment out of it. Each scan checks that line in (time and name). A garment in the box that is not on the list is accepted and marked **not on list** (its own transfer will show it missing). Progress shows *n of N checked in*. | *Receiving · outlet* |
+| **Received** | same | *Close receiving* reconciles: every line not scanned is flagged **missing** (the garment's status becomes `missing`, station *Missing · outlet*, red on Items) after a confirmation that lists them; the transfer stores received / missing / not-on-list counts and an audit row. A missing garment that turns up later is scanned in on the same transfer and becomes *found*. | *Stockroom · outlet* |
+
+**Receiving is not flooring.** A received garment sits in the outlet's **stockroom** until it is scanned on the **Floor stock** screen (`/floor`). That scan stamps `floored_on` (Pakistan date), the month's colour and who floored it, and moves the garment to *On floor · outlet*. A garment received on 1 January and floored on 5 January is floored on 5 January; one floored on 1 February gets February's colour. Only received garments can be floored (anything in transit is refused with the reason). *Floor the whole stockroom* does drop day in one go. The screen shows this month's colour, the stockroom (with each garment's received date), what was floored today, the monthly sticker sweep and the pull list. Managers can *Upload … to Shopify POS* from the Floor screen (today's floored garments) or from a received transfer (its checked-in garments): tracked, one unit, at that outlet's Shopify location only.
+
+The dashboard lists every shipment with its step, created / dispatched / received times and transit hours. The Items export carries each garment's station, transfer, dispatched and received times and floor date.
 
 Outlets: Karachi 1, Karachi 2, Islamabad, Lahore 1, Lahore 2, plus Online (rename to area names when ready).
 
