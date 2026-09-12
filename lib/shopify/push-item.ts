@@ -48,8 +48,12 @@ export async function pushItem(db: SupabaseClient, sku: string, visibility: Visi
       descriptionHtml: describe(item.description, item.measurements as Record<string, unknown>, item.grade_code, item.size_label, item.is_rare ? rareWebParagraphs((item as { rare_reasons?: string[] | null }).rare_reasons ?? [], (item as { rare_note?: string | null }).rare_note, await loadRareReasons(db)) : null),
       vendor: item.brand_text ?? "Khazanay", productType: subCategory, tags, sku, price, imageUrls,
       status: (visibility === "draft" ? "DRAFT" : "ACTIVE") as "DRAFT" | "ACTIVE", locationId,
-      // No outlet location mapped: leave stock untracked so any outlet's Shopify POS can sell it; the sale takes it off Shopify.
-      untracked: (visibility === "pos" || visibility === "both") && !locationId,
+      // The previous system's way, kept: one tracked unit (at the outlet's location if it has been received there,
+      // else the store's default), and "continue selling when out of stock" so any outlet's POS can bill it.
+      // Shopify shows "1 in stock" until it sells; the order webhook then takes it off Shopify.
+      untracked: false,
+      sellAnywhere: !locationId,
+      options: [{ name: "Size", value: item.size_label?.trim() || "One size" }, { name: "Condition", value: GRADE_NAME[item.grade_code] ?? item.grade_code }],
     };
     // Reuse a product that already exists for this SKU (a half-finished earlier upload) rather than making a second one.
     let productId = item.shopify_product_id as string | null;
@@ -88,6 +92,8 @@ export async function pushItem(db: SupabaseClient, sku: string, visibility: Visi
     return { ok: false, sku, error: message };
   }
 }
+
+const GRADE_NAME: Record<string, string> = { bnwt: "Brand New with Tags", premium: "Premium", excellent: "Excellent", very_good: "Very Good" };
 
 const GRADE_COPY: Record<string, string> = {
   bnwt: "Brand new with the original retail tags attached.",
