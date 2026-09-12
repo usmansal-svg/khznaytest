@@ -11,7 +11,7 @@ const hoodie = {
 describe("Shopify tags", () => {
   it("emits the collection tag Men Hoodie plus every filterable attribute", () => {
     const tags = shopifyTags(hoodie);
-    assert.deepEqual(tags, ["Men", "Men Winter Men Fashion", "Men Heavy Hoodie", "Winter Men Fashion", "Heavy Hoodie", "Winter", "Winter Heavy Hoodie", "Winter Men Heavy Hoodie", "Nike", "Affordable Luxury", "Size L", "Premium", "Black", "Cotton"]);
+    assert.deepEqual(tags, ["Men", "Men Winter Men Fashion", "Men Heavy Hoodie", "Winter", "Winter Men", "Winter Men Heavy Hoodie", "Nike", "Affordable Luxury", "Size L", "Premium", "Black", "Cotton"]);
   });
 
   it("strips the wearer prefix from the reference sub-category name", () => {

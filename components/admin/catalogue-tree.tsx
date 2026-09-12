@@ -122,7 +122,7 @@ export function CatalogueTree() {
                   {c.subs.filter((s) => showOff || s.active).map((s) => (
                     <span key={s.slug} className={cn("group inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-sm", s.active ? "border-sky-500 bg-sky-50 dark:bg-sky-950" : "border-dashed text-muted-foreground line-through")} title={`${s.tag ?? ""} · code ${s.code} · cost Rs ${s.cost ?? "—"} · ${s.items} tagged`}>
                       {s.name}
-                      <span className="font-mono text-[10px] text-muted-foreground no-underline">{s.tag?.replace(new RegExp(`^${GENDER_TAG[gender]} `), "")}</span>
+                      <span className="font-mono text-[10px] text-muted-foreground no-underline">{s.tag}</span>
                       {s.items > 0 && <span className="text-[10px] text-muted-foreground tabular-nums">· {s.items}</span>}
                       <span className="ml-1 hidden gap-0.5 group-hover:inline-flex">
                         <IconButton title="Rename" onClick={() => rename("sub", s.slug, s.name)} disabled={busy}><Pencil className="size-3" /></IconButton>

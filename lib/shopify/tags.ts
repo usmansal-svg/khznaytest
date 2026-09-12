@@ -38,8 +38,8 @@ const TIER: Record<string, string> = { affordable_luxury: "Affordable Luxury", u
 /**
  * The garment type without the wearer prefix the reference data carries:
  * "Men T-shirt" -> "T-shirt", "Women Sports Hoodie" -> "Sports Hoodie",
- * "Kids Jacket" -> "Jacket". Kept as its own tag so "Hoodie" collections
- * span men, women and kids.
+ * "Kids Jacket" -> "Jacket" — so the menu tag reads "Men T-Shirt", not
+ * "Men Men T-Shirt". Never emitted on its own.
  */
 export function garmentType(subCategory: string): string {
   return subCategory.replace(/^(Men|Women|Kids)\s+/i, "").trim();
@@ -81,16 +81,14 @@ export function shopifyTags(item: TaggableItem): string[] {
   if (wearer) tags.push(wearer);
   if (band && band !== wearer) tags.push(band);
   if (kids && band !== "Kids" && wearer !== "Kids") tags.push("Kids");
+  // Every catalogue tag carries the gender ("Men T-Shirt", never a bare
+  // "T-Shirt"), so a collection can never mix men's and women's garments.
   for (const m of menus) { if (!tags.includes(m)) tags.push(m); tags.push(`${m} ${category}`); tags.push(`${m} ${type}`); }
-  tags.push(category);
-  tags.push(type);
   if (wearer && !menus.includes(wearer)) tags.push(`${wearer} ${type}`); // "Kids Girls Hoodie"
   if (item.season && SEASON[item.season]) {
-    // Season on its own, and combined with wearer and type, so a collection
-    // can be built on any of "Summer", "Summer T-Shirt" or "Summer Men T-Shirt".
+    // Season on its own and with each menu gender: "Summer", "Summer Men", "Summer Men T-Shirt".
     tags.push(SEASON[item.season]);
-    tags.push(`${SEASON[item.season]} ${type}`);
-    if (wearer) tags.push(`${SEASON[item.season]} ${wearer} ${type}`);
+    for (const m of menus) { tags.push(`${SEASON[item.season]} ${m}`); tags.push(`${SEASON[item.season]} ${m} ${type}`); }
   }
   if (item.brand) tags.push(item.brand.trim());
   if (item.brand_tier && TIER[item.brand_tier]) tags.push(TIER[item.brand_tier]);
