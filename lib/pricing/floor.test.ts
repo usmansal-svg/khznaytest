@@ -26,6 +26,17 @@ describe("monthly sweep", () => {
     assert.deepEqual(s.to_pull.map((i) => i.sku), ["E"]);
   });
 
+  it("honours the commercials desk: a held stage beats the clock, a pull request pulls", () => {
+    const decided: FloorItem[] = [
+      { ...base, id: 10, sku: "H", floored_on: "2026-06-01", stage_override: "md1" }, // clock says last chance, desk says 25%
+      { ...base, id: 11, sku: "K", floored_on: "2026-07-01", stage_override: "full" }, // held at full price: no sticker
+      { ...base, id: 12, sku: "P", floored_on: "2026-09-01", pull_requested: true }, // this month, but pulled
+    ];
+    const d = sweep(decided, DEFAULT_SETTINGS, asOf);
+    assert.deepEqual(d.stickers.map((l) => [l.sku, l.sticker]), [["H", "25% OFF"]]);
+    assert.deepEqual(d.to_pull.map((i) => i.sku), ["P"]);
+  });
+
   it("orders by sticker type then sub-category so the operator works in runs", () => {
     const mixed: FloorItem[] = [
       { ...base, id: 7, sku: "Z", sub_category: "Women Skirt", floored_on: "2026-08-01" },

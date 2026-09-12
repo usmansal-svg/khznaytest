@@ -19,7 +19,7 @@ import { colourForMonth } from "@/lib/pricing/engine";
 import { sweep, type FloorItem } from "@/lib/pricing/floor";
 import { loadPricingContext } from "@/lib/pricing/repo";
 
-const SELECT = "id, sku, outlet_id, brand_text, size_label, price, price_manual, floored_on, colour_tag, status, received_at, shopify_product_id, sub_categories(name)";
+const SELECT = "id, sku, outlet_id, brand_text, size_label, price, price_manual, floored_on, colour_tag, status, received_at, shopify_product_id, stage_override, pull_requested, sub_categories(name)";
 const pkDate = (d = new Date()) => new Date(d.getTime() + 5 * 3600_000).toISOString().slice(0, 10);
 
 function toFloorItem(r: Record<string, unknown>): FloorItem {
@@ -35,6 +35,8 @@ function toFloorItem(r: Record<string, unknown>): FloorItem {
     floored_on: (r.floored_on as string | null) ?? null,
     colour_tag: (r.colour_tag as string | null) ?? null,
     status: r.status as string,
+    stage_override: (r.stage_override as FloorItem["stage_override"]) ?? null,
+    pull_requested: Boolean(r.pull_requested),
   };
 }
 

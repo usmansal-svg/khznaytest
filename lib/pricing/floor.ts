@@ -4,6 +4,10 @@
  * Stock is floored on the 1st, all in this month's colour; every month each
  * garment moves one rung down the ladder, so every on-floor garment with a
  * markdown needs a fresh sticker each sweep. Four colours back it is pulled.
+ *
+ * The commercials desk can override the clock per garment: a held stage
+ * (`stage_override`) wins over months on the floor, and a pull request
+ * (`pull_requested`) pulls it whatever the month.
  */
 
 import { depthsOf, type LadderStage, type Settings } from "./constants";
@@ -26,6 +30,8 @@ export type FloorItem = {
   floored_on: string | null;
   colour_tag: string | null;
   status: string;
+  stage_override?: LadderStage | null;
+  pull_requested?: boolean;
 };
 
 export type SweepLine = FloorItem & { stage: LadderStage; sticker: string; price_today: number };
@@ -36,8 +42,13 @@ export function sweep(items: FloorItem[], settings: Settings, asOf = new Date())
   const toPull: FloorItem[] = [];
   const stickers: SweepLine[] = [];
   for (const it of items) {
-    if (it.status !== "on_floor" || !it.floored_on) continue;
-    const stage = stageFor(new Date(it.floored_on), asOf);
+    if (it.status !== "on_floor") continue;
+    if (it.pull_requested) {
+      toPull.push(it);
+      continue;
+    }
+    if (!it.floored_on && !it.stage_override) continue;
+    const stage = it.stage_override ?? stageFor(new Date(it.floored_on!), asOf);
     if (stage === "pull") {
       toPull.push(it);
       continue;
