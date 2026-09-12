@@ -27,10 +27,10 @@ export const WEARER_LABELS: Record<Wearer, string> = {
 /** Which catalogue genders a wearer is tagged under. */
 export const WEARER_GENDERS: Record<Wearer, Gender[]> = {
   men: ["men"], women: ["women"], unisex: ["men", "women", "teenage", "kid", "toddler", "infant"],
-  teen_boy: ["teenage", "kid"], teen_girl: ["teenage", "kid"],
-  kids_boy: ["kid", "teenage"], kids_girl: ["kid", "teenage"],
-  toddler_boy: ["toddler", "kid"], toddler_girl: ["toddler", "kid"],
-  infant_boy: ["infant", "toddler"], infant_girl: ["infant", "toddler"],
+  teen_boy: ["teenage"], teen_girl: ["teenage"],
+  kids_boy: ["kid"], kids_girl: ["kid"],
+  toddler_boy: ["toddler"], toddler_girl: ["toddler"],
+  infant_boy: ["infant"], infant_girl: ["infant"],
   teenage: ["teenage"], kid: ["kid"], toddler: ["toddler"], infant: ["infant"], boy: ["kid", "toddler", "teenage"], girl: ["kid", "toddler", "teenage"],
 };
 /** Anyone under adult: kids size series on the tag form, Kids tags on Shopify. */

@@ -29,6 +29,7 @@ describe("Shopify tags", () => {
     assert.ok(tags.includes("Kids Hoodie"));
     const infant = shopifyTags({ ...hoodie, wearer: "infant_boy", category: "Children Winter", sub_category: "Kids Hoodie", size_label: "6–9 M" });
     assert.ok(infant.includes("Infant Boys") && infant.includes("Infants") && infant.includes("Kids"));
+    assert.ok(infant.includes("Infants Children Winter") && infant.includes("Infants Hoodie"), "an infant garment sits under the Infants menu, not Kids");
   });
 
   it("never emits duplicates and skips empty fields", () => {

@@ -55,9 +55,9 @@ function title(s: string): string {
     .join(" ");
 }
 
-/** The catalogue gender as the website menu names it: men → Men, women → Women, every child gender → Kids. */
+/** The catalogue gender as the website menu names it: Men, Women, Teens, Kids, Toddlers, Infants. */
 export function menuGender(gender: string | null | undefined): string {
-  return gender === "men" ? "Men" : gender === "women" ? "Women" : "Kids";
+  return { men: "Men", women: "Women", teenage: "Teens", kid: "Kids", toddler: "Toddlers", infant: "Infants" }[gender ?? ""] ?? "Kids";
 }
 
 /**
@@ -84,8 +84,9 @@ export function shopifyTags(item: TaggableItem): string[] {
   const category = title(item.category.trim());
   const band = item.wearer ? BAND[item.wearer] : undefined;
   const kids = !!item.wearer && !["men", "women", "unisex"].includes(item.wearer);
-  // The menu genders this garment belongs under: Men, Women, Kids — both for a unisex adult piece.
-  const menus = kids ? ["Kids"] : item.wearer === "unisex" ? ["Men", "Women"] : wearer ? [wearer] : [];
+  // The menu genders this garment belongs under: Men, Women, or the child's age
+  // band (Teens / Kids / Toddlers / Infants) — both Men and Women for a unisex adult piece.
+  const menus = kids ? [band ?? "Kids"] : item.wearer === "unisex" ? ["Men", "Women"] : wearer ? [wearer] : [];
 
   if (wearer) tags.push(wearer);
   if (band && band !== wearer) tags.push(band);
@@ -94,7 +95,7 @@ export function shopifyTags(item: TaggableItem): string[] {
   // "T-Shirt"), so a collection can never mix men's and women's garments.
   // A hand-set tag replaces the automatic one for the garment's own menu gender;
   // a unisex adult piece still gets the automatic tag for the other gender.
-  const own = kids ? "Kids" : item.wearer === "unisex" ? null : wearer;
+  const own = kids ? band ?? "Kids" : item.wearer === "unisex" ? null : wearer;
   const catTag = (m: string) => (m === own && item.category_tag?.trim()) || `${m} ${category}`;
   const subTag = (m: string) => (m === own && item.sub_tag?.trim()) || `${m} ${type}`;
   for (const m of menus) { if (!tags.includes(m)) tags.push(m); tags.push(catTag(m)); tags.push(subTag(m)); }

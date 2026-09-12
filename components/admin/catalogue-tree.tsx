@@ -21,8 +21,8 @@ type Cat = { slug: string; name: string; active: boolean; tag: string; auto_tag:
 type Branch = { gender: string; categories: Cat[] };
 type Preview = { wearer: Wearer; season: "summer" | "winter"; cat: string; sub: string; brand: string; grade: string; size: string };
 
-const GENDER_LABEL: Record<string, string> = { men: "Men", women: "Women", kid: "Kids", teenage: "Teens", toddler: "Toddlers", infant: "Infants" };
-const GENDER_TAG: Record<string, string> = { men: "Men", women: "Women", kid: "Kids", teenage: "Kids", toddler: "Kids", infant: "Kids" };
+const GENDER_LABEL: Record<string, string> = { men: "Men", women: "Women", kid: "Kids (2–8)", teenage: "Teens (9–14)", toddler: "Toddlers (1–2)", infant: "Infants (0–1)" };
+const GENDER_TAG: Record<string, string> = { men: "Men", women: "Women", kid: "Kids", teenage: "Teens", toddler: "Toddlers", infant: "Infants" };
 
 export function CatalogueTree() {
   const [tree, setTree] = useState<Branch[] | null>(null);
@@ -134,10 +134,9 @@ export function CatalogueTree() {
               </div>
               <ul className="divide-y px-2 pb-2 pt-2">
                 {current.subs.filter((s) => (showOff || s.active) && matches(s)).map((s) => (
-                  <li key={s.slug} className={cn("grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1 px-2 py-2 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_auto_auto_auto]", !s.active && "opacity-50")}>
+                  <li key={s.slug} className={cn("grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1 px-2 py-2 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_auto_auto]", !s.active && "opacity-50")}>
                     <InlineName value={s.name} busy={busy} onSave={(name) => act({ action: "rename", kind: "sub", slug: s.slug, name }, `Renamed to ${name}. Garments tagged from now on carry the new tag.`)} />
                     <div className="col-span-2 flex flex-wrap items-center gap-2 sm:col-span-1"><TagEdit tag={s.tag ?? ""} auto={s.auto_tag ?? ""} custom={s.custom} busy={busy} onSave={(tag) => act({ action: "set_tag", kind: "sub", slug: s.slug, tag }, tag ? `Tag set to ${tag}.` : "Tag back to automatic.")} /><span className="text-[11px] text-muted-foreground">SKU {s.code}</span></div>
-                    <div className="text-right text-xs text-muted-foreground tabular-nums">{s.cost != null ? `Rs ${Math.round(Number(s.cost)).toLocaleString("en-PK")}` : "no cost"}</div>
                     <div className="text-right text-xs text-muted-foreground tabular-nums" title="Garments tagged under it">{s.items ? `${s.items} tagged` : ""}</div>
                     <div className="flex items-center justify-end gap-1">
                       {!s.active && <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy} onClick={() => act({ action: "toggle", kind: "sub", slug: s.slug, active: true }, `${s.name} restored.`)}>Restore</Button>}
@@ -184,7 +183,10 @@ function TagEdit({ tag, auto, custom, onSave, busy }: { tag: string; auto: strin
     );
   }
   return (
-    <button type="button" onClick={() => setEditing(true)} title={custom ? `Hand-set tag (automatic would be “${auto}”). Click to edit.` : "Automatic tag. Click to set your own."} className={cn("rounded-md border px-1.5 py-0.5 font-mono text-[11px] leading-4 hover:border-foreground", custom ? "border-amber-500 bg-amber-50 text-amber-900 dark:bg-amber-950 dark:text-amber-200" : "bg-muted text-muted-foreground")}>{tag}</button>
+    <span className="inline-flex items-center gap-0.5">
+      <button type="button" onClick={() => setEditing(true)} title={custom ? `Hand-set tag (automatic would be “${auto}”). Click to edit.` : "Automatic tag. Click to set your own."} className={cn("rounded-md border px-1.5 py-0.5 font-mono text-[11px] leading-4 hover:border-foreground", custom ? "border-amber-500 bg-amber-50 text-amber-900 dark:bg-amber-950 dark:text-amber-200" : "bg-muted text-muted-foreground")}>{tag}</button>
+      <button type="button" onClick={() => setEditing(true)} className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Edit Shopify tag" title="Edit Shopify tag"><Pencil className="size-3" /></button>
+    </span>
   );
 }
 
@@ -206,7 +208,7 @@ function InlineName({ value, onSave, busy, big }: { value: string; onSave: (name
   return (
     <span className="group flex min-w-0 items-center gap-1">
       <button type="button" onClick={() => setEditing(true)} className={cn("min-w-0 truncate text-left hover:underline", big ? "text-lg font-semibold" : "text-sm")} title="Click to rename">{value}</button>
-      <button type="button" onClick={() => setEditing(true)} className="rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100 focus:opacity-100" aria-label={`Rename ${value}`}><Pencil className="size-3.5" /></button>
+      <button type="button" onClick={() => setEditing(true)} className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label={`Rename ${value}`} title="Edit name"><Pencil className="size-3.5" /></button>
     </span>
   );
 }
