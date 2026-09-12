@@ -151,13 +151,17 @@ export function ItemSearch() {
                 <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-emerald-600/10 text-emerald-700 dark:text-emerald-400"><FileSpreadsheet className="size-5" /></span>
                 <div><div className="font-semibold">Export to Excel</div><div className="text-xs text-muted-foreground">Every field on the tag plus station, tagger, lot, outlet, shipment and received dates.</div></div>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button className="h-10" disabled={!pickedVisible.length} onClick={() => exportList(pickedVisible.map((r) => r.sku))}><Download className="size-4" /> Export {pickedVisible.length || ""} ticked</Button>
-                <Button variant="outline" className="h-10" disabled={!visible.length} onClick={() => exportList(visible.map((r) => r.sku))}>Export all {visible.length} shown</Button>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button asChild variant="outline" className="h-10"><a href={`/api/export?what=items&format=xlsx&from=${from}&to=${to}`}><Download className="size-4" /> Export every garment tagged {from} → {to}</a></Button>
-                <span className="text-xs text-muted-foreground">Straight from the database — {total.toLocaleString("en-PK")} garment{total === 1 ? "" : "s"}, whatever the list shows.</span>
+              <div className="flex flex-wrap items-center gap-3">
+                {pickedVisible.length ? (
+                  <Button className="h-10" onClick={() => exportList(pickedVisible.map((r) => r.sku))}><Download className="size-4" /> Export {pickedVisible.length.toLocaleString("en-PK")} ticked</Button>
+                ) : filtering && !q.trim() ? (
+                  <Button className="h-10" disabled={!visible.length} onClick={() => exportList(visible.map((r) => r.sku))}><Download className="size-4" /> Export {visible.length.toLocaleString("en-PK")} filtered</Button>
+                ) : q.trim() ? (
+                  <Button className="h-10" disabled={!visible.length} onClick={() => exportList(visible.map((r) => r.sku))}><Download className="size-4" /> Export {visible.length.toLocaleString("en-PK")} results</Button>
+                ) : (
+                  <Button asChild className="h-10"><a href={`/api/export?what=items&format=xlsx&from=${from}&to=${to}`}><Download className="size-4" /> Export {total.toLocaleString("en-PK")} tagged {from} → {to}</a></Button>
+                )}
+                <span className="text-xs text-muted-foreground">{pickedVisible.length ? "Only the ticked garments. Untick all to export the whole range." : filtering && !q.trim() ? "Only what the column filters leave. Clear filters to export the whole range." : q.trim() ? "The search results. Clear the search to export by date." : "Every garment tagged in the date range above, straight from the database."}</span>
               </div>
             </CardContent>
           </Card>
