@@ -26,7 +26,7 @@ type Reference = {
   size_extras: Record<string, string[]>;
   rare_reasons: { code: string; label: string; tag: string; web: string }[];
   brand_picks_by_category: Record<string, { name: string; logo_url: string | null }[]>;
-  categories: { slug: string; name: string; gender: Gender; sort_order: number }[];
+  categories: { slug: string; name: string; gender: Gender; sort_order: number; for_wearer?: "any" | "girls" | "boys" }[];
   sub_categories: {
     slug: string;
     code: string;
@@ -186,9 +186,9 @@ export function TagForm() {
   const inSeason = useCallback((s: { season: "summer" | "winter" | "all" }) => s.season === "all" || s.season === season, [season]);
   const cats = useMemo(
     () => (ref?.categories ?? [])
-      .filter((c) => genders.includes(c.gender) && (ref?.sub_categories ?? []).some((s) => s.category_slug === c.slug && inSeason(s)))
+      .filter((c) => genders.includes(c.gender) && (c.for_wearer ?? "any") !== (/_boy$/.test(wearer) ? "girls" : /_girl$/.test(wearer) ? "boys" : "") && (ref?.sub_categories ?? []).some((s) => s.category_slug === c.slug && inSeason(s)))
       .sort((a, b) => GENDER_ORDER.indexOf(a.gender) - GENDER_ORDER.indexOf(b.gender) || a.sort_order - b.sort_order),
-    [ref, genders, inSeason],
+    [ref, genders, inSeason, wearer],
   );
   useEffect(() => {
     if (cats.length && !cats.some((c) => c.slug === category)) setCategory(cats[0].slug);

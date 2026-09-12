@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
  */
 
 type Sub = { slug: string; code: string; name: string; active: boolean; cost: number | null; items: number; tag: string | null; auto_tag: string | null; custom: boolean };
-type Cat = { slug: string; name: string; active: boolean; tag: string; auto_tag: string; custom: boolean; subs: Sub[]; items: number };
+type Cat = { slug: string; name: string; active: boolean; tag: string; auto_tag: string; custom: boolean; for_wearer: "any" | "girls" | "boys"; subs: Sub[]; items: number };
 type Branch = { gender: string; categories: Cat[] };
 type Preview = { wearer: Wearer; season: "summer" | "winter"; cat: string; sub: string; brand: string; grade: string; size: string };
 
@@ -109,7 +109,7 @@ export function CatalogueTree() {
             {visibleCats.map((c) => (
               <li key={c.slug}>
                 <button type="button" onClick={() => setSelected(c.slug)} className={cn("flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors", current?.slug === c.slug ? "bg-foreground text-background" : "hover:bg-muted", !c.active && "opacity-50")}>
-                  <span className="min-w-0 flex-1 truncate">{c.name}{!c.active && <span className="ml-1 text-[10px] uppercase">off</span>}</span>
+                  <span className="min-w-0 flex-1 truncate">{c.name}{!c.active && <span className="ml-1 text-[10px] uppercase">off</span>}{c.for_wearer !== "any" && <span className={cn("ml-1.5 rounded px-1 text-[10px] uppercase", current?.slug === c.slug ? "bg-background/20" : "bg-muted")}>{c.for_wearer}</span>}</span>
                   <span className={cn("text-xs tabular-nums", current?.slug === c.slug ? "opacity-70" : "text-muted-foreground")}>{q ? c.subs.filter(matches).length : live(c)}</span>
                   <ChevronRight className={cn("size-4 shrink-0", current?.slug === c.slug ? "opacity-70" : "text-muted-foreground")} />
                 </button>
@@ -132,6 +132,13 @@ export function CatalogueTree() {
                 {BAND_WEARERS[gender] && <span className="font-mono text-[10px] text-muted-foreground">+ {BAND_WEARERS[gender][0]} {current.tag.replace(/^\S+\s/, "")} · {BAND_WEARERS[gender][1]} {current.tag.replace(/^\S+\s/, "")}</span>}
                 <span className="text-xs text-muted-foreground tabular-nums">{live(current)} sub-categories · {current.items.toLocaleString("en-PK")} garments tagged</span>
                 <span className="ml-auto flex items-center gap-2">
+                  {BAND_WEARERS[gender] && (
+                    <label className="flex items-center gap-1 text-xs text-muted-foreground" title="Who the tag form offers this category to">Offered to
+                      <select value={current.for_wearer} disabled={busy} onChange={(e) => act({ action: "set_for", kind: "category", slug: current.slug, for_wearer: e.target.value }, `${current.name} is offered to ${e.target.value === "any" ? "boys and girls" : e.target.value}.`)} className={cn("h-8 rounded-md border border-input bg-background px-2 text-xs", current.for_wearer !== "any" && "border-amber-500 text-amber-900 dark:text-amber-200")}>
+                        <option value="any">Boys and girls</option><option value="girls">Girls only</option><option value="boys">Boys only</option>
+                      </select>
+                    </label>
+                  )}
                   {!current.active && <Button size="sm" variant="outline" className="h-8" disabled={busy} onClick={() => act({ action: "toggle", kind: "category", slug: current.slug, active: true }, `${current.name} restored.`)}>Restore</Button>}
                   <IconButton title={current.subs.length ? "Delete (empty the category first, or switch it off)" : "Delete category"} danger disabled={busy || current.subs.length > 0} onClick={() => { if (window.confirm(`Delete “${current.name}”?`)) void act({ action: "delete", kind: "category", slug: current.slug }, `${current.name} deleted.`).then(() => setSelected(null)); }}><Trash2 className="size-4" /></IconButton>
                 </span>
@@ -239,7 +246,7 @@ function AddRow({ placeholder, onAdd, busy, autoFocusKey }: { placeholder: strin
 
 /** Try a garment: pick what the tagger would pick and see every tag Shopify will receive. */
 function TagPreview({ tree, value, onChange }: { tree: Branch[]; value: Preview; onChange: (v: Preview) => void }) {
-  const cats = tree.flatMap((b) => b.categories.filter((c) => c.active).map((c) => ({ ...c, gender: b.gender })));
+  const cats = tree.flatMap((b) => b.categories.filter((c) => c.active && c.for_wearer !== (/_boy$/.test(value.wearer) ? "girls" : /_girl$/.test(value.wearer) ? "boys" : "")).map((c) => ({ ...c, gender: b.gender })));
   const cat = cats.find((c) => c.slug === value.cat) ?? cats[0];
   const subs = cat ? cat.subs.filter((s) => s.active) : [];
   const sub = subs.find((s) => s.slug === value.sub) ?? subs[0];

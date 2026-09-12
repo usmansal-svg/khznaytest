@@ -23,7 +23,7 @@ export async function GET() {
   const ctx = await loadPricingContext(supabase);
   const since = new Date(Date.now() - 90 * 86400_000).toISOString();
   const [categoriesRes, outletsRes, lots, recentRes, quickRes, byCatRes, sizesRes, rareReasons] = await Promise.all([
-    supabase.from("categories").select("slug, name, sort_order, gender").not("gender", "is", null).eq("active", true).order("sort_order"),
+    supabase.from("categories").select("slug, name, sort_order, gender, for_wearer").not("gender", "is", null).eq("active", true).order("sort_order"),
     supabase.from("outlets").select("id, name, is_online").eq("active", true).order("id"),
     loadOpenLots(supabase),
     supabase.from("items").select("brand_text").gte("tagged_at", since).not("brand_text", "is", null).limit(5000),
