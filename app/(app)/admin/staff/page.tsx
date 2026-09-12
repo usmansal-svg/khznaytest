@@ -1,7 +1,6 @@
-import { StaffAdmin } from "@/components/admin/staff-admin";
+import { redirect } from "next/navigation";
 
-export const metadata = { title: "Staff · Khazanay" };
-
+/** Staff moved under Settings (12 Sep). */
 export default function StaffPage() {
-  return <StaffAdmin />;
+  redirect("/admin/settings?tab=staff");
 }

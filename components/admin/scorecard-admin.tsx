@@ -33,6 +33,14 @@ export function ScorecardAdmin() {
     const r = await fetch("/api/admin/scorecard", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ month, staff_id: id, kind, note }) });
     const j = await r.json(); setMsg(r.ok ? `Score ${j.score} finalised.` : j.error); setNote(""); void load();
   }
+  const [people, setPeople] = useState<{ id: number; name: string; role: string; active: boolean; daily_target: number | null }[]>([]);
+  const [showTargets, setShowTargets] = useState(false);
+  const loadPeople = useCallback(async () => { const r = await fetch("/api/admin/staff"); const j = await r.json(); if (r.ok) setPeople((j.staff as typeof people).filter((p) => p.active && ["tagger", "photographer", "qc_senior"].includes(p.role))); }, []);
+  useEffect(() => { void loadPeople(); }, [loadPeople]);
+  async function saveTarget(id: number, v: number | null) {
+    const r = await fetch("/api/admin/staff", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, daily_target: v }) });
+    const j = await r.json(); setMsg(r.ok ? "Target saved." : j.error); void loadPeople(); void load();
+  }
   const tone = (n: number | null) => (n == null ? "" : n >= 90 ? "text-green-700 dark:text-green-400" : n >= 70 ? "text-amber-700 dark:text-amber-300" : "text-red-700 dark:text-red-400");
   return (
     <div className="mx-auto max-w-6xl space-y-4">
@@ -41,6 +49,27 @@ export function ScorecardAdmin() {
         <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="h-10 w-44" />
       </div>
       {msg && <p className="text-sm text-muted-foreground">{msg}</p>}
+      <Card><CardContent className="pt-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div><span className="font-semibold">Daily targets</span> <span className="text-sm text-muted-foreground">· garments per day per person; blank means the default of {data?.default_target ?? "—"} from Pricing</span></div>
+          <Button size="sm" variant="outline" onClick={() => setShowTargets((v) => !v)}>{showTargets ? "Hide" : `Set targets (${people.length})`}</Button>
+        </div>
+        {showTargets && (
+          <table className="mt-3 w-full text-sm">
+            <thead className="text-left text-xs uppercase text-muted-foreground"><tr><th className="pb-1">Name</th><th className="pb-1">Role</th><th className="pb-1">Daily target</th></tr></thead>
+            <tbody className="divide-y">
+              {people.map((p) => (
+                <tr key={p.id}>
+                  <td className="py-1.5">{p.name}</td>
+                  <td className="py-1.5 text-muted-foreground">{p.role === "qc_senior" ? "QC senior" : p.role[0].toUpperCase() + p.role.slice(1)}</td>
+                  <td className="py-1.5"><Input type="number" min="1" step="5" defaultValue={p.daily_target ?? ""} placeholder={`default ${data?.default_target ?? ""}`} onBlur={(e) => { const v = e.target.value === "" ? null : Number(e.target.value); if (v !== p.daily_target) void saveTarget(p.id, v); }} className="h-8 w-28" /></td>
+                </tr>
+              ))}
+              {people.length === 0 && <tr><td colSpan={3} className="py-3 text-muted-foreground">No active taggers, photographers or QC seniors on Staff.</td></tr>}
+            </tbody>
+          </table>
+        )}
+      </CardContent></Card>
       {data && (
         <>
         <h2 className="pt-2 text-lg font-semibold">Taggers <span className="text-sm font-normal text-muted-foreground">· score = {Math.round(data.weights.target * 100)}% target achievement + {Math.round(data.weights.accuracy * 100)}% QC accuracy (share of reviewed garments needing no correction)</span></h2>

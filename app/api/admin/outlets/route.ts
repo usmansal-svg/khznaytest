@@ -1,6 +1,8 @@
 /**
  * GET   /api/admin/outlets — outlets with their Shopify location, plus the store's locations to choose from
- * PATCH /api/admin/outlets { id, name?, shopify_location_id?, active? }
+ * POST  /api/admin/outlets { action: "create", name, city? } — a new outlet
+ *       /api/admin/outlets { action: "register_webhook" }
+ * PATCH /api/admin/outlets { id, name?, city?, shopify_location_id?, active? }
  */
 import { NextResponse } from "next/server";
 
@@ -25,8 +27,16 @@ export async function GET() {
 export async function POST(request: Request) {
   const gate = await requireManager();
   if ("response" in gate) return gate.response;
-  let body: { action?: string };
+  let body: { action?: string; name?: string; city?: string | null };
   try { body = await request.json(); } catch { return NextResponse.json({ error: "Body must be JSON." }, { status: 400 }); }
+  if (body.action === "create") {
+    const name = body.name?.trim() ?? "";
+    if (name.length < 2) return NextResponse.json({ error: "Give the outlet a name." }, { status: 400 });
+    const { data, error } = await gate.db.from("outlets").insert({ name, city: body.city?.trim() || null, active: true }).select("id").single();
+    if (error) return NextResponse.json({ error: /duplicate/i.test(error.message) ? "An outlet with that name already exists." : error.message }, { status: 400 });
+    await audit(gate.db, gate.staff.id, "outlets", String(data.id), null, { name, city: body.city ?? null }, "Outlet added");
+    return NextResponse.json({ ok: true, id: data.id });
+  }
   if (body.action !== "register_webhook") return NextResponse.json({ error: "Unknown action." }, { status: 400 });
   const cfg = shopifyConfig();
   if (!cfg) return NextResponse.json({ error: "Shopify is not connected." }, { status: 503 });
@@ -43,14 +53,15 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const gate = await requireManager();
   if ("response" in gate) return gate.response;
-  let body: { id?: number; name?: string; shopify_location_id?: string | null; active?: boolean };
+  let body: { id?: number; name?: string; city?: string | null; shopify_location_id?: string | null; active?: boolean };
   try { body = await request.json(); } catch { return NextResponse.json({ error: "Body must be JSON." }, { status: 400 }); }
   if (!Number.isInteger(body.id)) return NextResponse.json({ error: "id is required." }, { status: 400 });
   const patch: Record<string, unknown> = {};
   if (body.name !== undefined) { const n = body.name.trim(); if (n.length < 2) return NextResponse.json({ error: "Name too short." }, { status: 400 }); patch.name = n; }
+  if (body.city !== undefined) patch.city = body.city?.trim() || null;
   if (body.shopify_location_id !== undefined) patch.shopify_location_id = body.shopify_location_id?.trim() || null;
   if (body.active !== undefined) patch.active = Boolean(body.active);
-  const { data: before } = await gate.db.from("outlets").select("name, shopify_location_id, active").eq("id", body.id).maybeSingle();
+  const { data: before } = await gate.db.from("outlets").select("name, city, shopify_location_id, active").eq("id", body.id).maybeSingle();
   const { error } = await gate.db.from("outlets").update(patch).eq("id", body.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   await audit(gate.db, gate.staff.id, "outlets", String(body.id), before, { ...before, ...patch });

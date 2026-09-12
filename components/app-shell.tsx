@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Activity, ArrowRightLeft, Award, Camera, ClipboardCheck, PanelLeftClose, PanelLeftOpen, LayoutDashboard, Package, Search, SlidersHorizontal, Store, Tag, Tags, Users, type LucideIcon } from "lucide-react";
+import { ArrowRightLeft, Award, Camera, ClipboardCheck, PanelLeftClose, PanelLeftOpen, LayoutDashboard, Package, Search, Settings, SlidersHorizontal, Store, Tag, Tags, type LucideIcon } from "lucide-react";
 
 import { BrandLogo } from "@/components/brand-logo";
 import { ThemeSwitcher } from "@/components/theme-switcher";
@@ -27,9 +27,8 @@ const WORK: NavItem[] = [
 const ADMIN: NavItem[] = [
   { href: "/admin/pricing", label: "Pricing", icon: SlidersHorizontal, hint: "Constants & weights", min: "manager" },
   { href: "/admin/brands", label: "Brands", icon: Tags, hint: "Tiers & import", min: "manager" },
-  { href: "/admin/staff", label: "Staff", icon: Users, hint: "Names & PINs", min: "manager" },
   { href: "/admin/scorecard", label: "Scorecard", icon: Award, hint: "Monthly KPIs for everyone", min: "manager" },
-  { href: "/health", label: "Health", icon: Activity, min: "manager" },
+  { href: "/admin/settings", label: "Settings", icon: Settings, hint: "Staff, outlets, Shopify", min: "manager" },
 ];
 
 /** `auth` is rendered by the server layout — AuthButton is a Server Component and must not be imported here. */
