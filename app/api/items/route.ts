@@ -80,6 +80,7 @@ export async function POST(request: Request) {
   }
 
   const ctx = await loadPricingContext(supabase);
+  if (ctx.source === "defaults") return NextResponse.json({ error: "The pricing tables could not be read from the database, so this price cannot be trusted. Wait a moment and press Save again." }, { status: 503 });
   const [brand, lot] = await Promise.all([resolveBrandDb(supabase, body.brand_text), loadLot(supabase, Number(body.lot_id), ctx.settings)]);
   if (!lot) return bad(`Unknown lot: ${body.lot_id}`);
   if (lot.status === "split") return bad(`Lot ${lot.code} was split into piles — tag from one of its children.`);

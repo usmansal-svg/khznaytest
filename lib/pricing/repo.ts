@@ -200,7 +200,27 @@ function defaultsContext(warning: string): PricingContext {
  * Falls back to the code constants — visibly, via `source` — if the
  * database cannot be read, so a pricing screen never silently goes blank.
  */
+let lastGood: { ctx: PricingContext; at: number } | null = null;
+
 export async function loadPricingContext(supabase: SupabaseClient): Promise<PricingContext> {
+  // A gateway blip should not reprice the floor: try again once, then serve
+  // the last pricing this server loaded, and only with nothing at all fall
+  // back to the code constants (visibly).
+  const first = await readPricingContext(supabase);
+  if (!("failed" in first)) { lastGood = { ctx: first, at: Date.now() }; return first; }
+  await new Promise((r) => setTimeout(r, 400));
+  const second = await readPricingContext(supabase);
+  if (!("failed" in second)) { lastGood = { ctx: second, at: Date.now() }; return second; }
+  if (lastGood) {
+    const mins = Math.round((Date.now() - lastGood.at) / 60000);
+    return { ...lastGood.ctx, warning: `The database did not answer (${brief(second.failed)}); prices use the pricing loaded ${mins < 1 ? "moments" : `${mins} min`} ago. Reload in a minute.` };
+  }
+  return defaultsContext(
+    `Pricing data could not be read from the database (${brief(second.failed)}); using built-in defaults — tags cannot be saved until it answers. Reload in a minute.`,
+  );
+}
+
+async function readPricingContext(supabase: SupabaseClient): Promise<PricingContext | { failed: string }> {
   const [settingsRes, gradesRes, profilesRes, subsRes] = await Promise.all([
     supabase.from("settings").select("*").order("version", { ascending: false }).limit(1).maybeSingle(),
     supabase.from("grades").select("code, name, multiplier, share_of_intake, sort_order").order("sort_order"),
@@ -212,9 +232,7 @@ export async function loadPricingContext(supabase: SupabaseClient): Promise<Pric
 
   const firstError = settingsRes.error ?? gradesRes.error ?? profilesRes.error ?? subsRes.error;
   if (firstError || !settingsRes.data || !gradesRes.data?.length || !profilesRes.data?.length || !subsRes.data?.length) {
-    return defaultsContext(
-      `Pricing data could not be read from the database (${brief(firstError?.message ?? "empty tables")}); using built-in defaults — prices shown may not reflect the pricing sidebar.`,
-    );
+    return { failed: firstError?.message ?? "empty tables" };
   }
 
   const grades: Grade[] = gradesRes.data.map((g) => ({
