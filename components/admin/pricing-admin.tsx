@@ -19,7 +19,6 @@ type Preview = { rows: { slug: string; name: string; profile: string; weight_kg:
 type Est = { landed_cost: number; loaded_cost: number; bnwt: number; premium: number; excellent: number; very_good: number; gp_pct: number; effective_gp_pct: number };
 type SubRow = { slug: string; code: string; name: string; gender: string; category_slug: string; category: string; weight_kg: number; profile_code: string; value_index: number; season: "summer" | "winter" | "all"; market_ceiling: number | null; market_price: number | null; standard_cost_pkr: number | null; heavy_cost_pkr: number | null; active: boolean; estimate?: Est | null };
 
-const SEASON_LABEL: Record<string, string> = { summer: "Summer", winter: "Winter", all: "All year" };
 const rs = (n: number) => `Rs ${Math.round(n).toLocaleString("en-PK")}`;
 const pct = (n: number) => `${n >= 0 ? "+" : ""}${(n * 100).toFixed(1)}%`;
 
@@ -378,7 +377,6 @@ function SubCategoryEditor() {
                 <th className="pb-2"><HeaderFilter label="Gender" values={genderValues} selected={filters.gender} onChange={(v) => setFilters((f) => ({ ...f, gender: v }))} format={(g) => GENDER_OPTIONS.find((o) => o.code === g)?.name ?? g} /></th>
                 <th className="pb-2"><HeaderFilter label="Category" values={categoryValues} selected={filters.category} onChange={(v) => setFilters((f) => ({ ...f, category: v }))} /></th>
                 <th className="pb-2"><HeaderFilter label="Sub-category" values={nameValues} selected={filters.name} onChange={(v) => setFilters((f) => ({ ...f, name: v }))} /></th>
-                <th className="pb-2"><HeaderFilter label="Season" values={["summer", "winter", "all"]} selected={filters.season} onChange={(v) => setFilters((f) => ({ ...f, season: v }))} format={(v) => SEASON_LABEL[v] ?? v} /></th>
                 <th className="pb-2">Cost Rs</th>
                 <th className="pb-2" title="Tick the garments that also come heavy (winter wear bought by the kilo). The tag form asks Regular or Heavy for those only. Same website tag either way.">Heavy</th>
                 <th className="pb-2 text-right" title="Real margin per garment bought: revenue after markdowns, grade mix, never-sells and rejects, plus bulk recovery, ex tax, against landed cost.">Eff. GP</th>
@@ -405,11 +403,6 @@ function SubCategoryEditor() {
                     <td className="py-1 pr-2 text-xs text-muted-foreground">{GENDER_OPTIONS.find((o) => o.code === r.gender)?.name ?? r.gender}</td>
                     <td className="py-1 pr-2 text-xs">{r.category}</td>
                     <td className="py-1 pr-2"><Input value={v.name} onChange={(ev) => edit(r.slug, { name: ev.target.value })} className={cn("h-7 w-32 text-xs", changed("name") && "border-amber-500")} /></td>
-                    <td className="py-1 pr-2">
-                      <select value={v.season} onChange={(ev) => edit(r.slug, { season: ev.target.value as SubRow["season"] })} className={cn("h-7 rounded-md border border-input bg-transparent px-1 text-xs", changed("season") && "border-amber-500")}>
-                        <option value="summer">Summer</option><option value="winter">Winter</option><option value="all">All year</option>
-                      </select>
-                    </td>
                     <td className="py-1 pr-2"><Input type="number" step="10" min="1" value={v.standard_cost_pkr ?? ""} placeholder="set me" onChange={(ev) => edit(r.slug, { standard_cost_pkr: ev.target.value === "" ? null : Number(ev.target.value) })} className={cn("h-7 w-20 text-xs", changed("standard_cost_pkr") && "border-amber-500", !v.standard_cost_pkr && "border-amber-500")} /></td>
                     <td className="py-1 pr-2">
                       {v.heavy_cost_pkr == null ? (

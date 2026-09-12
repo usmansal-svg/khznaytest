@@ -11,6 +11,7 @@
  *   { action: "rename", kind: "category"|"sub", slug, name }
  *   { action: "set_tag", kind, slug, tag }               hand-set Shopify tag; blank = automatic
  *   { action: "set_for", slug, for_wearer }              category offered to any | girls | boys (child bands)
+ *   { action: "set_season", slug, season }               sub-category shown in summer | winter | all
  *   { action: "toggle", kind, slug, active }
  *   { action: "delete", kind, slug }                     a sub-category with garments is hidden instead of deleted; a category must be empty
  */
@@ -32,7 +33,7 @@ export async function GET() {
   const db = gate.db;
   const [{ data: cats, error }, { data: subs }, { data: items }] = await Promise.all([
     db.from("categories").select("slug, name, gender, sort_order, active, shopify_tag, for_wearer").not("gender", "is", null).order("gender").order("sort_order"),
-    db.from("sub_categories").select("slug, code, category_slug, gender, name, active, standard_cost_pkr, shopify_tag").order("name"),
+    db.from("sub_categories").select("slug, code, category_slug, gender, name, active, standard_cost_pkr, shopify_tag, season").order("name"),
     db.from("items").select("sub_category_slug").limit(200000),
   ]);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -41,7 +42,7 @@ export async function GET() {
   const tree = GENDERS.map((gender) => ({
     gender,
     categories: (cats ?? []).filter((c) => c.gender === gender).map((c) => {
-      const children = (subs ?? []).filter((s) => s.category_slug === c.slug).map((s) => { const t = menuTags(gender, c.name, s.name, { category: c.shopify_tag, sub: s.shopify_tag }); return { slug: s.slug, code: s.code, name: s.name, active: s.active, cost: s.standard_cost_pkr, items: used.get(s.slug) ?? 0, tag: t.sub, auto_tag: t.auto.sub, custom: Boolean(s.shopify_tag) }; });
+      const children = (subs ?? []).filter((s) => s.category_slug === c.slug).map((s) => { const t = menuTags(gender, c.name, s.name, { category: c.shopify_tag, sub: s.shopify_tag }); return { slug: s.slug, code: s.code, name: s.name, active: s.active, cost: s.standard_cost_pkr, items: used.get(s.slug) ?? 0, tag: t.sub, auto_tag: t.auto.sub, custom: Boolean(s.shopify_tag), season: s.season ?? "all" }; });
       const t = menuTags(gender, c.name, null, { category: c.shopify_tag });
       return { slug: c.slug, name: c.name, active: c.active, tag: t.category, auto_tag: t.auto.category, custom: Boolean(c.shopify_tag), for_wearer: c.for_wearer ?? "any", subs: children, items: children.reduce((n, s) => n + s.items, 0) };
     }),
@@ -49,7 +50,7 @@ export async function GET() {
   return NextResponse.json({ tree });
 }
 
-type Body = { action?: string; gender?: string; name?: string; category_slug?: string; kind?: "category" | "sub"; slug?: string; active?: boolean; tag?: string | null; for_wearer?: string };
+type Body = { action?: string; gender?: string; name?: string; category_slug?: string; kind?: "category" | "sub"; slug?: string; active?: boolean; tag?: string | null; for_wearer?: string; season?: string };
 
 export async function POST(request: Request) {
   const gate = await requireManager();
@@ -124,6 +125,16 @@ export async function POST(request: Request) {
     const { error } = await db.from("categories").update({ for_wearer: body.for_wearer }).eq("slug", body.slug);
     if (error) return bad(error.message);
     await audit(db, me, "categories", body.slug, before, { for_wearer: body.for_wearer }, "offered to " + body.for_wearer);
+    return NextResponse.json({ ok: true });
+  }
+
+  if (body.action === "set_season") {
+    if (table !== "sub_categories" || !["summer", "winter", "all"].includes(String(body.season))) return bad("season must be summer, winter or all.");
+    const { data: before } = await db.from("sub_categories").select("season").eq("slug", body.slug).maybeSingle();
+    if (!before) return bad("No such sub-category.");
+    const { error } = await db.from("sub_categories").update({ season: body.season }).eq("slug", body.slug);
+    if (error) return bad(error.message);
+    await audit(db, me, "sub_categories", body.slug, before, { season: body.season }, "season set from the catalogue");
     return NextResponse.json({ ok: true });
   }
 

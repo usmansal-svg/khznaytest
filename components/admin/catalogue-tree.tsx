@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
  * here; the numbers behind each sub-category stay on Pricing → Categories.
  */
 
-type Sub = { slug: string; code: string; name: string; active: boolean; cost: number | null; items: number; tag: string | null; auto_tag: string | null; custom: boolean };
+type Sub = { slug: string; code: string; name: string; active: boolean; cost: number | null; items: number; tag: string | null; auto_tag: string | null; custom: boolean; season: "summer" | "winter" | "all" };
 type Cat = { slug: string; name: string; active: boolean; tag: string; auto_tag: string; custom: boolean; for_wearer: "any" | "girls" | "boys"; subs: Sub[]; items: number };
 type Branch = { gender: string; categories: Cat[] };
 type Preview = { wearer: Wearer; season: "summer" | "winter"; cat: string; sub: string; brand: string; grade: string; size: string };
@@ -146,13 +146,16 @@ export function CatalogueTree() {
               </div>
               <div className="px-4 pt-3">
                 <AddRow placeholder={`Add a sub-category to ${current.name}, e.g. Formal shirt`} busy={busy} autoFocusKey={current.slug} onAdd={async (name) => Boolean(await act({ action: "add_sub", category_slug: current.slug, name }, `${name} added to ${current.name}.`))} />
-                <p className="mt-1.5 text-[11px] text-muted-foreground">Press Enter to add. The tag will read “{current.tag.split(" ")[0]} …name…”. Cost, weight and profile are copied from a sibling.</p>
+                <p className="mt-1.5 text-[11px] text-muted-foreground">Press Enter to add. The tag will read “{current.tag.split(" ")[0]} …name…”. Cost, weight and profile are copied from a sibling. The season on each row decides whether the Summer or Winter tag form offers it.</p>
               </div>
               <ul className="divide-y px-2 pb-2 pt-2">
                 {current.subs.filter((s) => (showOff || s.active) && matches(s)).map((s) => (
-                  <li key={s.slug} className={cn("grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1 px-2 py-2 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_auto_auto]", !s.active && "opacity-50")}>
+                  <li key={s.slug} className={cn("grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1 px-2 py-2 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_auto_auto_auto]", !s.active && "opacity-50")}>
                     <InlineName value={s.name} busy={busy} onSave={(name) => act({ action: "rename", kind: "sub", slug: s.slug, name }, `Renamed to ${name}. Garments tagged from now on carry the new tag.`)} />
                     <div className="col-span-2 flex flex-wrap items-center gap-2 sm:col-span-1"><TagEdit tag={s.tag ?? ""} auto={s.auto_tag ?? ""} custom={s.custom} busy={busy} onSave={(tag) => act({ action: "set_tag", kind: "sub", slug: s.slug, tag }, tag ? `Tag set to ${tag}.` : "Tag back to automatic.")} /><span className="text-[11px] text-muted-foreground">SKU {s.code}</span>{BAND_WEARERS[gender] && <span className="w-full font-mono text-[10px] text-muted-foreground sm:w-auto">+ {BAND_WEARERS[gender][0]} {(s.tag ?? "").replace(/^\S+\s/, "")} · {BAND_WEARERS[gender][1]} {(s.tag ?? "").replace(/^\S+\s/, "")}</span>}</div>
+                    <select value={s.season} disabled={busy} onChange={(e) => act({ action: "set_season", kind: "sub", slug: s.slug, season: e.target.value }, `${s.name} shows in ${e.target.value === "all" ? "both seasons" : e.target.value}.`)} title="Which season's tag form offers this garment" className={cn("h-7 rounded-md border border-input bg-background px-1.5 text-xs", s.season === "winter" ? "text-sky-700 dark:text-sky-300" : s.season === "summer" ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground")}>
+                      <option value="all">All year</option><option value="summer">Summer</option><option value="winter">Winter</option>
+                    </select>
                     <div className="text-right text-xs text-muted-foreground tabular-nums" title="Garments tagged under it">{s.items ? `${s.items} tagged` : ""}</div>
                     <div className="flex items-center justify-end gap-1">
                       <IconButton title="Try this garment: see every tag it would get" onClick={() => { setPreview((p) => ({ ...p, cat: current.slug, sub: s.slug, wearer: DEFAULT_WEARER[gender] ?? "men" })); window.scrollTo({ top: 0, behavior: "smooth" }); }}><FlaskConical className="size-3.5" /></IconButton>
