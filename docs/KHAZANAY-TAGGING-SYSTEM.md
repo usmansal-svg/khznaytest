@@ -46,7 +46,7 @@ Managers add staff at **Admin → Staff** (name, role, home outlet, PIN, daily t
 | Floor stock | `/floor` | QC senior+, outlet manager | Stockroom to floor by scan; colour, sweep, pull (§7) |
 | QC | `/qc` | QC senior+ | Review held garments: approve or correct the tagging (§8) |
 | Scorecard | `/admin/scorecard` | manager+ | Daily targets per person, and the monthly KPIs for everyone: taggers, photographers, QC reviewers; finalise scores (§8.1) |
-| Lots | `/lots` | manager+ | Purchases, splits, P&L (§6) |
+| Lots | `/lots` | manager+ | Read-only: lot number, description, quantity, tagged so far (§6). Purchasing lives in the commercial software |
 | Dashboard | `/dashboard` | manager+ | The founder's view (§10) |
 | Pricing | `/admin/pricing` | manager+ | Constants, markdown ladder, selling profiles, grades, sub-categories, history (§4) |
 | Brands | `/admin/brands` | manager+ | Quick-pick list for the tag form; three tier columns; new-from-tagger tray |
@@ -150,17 +150,13 @@ Taggers see only the shelf price and the grade prices — no cost, margin or lad
 
 **Station** (`lib/pricing/station.ts`) says where a garment is in the words the floor uses, and is the same on the Items screen and in the export. Online: *Tagging → Photography station → Packing station → Online shelf → Sold*. Outlet: *Tagging station → Packing · X → In transit · X → Receiving · X → Stockroom · X → On floor · X → Sold*, and *Missing · X* for a garment never scanned in at the outlet (§7). Either: *QC rail · Set aside · Pulled · Returned damaged · Rejected · Unlisted*.
 
-## 6. Lots
+## 6. Lots (read-only here since 12 Sep)
 
-A **lot** is a purchase. Numbers are issued in sequence (`LOT-0001`, …) and never reused.
+A **lot** is a purchase, and purchasing is **commercial**: supplier, basis, rate, kg or pieces, duty and tax treatment, splits, closing with true-up and the lot P&L all moved to Usman's commercial software (the code is kept in `archive/lots/` with the table contract). Both systems share one database; the commercial software **owns** `public.lots` and this app **reads** five columns only: `id`, `code`, `description`, `pieces` (quantity expected) and `status`. Financial columns are never selected.
 
-- **Basis:** by weight (USD/kg, kg bought, provisional yield 0.90 until close) or per piece (Rs each, pieces bought)
-- **Imported or Local market:** imported lots pay duty on weight and carry the reclaimable input-tax credit; local ones carry neither
-- **Description** (what was bought) vs **Notes** (internal)
-- **Split** into weighed or counted piles (`LOT-0001-A`, `-B`, …), each with its own description; the parent keeps the cost and can no longer be tagged from
-- **Edit** any field; **Close** with true-up (kg tagged) — garments already tagged keep their price; **Delete** asks twice and is refused while anything references the lot
+In this app: **Lots** (`/lots`, manager+) lists each lot's number, description, quantity, garments tagged so far, rejects, progress and status. The tag form's lot picker offers the **open** lots as `LOT-0001 · description` with *n of pieces tagged*; a garment must be tagged against a lot (provenance), and the lot's code goes on the Items screen, the export and the dashboard's progress bars. Closing a lot is done in the commercial software; a closed or split lot is refused on the tag form.
 
-**Lot P&L:** pieces, % done, rejects vs 3%, cost tagged (standard) against **actual cost per piece** (lot cost ÷ pieces) with the variance, expected revenue, expected GP, and **GP per piece** — the number to compare lots on.
+**Pricing does not look at the lot.** The tag price comes from the sub-category's cost per piece (Pricing → Categories) and the constants; a sub-category with no cost per piece cannot be tagged until one is set (the old fall-back — scale weight at the lot's USD/kg rate — is retired). The commercial software can compute each lot's P&L from the `items` rows with that `lot_id` (count, grade mix, landed cost, price, sold price).
 
 ---
 

@@ -16,7 +16,7 @@ import { NextResponse } from "next/server";
 import { requireStaff } from "@/lib/auth/staff";
 import { GRADE_RANK, type GradeCode } from "@/lib/pricing/constants";
 import { quote } from "@/lib/pricing/quote";
-import { loadLot, loadPricingContext, resolveBrandDb } from "@/lib/pricing/repo";
+import { loadPricingContext, resolveBrandDb } from "@/lib/pricing/repo";
 
 export const instant = false;
 
@@ -116,9 +116,8 @@ export async function POST(request: Request) {
     const sub = ctx.subCategories.find((s) => s.slug === slug);
     if (!sub) return NextResponse.json({ error: "Unknown garment type." }, { status: 400 });
     if (("grade_code" in patch || "sub_category_slug" in patch || "brand_tier" in patch) && item.price_manual == null) {
-      const lot = item.lot_id ? await loadLot(db, item.lot_id, ctx.settings) : null;
       const brand = "brand_tier" in patch ? { id: patch.brand_id as number | null, name: String(patch.brand_text), tier: patch.brand_tier as "regular", matched: true } : await resolveBrandDb(db, item.brand_text ?? "");
-      const q = quote({ subCategory: sub, brand, grade: (patch.grade_code as GradeCode) ?? (item.grade_code as GradeCode), adjustment: "standard", adjustPct: 0, isRare: Boolean(patch.is_rare ?? item.is_rare), lot, weightKg: item.weight_kg }, ctx);
+      const q = quote({ subCategory: sub, brand, grade: (patch.grade_code as GradeCode) ?? (item.grade_code as GradeCode), adjustment: "standard", adjustPct: 0, isRare: Boolean(patch.is_rare ?? item.is_rare), lot: null, weightKg: item.weight_kg }, ctx);
       if (q.price != null) { patch.price = q.price; patch.standard_price = q.standard_price; patch.landed_cost = q.landed_cost; priceAfter = q.price; }
     }
     const { error } = await db.from("items").update(patch).eq("id", item.id);

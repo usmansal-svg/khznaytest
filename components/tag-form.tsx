@@ -42,7 +42,7 @@ type Reference = {
     value_index: number;
   }[];
   outlets: { id: number; name: string; is_online: boolean }[];
-  lots: { id: number; code: string; supplier: string; basis: "kg" | "pc"; rate: number | null; effective_rate: number | null; yield: number; status: string }[];
+  lots: { id: number; code: string; description: string | null; pieces: number | null; tagged: number; status: string }[];
   grades: { code: GradeCode; name: string }[];
   outlet_min_grade: GradeCode;
   tagger: { name: string; role: string; outlet_id: number | null; today: number; target: number } | null;
@@ -462,10 +462,10 @@ export function TagForm() {
               label="Lot"
               hint={
                 selectedLot
-                  ? `${selectedLot.supplier} · records where this garment came from`
+                  ? `${selectedLot.tagged}${selectedLot.pieces ? ` of ${selectedLot.pieces}` : ""} tagged · records where this garment came from`
                   : ref.lots.length
                     ? undefined
-                    : "No open lots — ask a manager to create one"
+                    : "No open lots — record the lot in the commercial software first"
               }
             >
               <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -473,7 +473,7 @@ export function TagForm() {
                   {ref.lots.length === 0 && <option value="">No open lots</option>}
                   {ref.lots.map((l) => (
                     <option key={l.id} value={l.id}>
-                      {l.code} · {l.supplier}
+                      {l.code}{l.description ? ` · ${l.description}` : ""}
                     </option>
                   ))}
                 </select>

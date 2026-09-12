@@ -99,10 +99,15 @@ async function run(p: { what: string; format: string | null; from: string | null
       { name: "Lines", columns: [["transfer", "Transfer", 18], ["to_outlet", "To outlet", 12], ["status", "Status", 10], ["dispatched_at", "Dispatched", 18], ["received_at", "Received", 18], ["sku", "SKU", 20], ["brand", "Brand", 16], ["sub_category", "Sub-category", 22], ["size", "Size", 8], ["list_price", "List price", 10]].map(([key, header, width]) => ({ key: key as string, header: header as string, width: width as number })), rows: lines },
     ];
   } else if (what === "lots") {
-    const { data, error } = await db.from("lots").select("code, supplier, basis, rate, kg, kg_tagged, provisional_yield, status, arrived_on, closed_at, notes, parent:parent_lot_id(code)").order("created_at", { ascending: false });
+    const [{ data, error }, { data: tagged }] = await Promise.all([
+      db.from("lots").select("id, code, description, pieces, status, created_at").order("created_at", { ascending: false }),
+      db.from("items").select("lot_id, grade_code").not("lot_id", "is", null).limit(200000),
+    ]);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    sheets = [{ name: "Lots", columns: [["code", "Lot", 14], ["supplier", "Supplier", 16], ["basis", "Basis", 6], ["rate", "Rate", 10], ["kg", "kg bought", 10], ["kg_tagged", "kg tagged", 10], ["provisional_yield", "Prov. yield", 10], ["status", "Status", 8], ["arrived_on", "Arrived", 12], ["closed_at", "Closed", 18], ["parent", "Split from", 14], ["notes", "Notes", 30]].map(([key, header, width]) => ({ key: key as string, header: header as string, width: width as number })),
-      rows: (data ?? []).map((l) => ({ code: l.code, supplier: l.supplier, basis: l.basis, rate: l.rate == null ? null : Number(l.rate), kg: l.kg == null ? null : Number(l.kg), kg_tagged: l.kg_tagged == null ? null : Number(l.kg_tagged), provisional_yield: Number(l.provisional_yield), status: l.status, arrived_on: l.arrived_on ?? "", closed_at: pk(l.closed_at), parent: one<{ code: string }>(l.parent)?.code ?? "", notes: l.notes ?? "" })) }];
+    const n = new Map<number, { tagged: number; rejects: number }>();
+    for (const t of tagged ?? []) { const e = n.get(t.lot_id) ?? { tagged: 0, rejects: 0 }; e.tagged++; if (t.grade_code === "rejected") e.rejects++; n.set(t.lot_id, e); }
+    sheets = [{ name: "Lots", columns: [["code", "Lot", 14], ["description", "Description", 30], ["pieces", "Quantity", 10], ["tagged", "Tagged", 10], ["rejects", "Rejects", 10], ["status", "Status", 8], ["created_at", "Recorded", 18]].map(([key, header, width]) => ({ key: key as string, header: header as string, width: width as number })),
+      rows: (data ?? []).map((l) => ({ code: l.code, description: l.description ?? "", pieces: l.pieces, tagged: n.get(l.id)?.tagged ?? 0, rejects: n.get(l.id)?.rejects ?? 0, status: l.status, created_at: pk(l.created_at) })) }];
   } else {
     return NextResponse.json({ error: "what must be items, transfers or lots." }, { status: 400 });
   }

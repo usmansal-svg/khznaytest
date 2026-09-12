@@ -400,12 +400,25 @@ export function lotFromRow(row: LotRow, settings: Settings): DbLot {
   };
 }
 
-export async function loadLot(supabase: SupabaseClient, id: number, settings: Settings): Promise<DbLot | null> {
-  const { data } = await supabase.from("lots").select(LOT_COLUMNS).eq("id", id).maybeSingle();
-  return data ? lotFromRow(data as LotRow, settings) : null;
+/**
+ * Lots are owned by the commercial software (12 Sep); the tagging app reads
+ * only the number, description, quantity and status. Financial columns are
+ * never selected here. Pricing does not look at the lot.
+ */
+export type LotRef = { id: number; code: string; description: string | null; pieces: number | null; status: string };
+const LOT_REF_COLUMNS = "id, code, description, pieces, status";
+
+export async function loadLot(supabase: SupabaseClient, id: number): Promise<LotRef | null> {
+  const { data } = await supabase.from("lots").select(LOT_REF_COLUMNS).eq("id", id).maybeSingle();
+  return (data as LotRef | null) ?? null;
 }
 
-export async function loadOpenLots(supabase: SupabaseClient, settings: Settings): Promise<DbLot[]> {
-  const { data } = await supabase.from("lots").select(LOT_COLUMNS).eq("status", "open").order("created_at", { ascending: false }).limit(100);
-  return (data ?? []).map((r) => lotFromRow(r as LotRow, settings));
+export async function loadOpenLots(supabase: SupabaseClient): Promise<(LotRef & { tagged: number })[]> {
+  const { data } = await supabase.from("lots").select(LOT_REF_COLUMNS).eq("status", "open").order("created_at", { ascending: false }).limit(100);
+  const lots = (data ?? []) as LotRef[];
+  if (!lots.length) return [];
+  const { data: counts } = await supabase.from("items").select("lot_id").in("lot_id", lots.map((l) => l.id)).limit(200000);
+  const n = new Map<number, number>();
+  for (const c of counts ?? []) n.set(c.lot_id, (n.get(c.lot_id) ?? 0) + 1);
+  return lots.map((l) => ({ ...l, tagged: n.get(l.id) ?? 0 }));
 }

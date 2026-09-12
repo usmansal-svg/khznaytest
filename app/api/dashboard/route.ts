@@ -34,7 +34,7 @@ export async function GET(request: Request) {
     db.from("transfers").select("id, code, to_outlet_id, status, created_at, sent_at, received_at, note, created_by, transfer_items(item_id, items(sku))").order("created_at", { ascending: false }).limit(50),
     db.from("staff").select("id, name, role, active, daily_target"),
     db.from("outlets").select("id, name, is_online"),
-    db.from("lots").select("id, code, supplier, basis, status, kg, kg_tagged, pieces, description"),
+    db.from("lots").select("id, code, status, pieces, description"),
     db.from("price_alerts").select("id, sku, tagged_by, standard_price, final_price, pct_below, kind, reason, created_at").gte("created_at", since).lte("created_at", until).order("created_at", { ascending: false }).limit(200),
     db.from("brands").select("id, name, added_at, staff:added_by(name)").eq("source", "tagger").eq("tier", "regular").eq("active", true).order("added_at", { ascending: false }).limit(50),
     db.from("grade_audits").select("id, item_id, original_grade, audit_grade, audited_by, audited_at, method, price_delta, items(tagged_by, sku)").gte("audited_at", since).lte("audited_at", until).order("audited_at", { ascending: false }).limit(2000),
@@ -161,13 +161,12 @@ export async function GET(request: Request) {
   });
 
   /* --------------------------------------------------------- lots */
-  const kgByLot = new Map<number, { kg: number; pieces: number }>();
-  for (const i of items) if (i.lot_id) { const e = kgByLot.get(i.lot_id) ?? { kg: 0, pieces: 0 }; e.kg += Number(i.weight_kg ?? 0); e.pieces += 1; kgByLot.set(i.lot_id, e); }
+  const taggedByLot = new Map<number, number>();
+  for (const i of items) if (i.lot_id) taggedByLot.set(i.lot_id, (taggedByLot.get(i.lot_id) ?? 0) + 1);
   const lots = (lotsRes.data ?? []).filter((l) => l.status === "open").map((l) => {
-    const done = kgByLot.get(l.id) ?? { kg: 0, pieces: 0 };
-    const bought = l.basis === "kg" ? Number(l.kg ?? 0) : Number(l.pieces ?? 0);
-    const used = l.basis === "kg" ? done.kg : done.pieces;
-    return { code: l.code, supplier: l.supplier, description: l.description, basis: l.basis, bought, used: Math.round(used * 100) / 100, pieces: done.pieces, pct_done: bought ? Math.min(1, used / (l.basis === "kg" ? bought * 0.9 : bought)) : null };
+    const pieces = taggedByLot.get(l.id) ?? 0;
+    const bought = Number(l.pieces ?? 0);
+    return { code: l.code, description: l.description, bought, pieces, pct_done: bought ? Math.min(1, pieces / bought) : null };
   }).sort((a, b) => (b.pct_done ?? 0) - (a.pct_done ?? 0));
 
   /* ------------------------------------------------------ online */

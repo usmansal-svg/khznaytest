@@ -25,7 +25,7 @@ export async function GET() {
   const [categoriesRes, outletsRes, lots, recentRes, quickRes, byCatRes, sizesRes, rareReasons] = await Promise.all([
     supabase.from("categories").select("slug, name, sort_order, gender").not("gender", "is", null).eq("active", true).order("sort_order"),
     supabase.from("outlets").select("id, name, is_online").eq("active", true).order("id"),
-    loadOpenLots(supabase, ctx.settings),
+    loadOpenLots(supabase),
     supabase.from("items").select("brand_text").gte("tagged_at", since).not("brand_text", "is", null).limit(5000),
     supabase.from("brands").select("name, logo_url").eq("active", true).not("quick_pick_order", "is", null).order("quick_pick_order").limit(20),
     supabase.from("brand_quick_picks").select("category_name, position, brands(name, logo_url, active)").order("position"),
@@ -96,7 +96,7 @@ export async function GET() {
         value_index: s.valueIndex,
       })),
     outlets: outletsRes.data ?? [],
-    lots: lots.map((l) => ({ id: l.id, code: l.code, supplier: l.supplier, basis: l.basis, rate: l.rate, effective_rate: l.effectiveRate, yield: l.yield, status: l.status })),
+    lots: lots.map((l) => ({ id: l.id, code: l.code, description: l.description, pieces: l.pieces, tagged: l.tagged, status: l.status })),
     grades: ctx.refs.grades.map((g) => ({ code: g.code, name: g.name })),
     tagger,
     colour_tag: colourForMonth(new Date()),

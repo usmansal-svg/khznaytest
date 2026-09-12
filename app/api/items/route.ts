@@ -81,10 +81,9 @@ export async function POST(request: Request) {
 
   const ctx = await loadPricingContext(supabase);
   if (ctx.source === "defaults") return NextResponse.json({ error: "The pricing tables could not be read from the database, so this price cannot be trusted. Wait a moment and press Save again." }, { status: 503 });
-  const [brand, lot] = await Promise.all([resolveBrandDb(supabase, body.brand_text), loadLot(supabase, Number(body.lot_id), ctx.settings)]);
+  const [brand, lot] = await Promise.all([resolveBrandDb(supabase, body.brand_text), loadLot(supabase, Number(body.lot_id))]);
   if (!lot) return bad(`Unknown lot: ${body.lot_id}`);
-  if (lot.status === "split") return bad(`Lot ${lot.code} was split into piles — tag from one of its children.`);
-  if (lot.status !== "open") return bad(`Lot ${lot.code} is closed — reopen it to tag from it.`);
+  if (lot.status !== "open") return bad(`Lot ${lot.code} is ${lot.status} in the commercial software — pick an open lot.`);
 
   const subCategory = ctx.subCategories.find((s) => s.slug === body.sub_category_id);
   if (!subCategory) return bad(`Unknown category: ${body.sub_category_id ?? "(missing)"}`);
@@ -92,7 +91,7 @@ export async function POST(request: Request) {
   const wearer = (WEARERS.includes(subCategory.gender as Wearer) ? subCategory.gender : "unisex") as Wearer;
 
   if (staff.role === "photographer") return NextResponse.json({ error: "Photographers take pictures; tagging is for taggers." }, { status: 403 });
-  const q = quote({ subCategory, brand, grade, adjustment, adjustPct, isRare: Boolean(body.is_rare), lot, weightKg: body.weight_kg ?? null }, ctx);
+  const q = quote({ subCategory, brand, grade, adjustment, adjustPct, isRare: Boolean(body.is_rare), lot: null, weightKg: body.weight_kg ?? null }, ctx);
   if (q.error) return bad(q.error);
 
   const rejected = grade === REJECTED;

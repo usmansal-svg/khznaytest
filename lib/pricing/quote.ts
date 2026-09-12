@@ -87,8 +87,9 @@ export function quote(input: QuoteInput, ctx: PricingContext): Quote {
       return { ...empty(subCategory, brand, grade, adjustment, ctx), lot: lotSummary(lot), error: "Weigh the garment — kg lots price by scale weight." };
     }
   } else {
-    weightKg = subCategory.weightKg;
-    warnings.push("No standard cost set for this sub-category — planning quote at the blended rate and default weight. Set one under Pricing.");
+    // Lots carry no cost here any more (they live in the commercial software), so a
+    // sub-category without a cost per piece cannot be priced — say so, do not guess.
+    return { ...empty(subCategory, brand, grade, adjustment, ctx), error: `No cost per piece is set for ${subCategory.name} — set it under Pricing → Categories before tagging.` };
   }
 
   const baseInputs = {

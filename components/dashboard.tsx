@@ -17,7 +17,7 @@ type Data = {
   genders: { gender: string; n: number }[];
   outlets: { id: number | null; name: string; tagged: number; awaiting_floor: number; on_floor: number; on_floor_value: number; sold: number; pulled: number; colours: Record<string, number> }[];
   transfers: { id: number; code: string; to_outlet: string; status: string; created_by: string; created_at: string; sent_at: string | null; received_at: string | null; pieces: number; skus: string[]; transit_hours: number | null; note: string | null }[];
-  lots: { code: string; supplier: string; description: string | null; basis: string; bought: number; used: number; pieces: number; pct_done: number | null }[];
+  lots: { code: string; description: string | null; bought: number; pieces: number; pct_done: number | null }[];
   alerts: { id: number; sku: string; tagger: string; standard_price: number; final_price: number; pct_below: number; kind: string; reason: string | null; created_at: string }[];
   recent: { sku: string; tagged_at: string; tagger: string; sub_category: string; grade: string; price: number; photos: number; status: string }[];
   grading: { total: number; agree: number; low: number; high: number; rupees_low: number; physical: number; photo: number; recent: { sku: string; tagger: string; by: string; at: string; original: string; audit: string; dir: string; method: string; delta: number }[] };
@@ -63,7 +63,7 @@ export function Dashboard() {
     a.new_brands.length > 0 && { text: `${a.new_brands.length} new brand${a.new_brands.length === 1 ? "" : "s"} from taggers need a tier`, href: "/admin/brands", tone: "warn" as const },
     a.no_photo > 0 && { text: `${a.no_photo} garment${a.no_photo === 1 ? "" : "s"} without a photo`, href: "/items", tone: "warn" as const },
     a.qc_held > 0 && { text: `${a.qc_held} garment${a.qc_held === 1 ? "" : "s"} on the QC rail waiting for a regrade`, href: "/qc", tone: "warn" as const },
-    a.lots_nearly_done.length > 0 && { text: `Lots nearly finished: ${a.lots_nearly_done.join(", ")} — time to close and true-up`, href: "/lots", tone: "info" as const },
+    a.lots_nearly_done.length > 0 && { text: `Lots nearly finished: ${a.lots_nearly_done.join(", ")} — close them in the commercial software`, href: "/lots", tone: "info" as const },
     k.awaiting_floor > 0 && { text: `${k.awaiting_floor} tagged garments not yet on a transfer`, href: "/transfers", tone: "info" as const },
   ].filter(Boolean) as { text: string; href: string; tone: "warn" | "info" }[];
 
@@ -164,7 +164,7 @@ export function Dashboard() {
           <CardContent>
             {data.lots.length === 0 ? <p className="text-sm text-muted-foreground">No open lots.</p> : (
               <ul className="space-y-2 text-sm">{data.lots.map((l) => (
-                <li key={l.code}><div className="flex justify-between"><span><span className="font-mono text-xs">{l.code}</span> {l.description ? <span className="text-muted-foreground">· {l.description}</span> : <span className="text-muted-foreground">· {l.supplier}</span>}</span><span className="tabular-nums">{l.pieces} pcs · {l.pct_done == null ? "—" : pct(l.pct_done)}</span></div>
+                <li key={l.code}><div className="flex justify-between"><span><span className="font-mono text-xs">{l.code}</span> {l.description && <span className="text-muted-foreground">· {l.description}</span>}</span><span className="tabular-nums">{l.pieces}{l.bought ? ` of ${l.bought}` : ""} pcs · {l.pct_done == null ? "—" : pct(l.pct_done)}</span></div>
                 <div className="mt-1 h-1.5 rounded bg-muted"><div className={cn("h-1.5 rounded", (l.pct_done ?? 0) >= 0.85 ? "bg-amber-500" : "bg-foreground/70")} style={{ width: `${Math.min(100, (l.pct_done ?? 0) * 100)}%` }} /></div></li>
               ))}</ul>
             )}

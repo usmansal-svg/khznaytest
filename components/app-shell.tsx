@@ -21,7 +21,7 @@ const WORK: NavItem[] = [
   { href: "/transfers", label: "Transfers", icon: ArrowRightLeft, hint: "Pack, dispatch, receive", min: "qc_senior" },
   { href: "/floor", label: "Floor stock", icon: Store, hint: "Stockroom to floor", min: "qc_senior" },
   { href: "/qc", label: "QC", icon: ClipboardCheck, hint: "Review the tagging", min: "qc_senior" },
-  { href: "/lots", label: "Lots", icon: Package, hint: "Bales & P&L", min: "manager" },
+  { href: "/lots", label: "Lots", icon: Package, hint: "From the commercial software", min: "manager" },
 ];
 
 const ADMIN: NavItem[] = [

@@ -51,9 +51,8 @@ export async function POST(request: Request) {
   const ctx = await loadPricingContext(supabase);
   const [brand, lot] = await Promise.all([
     resolveBrandDb(supabase, body.brand_text),
-    body.lot_id != null ? loadLot(supabase, Number(body.lot_id), ctx.settings) : Promise.resolve(null),
+    Promise.resolve(null),
   ]);
-  if (body.lot_id != null && !lot) return NextResponse.json({ error: `Unknown lot: ${body.lot_id}` }, { status: 400 });
 
   const subCategory = ctx.subCategories.find((s) => s.slug === body.sub_category_id);
   if (!subCategory) return NextResponse.json({ error: `Unknown sub_category_id: ${body.sub_category_id ?? "(missing)"}` }, { status: 400 });

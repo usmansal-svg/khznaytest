@@ -24,8 +24,10 @@ const ctx: PricingContext = {
 const lotS: DbLot = { id: 1, code: "LOT-B-01-S", supplier: "B", basis: "kg", rate: 6, kgBought: 27, kgTagged: 25, provisionalYield: 0.9, status: "closed", parentLotId: null, arrivedOn: null, notes: null, description: null, pieces: null, imported: true, effectiveRate: 6 / (25 / 27), yield: 25 / 27 };
 const lotPc: DbLot = { id: 2, code: "LOT-A-01", supplier: "A", basis: "pc", rate: 600, kgBought: null, kgTagged: null, provisionalYield: 0.9, status: "open", parentLotId: null, arrivedOn: null, notes: null, description: null, pieces: null, imported: true, effectiveRate: 600, yield: 1 };
 
-function q(slug: string, opts: { brand?: string; grade?: GradeCode; adjustment?: Adjustment; rare?: boolean; lot?: DbLot | null; weight?: number | null } = {}) {
-  const subCategory = ctx.subCategories.find((s) => s.slug === slug)!;
+// Without a lot the sub-category prices from its cost per piece (Rs 650 here, the men's shirt example); the lot path stays for the engine tests.
+function q(slug: string, opts: { brand?: string; grade?: GradeCode; adjustment?: Adjustment; rare?: boolean; lot?: DbLot | null; weight?: number | null; cost?: number | null } = {}) {
+  const base = ctx.subCategories.find((s) => s.slug === slug)!;
+  const subCategory = { ...base, standardCost: opts.cost !== undefined ? opts.cost : opts.lot === undefined ? 650 : null };
   return quote(
     { subCategory, brand: { id: null, ...resolveBrand(opts.brand ?? "") }, grade: opts.grade ?? "premium", adjustment: opts.adjustment ?? "standard", isRare: opts.rare ?? false, lot: opts.lot, weightKg: opts.weight },
     ctx,
@@ -83,17 +85,16 @@ describe("price quote", () => {
     assert.equal(r.expected_revenue, Math.round(r.landed_cost * DEFAULT_SETTINGS.bulkRecovery * 100) / 100);
   });
 
-  it("with no lot it is a planning quote at the default weight, and says so", () => {
-    const r = q("smt-men-button-down-shirt", { brand: "Zara" });
-    assert.equal(r.cost_basis, "planning");
-    assert.equal(r.price, 2090);
-    assert.ok(r.warnings!.some((w) => /planning quote/i.test(w)));
+  it("with no cost per piece and no lot cost it refuses to guess", () => {
+    const r = q("smt-men-button-down-shirt", { brand: "Zara", cost: null });
+    assert.match(r.error ?? "", /No cost per piece/);
+    assert.equal(r.price, null);
   });
 
   it("affordable luxury resolves from the brand, never from the tagger", () => {
     const r = q("smt-men-button-down-shirt", { brand: "nike" });
     assert.equal(r.brand_tier, "affordable_luxury");
-    assert.equal(r.price, 4290);
+    assert.equal(r.price, 4690);
   });
 
   it("ultra luxury blocks with a reason and no price", () => {
@@ -116,6 +117,6 @@ describe("price quote", () => {
   });
 
   it("flags high-value items for QC review", () => {
-    assert.ok(q("wmf-leather-jacket", { brand: "Zara" }).warnings!.some((w) => /QC review/i.test(w)));
+    assert.ok(q("wmf-leather-jacket", { brand: "Zara", cost: 8000 }).warnings!.some((w) => /QC review/i.test(w)));
   });
 });
