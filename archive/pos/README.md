@@ -12,3 +12,8 @@ What is here:
 - `KHAZANAY-POS.md` — the full reference
 
 How to lift it into a new project: create a Next.js app with the same Supabase project (or a synced copy), copy the four folders back to `app/pos`, `app/api/pos`, `components/pos`, `lib/pos`, bring `lib/pricing/{engine,constants,repo,floor}.ts`, `lib/auth/*`, `lib/supabase/*`, `components/brand-logo.tsx` and the shadcn `components/ui` primitives, and re-add the nightly cron for `/api/pos/shopify-sync` in `vercel.json`. The roles `cashier` and `outlet_manager` already exist on `staff`.
+
+
+## Added 13 Sep 2026: Floor stock
+
+The Floor stock screen (floor by scan, drop day, sticker sweep, pull) moved out of the tagging app into `floor/` here — see `floor/README.md`. It becomes a menu item of the POS.

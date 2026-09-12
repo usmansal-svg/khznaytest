@@ -134,7 +134,7 @@ export function TransfersPage() {
     const j = await call("PATCH", { id: current.id, action: "close_receiving", confirm: true });
     if (j?.reconciliation) {
       const r = j.reconciliation as { received: string[]; missing: string[]; unexpected: string[] };
-      setMessage({ tone: r.missing.length ? "warn" : "ok", text: `${current.code} received: ${r.received.length + r.unexpected.length} checked in${r.missing.length ? `, ${r.missing.length} missing` : ""}${r.unexpected.length ? `, ${r.unexpected.length} not on the list` : ""}. Garments are in the stockroom — floor them from the Floor screen.` });
+      setMessage({ tone: r.missing.length ? "warn" : "ok", text: `${current.code} received: ${r.received.length + r.unexpected.length} checked in${r.missing.length ? `, ${r.missing.length} missing` : ""}${r.unexpected.length ? `, ${r.unexpected.length} not on the list` : ""}. Garments are in the stockroom — the POS floors them.` });
     }
   }
 
@@ -166,7 +166,7 @@ export function TransfersPage() {
     <div className="mx-auto max-w-6xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Transfers</h1>
-        <p className="text-sm text-muted-foreground">Pack a box by scanning every tag, dispatch it, and the outlet scans every garment back out of the box. Anything missing is flagged. Received garments wait in the stockroom until they are scanned onto the floor.</p>
+        <p className="text-sm text-muted-foreground">Pack a box by scanning every tag, dispatch it, and the outlet scans every garment back out of the box. Anything missing is flagged. Received garments wait in the stockroom until the POS scans them onto the floor.</p>
       </div>
       {message && <p className={cn("rounded-md border p-3 text-sm", message.tone === "error" ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200" : message.tone === "warn" ? "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200" : "bg-muted")}>{message.text}</p>}
 
