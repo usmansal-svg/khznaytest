@@ -341,6 +341,7 @@ function SubCategoryEditor() {
 
   // Excel-style column filters on gender, category and sub-category.
   const [filters, setFilters] = useState<{ gender: Set<string>; category: Set<string>; name: Set<string>; season: Set<string> }>({ gender: new Set(), category: new Set(), name: new Set(), season: new Set() });
+  const [showHidden, setShowHidden] = useState(false);
 
   if (!rows) return <p className="text-muted-foreground">Loading…</p>;
   const dirty = Object.keys(edits).length;
@@ -349,7 +350,6 @@ function SubCategoryEditor() {
     (skip === "gender" || !filters.gender.size || filters.gender.has(r.gender)) &&
     (skip === "category" || !filters.category.size || filters.category.has(r.category)) &&
     (skip === "name" || !filters.name.size || filters.name.has(r.name));
-  const [showHidden, setShowHidden] = useState(false);
   const visible = rows.filter((r) => pass(r) && (showHidden || r.active));
   const hiddenCount = rows.filter((r) => !r.active).length;
   // Each list offers the values still reachable under the other two filters, as Excel does.
