@@ -147,7 +147,7 @@ Taggers see only the shelf price and the grade prices — no cost, margin or lad
 
 ---
 
-**Station** (`lib/pricing/station.ts`) says where a garment is in the words the floor uses, and is the same on the Items screen and in the export. Online: *Tagging → Photography station → Packing station → Online shelf → Sold*. Outlet: *Tagging station → Being packed for X → In transit to X → At X → Sold*. Either: *QC rail · Set aside · Pulled · Returned damaged · Rejected · Unlisted*.
+**Station** (`lib/pricing/station.ts`) says where a garment is in the words the floor uses, and is the same on the Items screen and in the export. Online: *Tagging → Photography station → Packing station → Online shelf → Sold*. Outlet: *Tagging station → To be dispatched · X → In transit · X → Received · X → Sold* (the wording of the previous system, matched 12 Sep). A received transfer has *Upload N to Shopify POS · outlet* for managers: the whole box goes up tracked at that outlet's Shopify location only. Either: *QC rail · Set aside · Pulled · Returned damaged · Rejected · Unlisted*.
 
 ## 6. Lots
 

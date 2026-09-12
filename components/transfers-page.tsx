@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Printer, ScanLine, Send, PackageCheck, X } from "lucide-react";
+import { Globe, Printer, ScanLine, Send, PackageCheck, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,6 +27,25 @@ export function TransfersPage() {
   const [note, setNote] = useState("");
   const [scan, setScan] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  // After receipt, the whole box goes to that outlet's Shopify POS in one go: tracked, one unit each, at the outlet's location.
+  const [canPush, setCanPush] = useState(false);
+  const [pushing, setPushing] = useState<{ total: number; done: number; failed: string[] } | null>(null);
+  useEffect(() => { fetch("/api/auth/me").then((r) => r.json()).then((j) => setCanPush(["manager", "founder"].includes(j.staff?.role))).catch(() => {}); }, []);
+  async function pushToPos(t: Transfer) {
+    const skus = t.items.filter((l) => l.status !== "sold").map((l) => l.sku);
+    if (!skus.length || !window.confirm(`Upload ${skus.length} garments to the Shopify POS for ${t.to_outlet}? They will be stocked at that outlet's Shopify location only.`)) return;
+    setPushing({ total: skus.length, done: 0, failed: [] });
+    for (let i = 0; i < skus.length; i += 25) {
+      const batch = skus.slice(i, i + 25);
+      try {
+        const res = await fetch("/api/shopify/push-bulk", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ skus: batch, visibility: "pos" }) });
+        const j = await res.json();
+        const bad = res.ok ? (j.results as { ok: boolean; sku: string; error?: string }[]).filter((r) => !r.ok).map((r) => `${r.sku}: ${r.error}`) : batch.map((s) => `${s}: ${j.error ?? "failed"}`);
+        setPushing((p) => p && { ...p, done: p.done + batch.length, failed: [...p.failed, ...bad] });
+      } catch (e) { setPushing((p) => p && { ...p, done: p.done + batch.length, failed: [...p.failed, ...batch.map((s) => `${s}: ${e instanceof Error ? e.message : "failed"}`)] }); }
+    }
+    setPushing((p) => { if (p) setMessage(p.failed.length ? `${p.total - p.failed.length} uploaded to Shopify POS · ${p.failed.length} failed: ${p.failed.slice(0, 3).join("; ")}` : `${p.total} garments uploaded to the Shopify POS for ${t.to_outlet}.`); return null; });
+  }
   const [busy, setBusy] = useState(false);
   const scanRef = useRef<HTMLInputElement>(null);
 
@@ -128,11 +147,12 @@ export function TransfersPage() {
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
-                  <span><span className="font-mono">{current.code}</span> → {current.to_outlet} <span className="ml-2 rounded-full border px-2 py-0.5 text-xs font-normal capitalize">{current.status}</span></span>
+                  <span><span className="font-mono">{current.code}</span> → {current.to_outlet} <span className="ml-2 rounded-full border px-2 py-0.5 text-xs font-normal">{{ open: "To be dispatched", sent: "In transit", received: "Received" }[current.status]}</span></span>
                   <span className="flex gap-2">
                     <Button asChild size="sm" variant="outline"><a href={`/transfers/${current.id}/print`} target="_blank" rel="noreferrer"><Printer className="size-4" /> Sheet</a></Button>
                     {current.status === "open" && <Button size="sm" disabled={busy || current.items.length === 0} onClick={() => call("PATCH", { id: current.id, action: "send" })}><Send className="size-4" /> Send</Button>}
                     {current.status !== "received" && <Button size="sm" variant="outline" disabled={busy || current.items.length === 0} onClick={() => call("PATCH", { id: current.id, action: "receive" })}><PackageCheck className="size-4" /> Mark received</Button>}
+                    {current.status === "received" && canPush && <Button size="sm" disabled={busy || pushing != null || current.items.length === 0} onClick={() => pushToPos(current)}><Globe className="size-4" /> {pushing ? `Uploading ${pushing.done}/${pushing.total}…` : `Upload ${current.items.length} to Shopify POS · ${current.to_outlet}`}</Button>}
                   </span>
                 </CardTitle>
               </CardHeader>

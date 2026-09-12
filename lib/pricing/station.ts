@@ -3,7 +3,7 @@
  * the Items screen, the export and any report agree.
  *
  *   Online:  Tagging → Photography station → Packing station → Online shelf (listed) → Sold
- *   Outlet:  Tagging → Being packed for X → In transit to X → At X → Sold
+ *   Outlet:  Tagging station → To be dispatched · X → In transit · X → Received · X → Sold
  *   Either:  QC rail · Set aside · Pulled · Returned damaged · Rejected · Unlisted
  */
 
@@ -33,12 +33,12 @@ export function stationOf(i: StationInput): string {
     if (photoCount === 0) return "Photography station";
     return "Packing station";
   }
-  if (i.status === "on_floor" && i.outlet) return `At ${i.outlet}`;
+  if (i.status === "on_floor" && i.outlet) return `Received · ${i.outlet}`;
   if (i.transfer) {
-    if (i.transfer.status === "received") return i.outlet ? `At ${i.outlet}` : "Received";
-    if (i.transfer.status === "sent") return `In transit to ${i.transfer.outlet ?? "outlet"}`;
-    return `Being packed for ${i.transfer.outlet ?? "outlet"}`;
+    if (i.transfer.status === "received") return `Received · ${i.outlet ?? i.transfer.outlet ?? "outlet"}`;
+    if (i.transfer.status === "sent") return `In transit · ${i.transfer.outlet ?? "outlet"}`;
+    return `To be dispatched · ${i.transfer.outlet ?? "outlet"}`;
   }
-  if (i.outlet) return `At ${i.outlet}`;
+  if (i.outlet) return `Received · ${i.outlet}`;
   return "Tagging station";
 }

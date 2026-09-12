@@ -12,9 +12,9 @@ describe("station", () => {
   });
   it("walks an outlet garment from tagging to the outlet", () => {
     assert.equal(stationOf({ status: "tagged", channel: "outlet", online_status: null }), "Tagging station");
-    assert.equal(stationOf({ status: "tagged", channel: "outlet", online_status: null, transfer: { status: "open", outlet: "Lahore 1" } }), "Being packed for Lahore 1");
-    assert.equal(stationOf({ status: "tagged", channel: "outlet", online_status: null, transfer: { status: "sent", outlet: "Lahore 1" } }), "In transit to Lahore 1");
-    assert.equal(stationOf({ status: "on_floor", channel: "outlet", online_status: null, outlet: "Lahore 1", transfer: { status: "received", outlet: "Lahore 1" } }), "At Lahore 1");
+    assert.equal(stationOf({ status: "tagged", channel: "outlet", online_status: null, transfer: { status: "open", outlet: "Lahore 1" } }), "To be dispatched · Lahore 1");
+    assert.equal(stationOf({ status: "tagged", channel: "outlet", online_status: null, transfer: { status: "sent", outlet: "Lahore 1" } }), "In transit · Lahore 1");
+    assert.equal(stationOf({ status: "on_floor", channel: "outlet", online_status: null, outlet: "Lahore 1", transfer: { status: "received", outlet: "Lahore 1" } }), "Received · Lahore 1");
   });
   it("holds and exceptions come first", () => {
     assert.equal(stationOf({ status: "tagged", channel: "outlet", online_status: null, qc_hold: true }), "QC rail");
