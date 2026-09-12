@@ -24,7 +24,7 @@ export const instant = false;
 
 const senior = (role: string) => ["qc_senior", "manager", "founder"].includes(role);
 const one = <T,>(v: unknown) => (Array.isArray(v) ? v[0] : v) as T | null | undefined;
-const SELECT = "id, sku, brand_text, brand_tier, size_label, colour, season, wearer, is_rare, rare_reasons, rare_note, photos, weight_kg, lot_id, grade_code, adjust_pct, price, price_manual, standard_price, qc_hold, tagged_by, tagged_at, sub_category_slug, sub_categories(name, gender, categories(name)), staff:tagged_by(name)";
+const SELECT = "id, sku, brand_text, brand_tier, size_label, colour, season, wearer, is_rare, rare_reasons, rare_note, photos, weight_kg, weight_class, lot_id, grade_code, adjust_pct, price, price_manual, standard_price, qc_hold, tagged_by, tagged_at, sub_category_slug, sub_categories(name, gender, categories(name)), staff:tagged_by(name)";
 type Row = { id: number; sku: string; brand_text: string | null; brand_tier: string; size_label: string | null; colour: string | null; season: string | null; wearer: string | null; is_rare: boolean; photos: unknown; grade_code: string; price: number | null; price_manual: number | null; qc_hold: boolean; tagged_by: number | null; tagged_at: string; sub_category_slug: string; sub_categories: unknown; staff?: unknown };
 
 function shape(r: Row) {
@@ -120,7 +120,7 @@ export async function POST(request: Request) {
     if (!sub) return NextResponse.json({ error: "Unknown garment type." }, { status: 400 });
     if (("grade_code" in patch || "sub_category_slug" in patch || "brand_tier" in patch) && item.price_manual == null) {
       const brand = "brand_tier" in patch ? { id: patch.brand_id as number | null, name: String(patch.brand_text), tier: patch.brand_tier as "regular", matched: true } : await resolveBrandDb(db, item.brand_text ?? "");
-      const q = quote({ subCategory: sub, brand, grade: (patch.grade_code as GradeCode) ?? (item.grade_code as GradeCode), adjustment: "standard", adjustPct: 0, isRare: Boolean(patch.is_rare ?? item.is_rare), lot: null, weightKg: item.weight_kg }, ctx);
+      const q = quote({ subCategory: sub, brand, grade: (patch.grade_code as GradeCode) ?? (item.grade_code as GradeCode), adjustment: "standard", adjustPct: 0, isRare: Boolean(patch.is_rare ?? item.is_rare), lot: null, weightKg: item.weight_kg, heavy: item.weight_class === "heavy" }, ctx);
       if (q.price != null) { patch.price = q.price; patch.standard_price = q.standard_price; patch.landed_cost = q.landed_cost; priceAfter = q.price; }
     }
     const { error } = await db.from("items").update(patch).eq("id", item.id);

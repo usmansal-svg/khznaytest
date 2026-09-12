@@ -27,6 +27,8 @@ export type QuoteInput = {
   lot?: DbLot | null;
   /** Scale weight; required for kg lots, ignored for pc lots */
   weightKg?: number | null;
+  /** The tagger marked it Heavy: price from the sub-category's heavy cost when one is set */
+  heavy?: boolean;
 };
 
 export type Quote = {
@@ -74,7 +76,7 @@ export function quote(input: QuoteInput, ctx: PricingContext): Quote {
   if (subCategory.standardCost) {
     // The sheet's cost per piece is the purchase cost before sales tax; landed applies the constants.
     basis = "pc";
-    effRate = subCategory.standardCost;
+    effRate = input.heavy && subCategory.heavyCost ? subCategory.heavyCost : subCategory.standardCost;
     weightKg = null;
   } else if (lot) {
     if (lot.effectiveRate == null) {

@@ -16,7 +16,7 @@ import { shopifyTags, shopifyTitle } from "@/lib/shopify/tags";
 
 type Photo = { url: string; path: string; kind: "original" | "cutout"; source?: string; taken_at?: string };
 const one = <T,>(v: unknown) => (Array.isArray(v) ? v[0] : v) as T | null | undefined;
-const SELECT = "id, sku, brand_text, brand_tier, grade_code, is_rare, rare_reasons, rare_note, season, wearer, size_label, colour, fabric, measurements, price, price_manual, status, channel, online_status, photos, description, shopify_product_id, shopify_visibility, outlet_id, outlets!items_outlet_id_fkey(shopify_location_id), sub_categories(name, shopify_tag, categories(name, shopify_tag))";
+const SELECT = "id, sku, brand_text, brand_tier, grade_code, is_rare, rare_reasons, rare_note, season, wearer, size_label, colour, fabric, measurements, price, price_manual, status, channel, online_status, photos, description, shopify_product_id, shopify_visibility, weight_class, outlet_id, outlets!items_outlet_id_fkey(shopify_location_id), sub_categories(name, shopify_tag, categories(name, shopify_tag))";
 
 export type PushOutcome = { ok: true; sku: string; product_id: string; handle: string; admin_url: string; created: boolean; visibility: Visibility } | { ok: false; sku: string; error: string };
 
@@ -39,7 +39,7 @@ export async function pushItem(db: SupabaseClient, sku: string, visibility: Visi
   const cutouts = photos.filter((p) => p.kind === "cutout");
   const cutFor = (p: Photo) => cutouts.find((c) => c.source === p.path) ?? cutouts.find((c) => !c.source && (c.taken_at ?? "") > (p.taken_at ?? "") && !originals.some((o) => (o.taken_at ?? "") > (p.taken_at ?? "") && (o.taken_at ?? "") < (c.taken_at ?? "")));
   const imageUrls = originals.length ? originals.map((p) => cutFor(p)?.url ?? p.url) : cutouts.map((c) => c.url);
-  const taggable = { wearer: item.wearer, season: item.season, category, sub_category: subCategory, brand: item.brand_text, brand_tier: item.brand_tier, grade: item.grade_code, size_label: item.size_label, colour: item.colour, fabric: item.fabric, is_rare: item.is_rare, category_tag: catRow?.shopify_tag ?? null, sub_tag: sub?.shopify_tag ?? null };
+  const taggable = { wearer: item.wearer, season: item.season, category, sub_category: subCategory, brand: item.brand_text, brand_tier: item.brand_tier, grade: item.grade_code, size_label: item.size_label, colour: item.colour, fabric: item.fabric, is_rare: item.is_rare, category_tag: catRow?.shopify_tag ?? null, sub_tag: sub?.shopify_tag ?? null, heavy: item.weight_class === "heavy" };
   // A channel tag so the store's automated collections (feeds, "all products") can exclude outlet stock with one rule.
   const tags = [...shopifyTags(taggable), visibility === "pos" ? "POS only" : visibility === "draft" ? "Draft" : "Website"];
   // Received at an outlet: its own location. Otherwise the warehouse — the location mapped to the Online outlet —

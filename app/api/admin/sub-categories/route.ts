@@ -13,7 +13,7 @@ import { computePrice } from "@/lib/pricing/engine";
 import { loadPricingContext } from "@/lib/pricing/repo";
 
 const PROFILES = ["fast", "standard", "slow"];
-const EDITABLE = ["category_slug", "gender", "name", "weight_kg", "profile_code", "value_index", "season", "market_ceiling", "market_price", "per_piece_cost", "per_piece_share", "planning_rate_usd_per_kg", "standard_cost_pkr", "active"] as const;
+const EDITABLE = ["category_slug", "gender", "name", "weight_kg", "profile_code", "value_index", "season", "market_ceiling", "market_price", "per_piece_cost", "per_piece_share", "planning_rate_usd_per_kg", "standard_cost_pkr", "heavy_cost_pkr", "active"] as const;
 const SEASONS = ["summer", "winter", "all"];
 const GENDERS = ["men", "women", "teenage", "kid", "toddler", "infant"];
 
@@ -21,7 +21,7 @@ export async function GET() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("sub_categories")
-    .select("slug, code, category_slug, gender, name, weight_kg, profile_code, value_index, measure_type, season, market_ceiling, market_price, per_piece_cost, per_piece_share, planning_rate_usd_per_kg, standard_cost_pkr, active, categories(name, sort_order)")
+    .select("slug, code, category_slug, gender, name, weight_kg, profile_code, value_index, measure_type, season, market_ceiling, market_price, per_piece_cost, per_piece_share, planning_rate_usd_per_kg, standard_cost_pkr, heavy_cost_pkr, active, categories(name, sort_order)")
     .order("name");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   const genderOrder = ["men", "women", "teenage", "kid", "toddler", "infant"];
@@ -183,7 +183,7 @@ export async function PATCH(request: Request) {
 
     const { data: before } = await supabase
       .from("sub_categories")
-      .select("category_slug, gender, name, weight_kg, profile_code, value_index, season, market_ceiling, market_price, per_piece_cost, per_piece_share, planning_rate_usd_per_kg, standard_cost_pkr, active")
+      .select("category_slug, gender, name, weight_kg, profile_code, value_index, season, market_ceiling, market_price, per_piece_cost, per_piece_share, planning_rate_usd_per_kg, standard_cost_pkr, heavy_cost_pkr, active")
       .eq("slug", slug)
       .maybeSingle();
     if (!before) {
@@ -214,7 +214,7 @@ function check(p: Record<string, unknown>): string | null {
   if ("season" in p && !SEASONS.includes(String(p.season))) return "season must be summer, winter or all.";
   if ("gender" in p && !GENDERS.includes(String(p.gender))) return "gender must be men, women, teenage, kid, toddler or infant.";
   if ("name" in p && !String(p.name ?? "").trim()) return "name cannot be empty.";
-  for (const k of ["market_ceiling", "market_price", "per_piece_cost", "planning_rate_usd_per_kg", "standard_cost_pkr"] as const) {
+  for (const k of ["market_ceiling", "market_price", "per_piece_cost", "planning_rate_usd_per_kg", "standard_cost_pkr", "heavy_cost_pkr"] as const) {
     if (k in p && p[k] !== null && !(typeof p[k] === "number" && (p[k] as number) >= 0)) return `${k} must be a non-negative number or empty.`;
   }
   if ("per_piece_share" in p && !(typeof p.per_piece_share === "number" && p.per_piece_share >= 0 && p.per_piece_share <= 1)) return "per_piece_share must be between 0 and 1.";

@@ -44,6 +44,7 @@ type Body = {
   outlet_id?: number | null;
   lot_id?: number | null;
   weight_kg?: number | null;
+  heavy?: boolean;
   price_manual?: number | null;
   channel?: string;
   /** Deliberate send-to-outlet of a garment below the outlet minimum; confirmed twice on the form and audited. */
@@ -92,7 +93,7 @@ export async function POST(request: Request) {
   const wearer = (WEARERS.includes(body.wearer as Wearer) ? body.wearer : WEARERS.includes(subCategory.gender as Wearer) ? subCategory.gender : "unisex") as Wearer;
 
   if (staff.role === "photographer") return NextResponse.json({ error: "Photographers take pictures; tagging is for taggers." }, { status: 403 });
-  const q = quote({ subCategory, brand, grade, adjustment, adjustPct, isRare: Boolean(body.is_rare), lot: null, weightKg: body.weight_kg ?? null }, ctx);
+  const q = quote({ subCategory, brand, grade, adjustment, adjustPct, isRare: Boolean(body.is_rare), lot: null, weightKg: body.weight_kg ?? null, heavy: Boolean(body.heavy) }, ctx);
   if (q.error) return bad(q.error);
 
   const rejected = grade === REJECTED;
@@ -170,6 +171,7 @@ export async function POST(request: Request) {
       fabric: body.fabric?.trim() || null,
       measurements: body.measurements ?? {},
       weight_kg: q.weight_kg,
+      weight_class: body.heavy && subCategory.heavyCost ? "heavy" : "light",
       adjustment: adjustPct > 0 ? "above" : adjustPct < 0 ? "below" : "standard",
       adjust_pct: adjustPct,
       standard_price: rejected ? 0 : q.standard_price,

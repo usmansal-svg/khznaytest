@@ -79,12 +79,12 @@ describe("pricing workbook", () => {
       const ss = wb.getWorksheet("Sub-categories")!;
       const row = find(ss, 1, subs[1].slug);
       row.getCell(7).value = 750; // cost per piece
-      row.getCell(8).value = "Slow";
-      row.getCell(12).value = 3000; // market price
+      row.getCell(9).value = "Slow";
+      row.getCell(13).value = 3000; // market price
       row.getCell(6).value = "Winter"; // season
       const row0 = find(ss, 1, subs[0].slug);
-      row0.getCell(12).value = null; // clear the market price
-      row0.getCell(13).value = "no";
+      row0.getCell(13).value = null; // clear the market price
+      row0.getCell(14).value = "no";
     });
     assert.deepEqual(r.problems, []);
     assert.ok(r.settings);
@@ -110,8 +110,8 @@ describe("pricing workbook", () => {
     const r = await roundTrip((wb) => {
       const ss = wb.getWorksheet("Sub-categories")!;
       const row = find(ss, 1, subs[2].slug);
-      row.getCell(8).value = "quick";
-      row.getCell(15).value = 99999; // Premium (calc)
+      row.getCell(9).value = "quick";
+      row.getCell(16).value = 99999; // Premium (calc)
       const ps = wb.getWorksheet("Selling profiles")!;
       find(ps, 1, "slow").getCell(4).value = 90; // breaks the 100% sum
     });

@@ -24,6 +24,7 @@ type Body = {
   is_rare?: boolean;
   lot_id?: number | null;
   weight_kg?: number | null;
+  heavy?: boolean;
 };
 
 export async function POST(request: Request) {
@@ -57,7 +58,7 @@ export async function POST(request: Request) {
   const subCategory = ctx.subCategories.find((s) => s.slug === body.sub_category_id);
   if (!subCategory) return NextResponse.json({ error: `Unknown sub_category_id: ${body.sub_category_id ?? "(missing)"}` }, { status: 400 });
 
-  const q = quote({ subCategory, brand, grade, adjustment, adjustPct, isRare: Boolean(body.is_rare), lot, weightKg: body.weight_kg ?? null }, ctx);
+  const q = quote({ subCategory, brand, grade, adjustment, adjustPct, isRare: Boolean(body.is_rare), lot, weightKg: body.weight_kg ?? null, heavy: Boolean(body.heavy) }, ctx);
   // Taggers see the shelf price and the grade prices only. Cost, margin,
   // expected revenue, the multiple and the markdown ladder are management.
   if (!me || !MANAGER_ROLES.has(me.role)) {

@@ -25,6 +25,7 @@ export type TaggableItem = {
   /** Hand-set Shopify tags from the Catalogue screen; blank = automatic. */
   category_tag?: string | null;
   sub_tag?: string | null;
+  heavy?: boolean;
 };
 
 const WEARER: Record<string, string> = {
@@ -114,6 +115,7 @@ export function shopifyTags(item: TaggableItem): string[] {
   if (item.colour) tags.push(title(item.colour.trim()));
   if (item.fabric) tags.push(title(item.fabric.trim()));
   if (item.is_rare) tags.push("Rare Find");
+  if (item.heavy) tags.push("Heavyweight");
   if (/sport/i.test(item.category) || /sport/i.test(item.sub_category)) tags.push("Sportswear");
 
   // Shopify treats tags case-insensitively and caps them at 255 chars.

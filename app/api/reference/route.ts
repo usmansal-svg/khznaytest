@@ -94,6 +94,7 @@ export async function GET() {
         weight_kg: s.weightKg,
         profile_code: s.profileCode,
         value_index: s.valueIndex,
+        has_heavy: s.heavyCost != null,
       })),
     outlets: outletsRes.data ?? [],
     lots: lots.map((l) => ({ id: l.id, code: l.code, description: l.description, pieces: l.pieces, tagged: l.tagged, status: l.status })),

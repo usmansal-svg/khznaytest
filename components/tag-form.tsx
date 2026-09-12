@@ -40,6 +40,7 @@ type Reference = {
     weight_kg: number;
     profile_code: string;
     value_index: number;
+    has_heavy?: boolean;
   }[];
   outlets: { id: number; name: string; is_online: boolean }[];
   lots: { id: number; code: string; description: string | null; pieces: number | null; tagged: number; status: string }[];
@@ -113,6 +114,7 @@ export function TagForm() {
   const [sizeOther, setSizeOther] = useState(false);
   const [colour, setColour] = useState("");
   const [grade, setGrade] = useState<GradeCode>("premium");
+  const [heavy, setHeavy] = useState(false);
   const [measure, setMeasure] = useState<Record<string, string>>({});
   const [sleeve, setSleeve] = useState<string>("");
   const [adjustPct, setAdjustPct] = useState(0);
@@ -270,7 +272,7 @@ export function TagForm() {
           method: "POST",
           headers: { "content-type": "application/json" },
           signal: ctrl.signal,
-          body: JSON.stringify({ sub_category_id: sub, brand_text: brand, grade, adjust_pct: adjustPct, is_rare: rareFind, lot_id: lotId ? Number(lotId) : null }),
+          body: JSON.stringify({ sub_category_id: sub, brand_text: brand, grade, adjust_pct: adjustPct, is_rare: rareFind, lot_id: lotId ? Number(lotId) : null, heavy: heavy && Boolean(selectedSub?.has_heavy) }),
         });
         setPrice(await res.json());
       } catch (e) {
@@ -283,7 +285,7 @@ export function TagForm() {
       clearTimeout(t);
       ctrl.abort();
     };
-  }, [sub, brand, grade, adjustPct, lotId, rareFind]);
+  }, [sub, brand, grade, adjustPct, lotId, rareFind, heavy, selectedSub?.has_heavy]);
 
   const blocked = !rejected && Boolean(price?.block_reason);
   // No hand-off: an ultra-luxury brand (blocked) must be priced by hand; a
@@ -364,6 +366,7 @@ export function TagForm() {
           measurements: outlet ? {} : { ...Object.fromEntries(Object.entries(measure).filter(([, v]) => v !== "")), ...(asksSleeve && sleeve ? { Sleeve: sleeve } : {}) },
           outlet_id: null,
           lot_id: Number(lotId),
+          heavy: heavy && Boolean(selectedSub?.has_heavy),
           channel,
           outlet_override: outletOverride,
           price_manual: needsManual ? Number(manualPrice) : null,
@@ -483,6 +486,7 @@ export function TagForm() {
             </Field>
 
             <ButtonGroup label="Season" hint="Shows that season's catalogue; goes into the SKU and the Shopify tags" options={SEASON_OPTIONS} value={season} onChange={setSeason} />
+            {selectedSub?.has_heavy && <ButtonGroup label="Weight" hint="Bought by the kilo: a heavy piece costs more, so it prices from the heavy cost. Same tag on the website." options={[{ code: "light", label: "Light" }, { code: "heavy", label: "Heavy" }]} value={heavy ? "heavy" : "light"} onChange={(v) => setHeavy(v === "heavy")} />}
             <Field label="Wearer">
               <select className={selectClass} value={wearer} onChange={(e) => setWearer(e.target.value as Wearer)}>
                 {WEARER_OPTIONS.map((w) => <option key={w} value={w}>{WEARER_LABELS[w]}</option>)}
