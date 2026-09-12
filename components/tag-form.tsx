@@ -16,7 +16,7 @@ import { ADULT_SIZES, KIDS_SIZES } from "@/lib/pricing/kids-sizes";
 import { sizeSeriesFor } from "@/lib/pricing/sizes";
 import { rareTagLine } from "@/lib/pricing/rare-reasons";
 import { GENDER_LABELS, type Gender, type Season, type Wearer, WEARER_OPTIONS, WEARER_LABELS, WEARER_GENDERS, isChildWearer } from "@/lib/pricing/sku";
-import { SLEEVE_TYPES } from "@/lib/pricing/sub-categories";
+import { SLEEVE_TYPES, measurementFields, type MeasureType } from "@/lib/pricing/sub-categories";
 
 /* ---------------------------------------------------------------- types */
 
@@ -237,6 +237,7 @@ export function TagForm() {
   // A new garment type resets the switch to that type's own series.
   useEffect(() => { setSizeSeriesCode(null); setSizeOther(false); }, [sub, isKids]);
   const asksSleeve = Boolean(selectedSub?.asks_sleeve);
+  useEffect(() => { setSleeve(selectedSub?.measure_type === "outer" ? "Full sleeve" : "Half sleeve"); }, [selectedSub?.slug, selectedSub?.measure_type]);
   const isManager = ref?.tagger?.role === "manager" || ref?.tagger?.role === "founder";
   const selectedLot = ref?.lots.find((l) => String(l.id) === lotId) ?? null;
   const rejected = grade === "rejected";
@@ -689,7 +690,7 @@ export function TagForm() {
                 <div>
                   <Label className="mb-2 block">Measured flat (inches)</Label>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    {selectedSub.measure_fields.map((f) => (
+                    {measurementFields(selectedSub.measure_type as MeasureType, selectedSub.gender, sleeve).map((f) => (
                       <Field key={f} label={f} small>
                         <Input type="number" inputMode="decimal" step="0.5" min="0" value={measure[f] ?? ""} onChange={(e) => setMeasure((m) => ({ ...m, [f]: e.target.value }))} />
                       </Field>

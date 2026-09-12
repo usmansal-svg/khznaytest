@@ -19,13 +19,25 @@ import type { ProfileCode } from "./constants";
 export type MeasureType = "top" | "bottom" | "dress" | "outer" | "kids_top" | "kids_bottom";
 
 export const MEASUREMENT_FIELDS: Readonly<Record<MeasureType, readonly string[]>> = {
-  top: ["Chest", "Length"],
-  bottom: ["Waist", "Length"],
+  top: ["Chest", "Length", "Shoulder"],
+  bottom: ["Waist", "Length", "Inseam"],
   dress: ["Bust", "Waist", "Length"],
-  outer: ["Chest", "Length", "Sleeve length"],
+  outer: ["Chest", "Length", "Shoulder"],
   kids_top: ["Chest", "Length"],
   kids_bottom: ["Waist", "Length"],
 };
+
+/**
+ * What the tagger measures, flat in inches, for one garment: the type's
+ * fields, "Bust" instead of "Chest" for women, and a sleeve length only when
+ * the garment has full sleeves — a thrift customer needs exactly these to
+ * know whether it fits.
+ */
+export function measurementFields(measureType: MeasureType, gender: string | null | undefined, sleeve: string | null | undefined): string[] {
+  const base = MEASUREMENT_FIELDS[measureType].map((f) => (f === "Chest" && gender === "women" ? "Bust" : f));
+  if (ASKS_SLEEVE.has(measureType) && sleeve === "Full sleeve") base.push("Sleeve length");
+  return base;
+}
 
 /** Garment types that need the sleeve question answered. */
 export const ASKS_SLEEVE: ReadonlySet<MeasureType> = new Set(["top", "outer", "kids_top", "dress"]);
