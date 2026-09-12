@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, Globe, Printer } from "lucide-react";
+import { Download, FileSpreadsheet, Printer } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,7 +42,6 @@ export function ItemSearch() {
   const [to, setTo] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
   const [exportSkus, setExportSkus] = useState("");
-  const [exportFormat, setExportFormat] = useState<"xlsx" | "csv">("xlsx");
   const [visibility, setVisibility] = useState<"pos" | "both" | "online" | "draft">("pos");
   const [pushing, setPushing] = useState<{ total: number; done: number; failed: { sku: string; error: string }[] } | null>(null);
 
@@ -95,9 +94,9 @@ export function ItemSearch() {
   const pickedVisible = visible.filter((r) => picked.has(r.sku));
   const toggleAll = () => setPicked((p) => { const n = new Set(p); if (allVisiblePicked) visible.forEach((r) => n.delete(r.sku)); else visible.forEach((r) => n.add(r.sku)); return n; });
 
-  function exportList(skus: string[], format: "xlsx" | "csv") {
+  function exportList(skus: string[]) {
     if (!skus.length) return;
-    setExportSkus(skus.join(",")); setExportFormat(format);
+    setExportSkus(skus.join(","));
     setTimeout(() => formRef.current?.submit(), 0);
   }
 
@@ -111,39 +110,56 @@ export function ItemSearch() {
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       {canExport && (
-        <Card>
-          <CardContent className="flex flex-wrap items-center gap-3 pt-4">
-            <form ref={formRef} method="post" action="/api/export" className="hidden"><input type="hidden" name="what" value="items" /><input type="hidden" name="format" value={exportFormat} /><input type="hidden" name="skus" value={exportSkus} /></form>
-            <div className="mr-2"><div className="font-medium">Export</div><div className="text-xs text-muted-foreground">Every field on the tag plus station, tagger, lot, outlet, shipment and received dates.</div></div>
-            <Button className="h-10" disabled={!pickedVisible.length} onClick={() => exportList(pickedVisible.map((r) => r.sku), "xlsx")}><Download className="size-4" /> Export {pickedVisible.length || ""} ticked · Excel</Button>
-            <Button variant="outline" className="h-10" disabled={!pickedVisible.length} onClick={() => exportList(pickedVisible.map((r) => r.sku), "csv")}>CSV</Button>
-            <Button variant="outline" className="h-10" disabled={!visible.length} onClick={() => exportList(visible.map((r) => r.sku), "xlsx")}>Export all {visible.length} shown</Button>
-            <span className="mx-2 text-muted-foreground">or by date</span>
-            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-10 w-40" /><span className="text-muted-foreground">to</span><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-10 w-40" />
-            <Button asChild variant="outline" className="h-10"><a href={`/api/export?what=items&format=xlsx&from=${from}&to=${to}`}><Download className="size-4" /> Excel</a></Button>
-          </CardContent>
-        </Card>
-      )}
+        <div className="grid gap-4 xl:grid-cols-2">
+          <Card>
+            <CardContent className="space-y-3 pt-4">
+              <form ref={formRef} method="post" action="/api/export" className="hidden"><input type="hidden" name="what" value="items" /><input type="hidden" name="format" value="xlsx" /><input type="hidden" name="skus" value={exportSkus} /></form>
+              <div className="flex items-start gap-3">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-emerald-600/10 text-emerald-700 dark:text-emerald-400"><FileSpreadsheet className="size-5" /></span>
+                <div><div className="font-semibold">Export to Excel</div><div className="text-xs text-muted-foreground">Every field on the tag plus station, tagger, lot, outlet, shipment and received dates.</div></div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button className="h-10" disabled={!pickedVisible.length} onClick={() => exportList(pickedVisible.map((r) => r.sku))}><Download className="size-4" /> Export {pickedVisible.length || ""} ticked</Button>
+                <Button variant="outline" className="h-10" disabled={!visible.length} onClick={() => exportList(visible.map((r) => r.sku))}>Export all {visible.length} shown</Button>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm text-muted-foreground">Or tagged between</span>
+                <div className="flex items-center overflow-hidden rounded-md border border-input">
+                  <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-10 w-[9.5rem] rounded-none border-0 shadow-none focus-visible:ring-0" aria-label="From" />
+                  <span className="px-2 text-muted-foreground">→</span>
+                  <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-10 w-[9.5rem] rounded-none border-0 shadow-none focus-visible:ring-0" aria-label="To" />
+                </div>
+                <Button asChild variant="outline" className="h-10"><a href={`/api/export?what=items&format=xlsx&from=${from}&to=${to}`}><Download className="size-4" /> Export range</a></Button>
+              </div>
+            </CardContent>
+          </Card>
 
-      {canExport && (
-        <Card>
-          <CardContent className="flex flex-wrap items-center gap-3 pt-4">
-            <div className="mr-2"><div className="font-medium">Shopify</div><div className="text-xs text-muted-foreground">Tick garments, choose where they should appear, and upload. POS only makes them sellable on the outlets&apos; Shopify POS without showing on the website.</div></div>
-            <select value={visibility} onChange={(e) => setVisibility(e.target.value as typeof visibility)} className="h-10 rounded-md border border-input bg-transparent px-2 text-sm">
-              <option value="pos">Outlets&apos; Shopify POS only</option>
-              <option value="both">Website + Shopify POS</option>
-              <option value="online">Website only</option>
-              <option value="draft">Draft (hidden everywhere)</option>
-            </select>
-            <Button className="h-10" disabled={!pickedVisible.length || pushing != null && pushing.done < pushing.total} onClick={pushTicked}><Globe className="size-4" /> Upload {pickedVisible.length || ""} ticked to Shopify</Button>
-            {pushing && (
-              <span className="text-sm">
-                {pushing.done < pushing.total ? `Uploading ${pushing.done} of ${pushing.total}…` : <span className="text-green-700 dark:text-green-400">Done: {pushing.total - pushing.failed.length} uploaded{pushing.failed.length ? `, ${pushing.failed.length} failed` : ""}.</span>}
-                {pushing.failed.length > 0 && <span className="block text-xs text-destructive">{pushing.failed.slice(0, 5).map((f) => `${f.sku}: ${f.error}`).join(" · ")}{pushing.failed.length > 5 ? " …" : ""}</span>}
-              </span>
-            )}
-          </CardContent>
-        </Card>
+          <Card className="border-[#95BF47]/60 bg-gradient-to-br from-[#95BF47]/10 via-transparent to-transparent">
+            <CardContent className="space-y-3 pt-4">
+              <div className="flex items-start gap-3">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[#95BF47]/20"><ShopifyMark className="size-6" /></span>
+                <div><div className="font-semibold">Upload to Shopify</div><div className="text-xs text-muted-foreground">Tick garments, choose where they should appear, and upload. POS only makes them sellable on the outlets&apos; Shopify POS without showing on the website.</div></div>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <div role="radiogroup" aria-label="Where to show" className="inline-flex overflow-hidden rounded-md border border-input bg-background p-0.5">
+                  {([["pos", "POS only"], ["both", "Website + POS"], ["online", "Website only"], ["draft", "Draft"]] as const).map(([v, label]) => (
+                    <button key={v} type="button" role="radio" aria-checked={visibility === v} onClick={() => setVisibility(v)} className={cn("h-9 rounded px-3 text-sm transition-colors", visibility === v ? "bg-[#5E8E3E] font-semibold text-white shadow-sm" : "text-muted-foreground hover:bg-muted")}>{label}</button>
+                  ))}
+                </div>
+                <button type="button" disabled={!pickedVisible.length || (pushing != null && pushing.done < pushing.total)} onClick={pushTicked}
+                  className="inline-flex h-10 items-center gap-2 rounded-md bg-[#5E8E3E] px-4 text-sm font-semibold text-white shadow-md transition hover:bg-[#4f7a33] hover:shadow-lg active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none">
+                  <ShopifyMark className="size-4" light /> Upload {pickedVisible.length || ""} ticked
+                </button>
+              </div>
+              {pushing && (
+                <p className="text-sm">
+                  {pushing.done < pushing.total ? `Uploading ${pushing.done} of ${pushing.total}…` : <span className="text-green-700 dark:text-green-400">Done: {pushing.total - pushing.failed.length} uploaded{pushing.failed.length ? `, ${pushing.failed.length} failed` : ""}.</span>}
+                  {pushing.failed.length > 0 && <span className="block text-xs text-destructive">{pushing.failed.slice(0, 5).map((f) => `${f.sku}: ${f.error}`).join(" · ")}{pushing.failed.length > 5 ? " …" : ""}</span>}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       <Card>
@@ -197,5 +213,15 @@ export function ItemSearch() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+/** The Shopify bag, drawn simply: green bag with a white "S" for the badge, all white on the green button. */
+function ShopifyMark({ className, light }: { className?: string; light?: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+      <path d="M8.2 6.4 9.6 3.9c.5-.9 1.4-1.4 2.4-1.4s1.9.5 2.4 1.4l1.4 2.5h2.1c.5 0 .9.4.9.9l1 12.6c0 .9-.6 1.6-1.5 1.7L12 23l-6.3-1.4c-.9-.2-1.5-.9-1.5-1.7l1-12.6c0-.5.4-.9.9-.9h2.1Zm2.3 0h3l-.9-1.6a.7.7 0 0 0-1.2 0l-.9 1.6Z" fill={light ? "#fff" : "#5E8E3E"} />
+      <path d="M13.9 10.6c-.5-.3-1.2-.5-1.8-.5-.9 0-1.4.5-1.4 1 0 .6.6.9 1.5 1.3 1.1.5 2.1 1.1 2.1 2.5 0 1.6-1.2 2.6-3 2.6-1 0-2-.4-2.6-.9l.6-1.5c.5.4 1.3.8 1.9.8.6 0 1-.3 1-.8 0-.5-.4-.8-1.3-1.2-1.1-.5-2.2-1.1-2.2-2.6 0-1.5 1.1-2.7 3.1-2.7.9 0 1.7.3 2.3.6l-.2 1.4Z" fill={light ? "#5E8E3E" : "#fff"} />
+    </svg>
   );
 }
