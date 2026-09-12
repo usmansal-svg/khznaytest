@@ -20,6 +20,7 @@ type Est = { landed_cost: number; loaded_cost: number; bnwt: number; premium: nu
 type SubRow = { slug: string; code: string; name: string; gender: string; category_slug: string; category: string; weight_kg: number; profile_code: string; value_index: number; season: "summer" | "winter" | "all"; market_ceiling: number | null; market_price: number | null; standard_cost_pkr: number | null; heavy_cost_pkr: number | null; active: boolean; estimate?: Est | null };
 
 const rs = (n: number) => `Rs ${Math.round(n).toLocaleString("en-PK")}`;
+const n0 = (n: number) => Math.round(n).toLocaleString("en-PK");
 const pct = (n: number) => `${n >= 0 ? "+" : ""}${(n * 100).toFixed(1)}%`;
 
 const FIELDS = SETTINGS_FIELDS;
@@ -367,7 +368,7 @@ function SubCategoryEditor() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="mb-3 text-xs text-muted-foreground"><strong>Cost per piece</strong> is what a garment costs you <strong>before sales tax</strong>, duty included — enter it that way whether the vendor charged tax or not. <strong>Landed</strong> adds the non-recoverable part of input tax and the sorting cost. <strong>Loaded</strong> then spreads every constant and the selling profile onto the one garment that sells at Premium — markdowns, grade mix, never-sells, rejects, bulk recovery and the target GP — so Premium ex tax is loaded ÷ (1 − target GP). The value index and grades give the four shelf prices, and <strong>Effective GP</strong> is the real margin per garment bought after all of that (it sits at the target, moved only by rounding and the value index). A <strong>market price</strong> sets the Premium price directly (the other grades follow it); clear it to return to the calculation. Everything updates as you type, in amber until you press Save. Weights are the spec&apos;s open item #1 — weigh 20 pieces per category and replace the estimates. Click a column heading to filter the list the way Excel does. <strong>Effective GP</strong> is green at or above your target gross profit and red below it.</p>
+        <p className="mb-3 text-xs text-muted-foreground"><strong>Cost per piece</strong> is what a garment costs you <strong>before sales tax</strong>, duty included — enter it that way whether the vendor charged tax or not. <strong>Landed</strong> adds the non-recoverable part of input tax and the sorting cost. <strong>Loaded</strong> then spreads every constant and the selling profile onto the one garment that sells at Premium — markdowns, grade mix, never-sells, rejects, bulk recovery and the target GP — so Premium ex tax is loaded ÷ (1 − target GP). The value index and grades give the four shelf prices, and <strong>Effective GP</strong> is the real margin per garment bought after all of that (it sits at the target, moved only by rounding and the value index). A <strong>market price</strong> sets the Premium price directly (the other grades follow it); clear it to return to the calculation. Everything updates as you type, in amber until you press Save. Prices are in rupees; <strong>Premium</strong> is boxed because most stock sells at that grade. Weights are the spec&apos;s open item #1 — weigh 20 pieces per category and replace the estimates. Click a column heading to filter the list the way Excel does. <strong>Effective GP</strong> is green at or above your target gross profit and red below it.</p>
         {hiddenCount > 0 && <label className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground"><input type="checkbox" checked={showHidden} onChange={(e) => setShowHidden(e.target.checked)} /> Show {hiddenCount} hidden sub-categor{hiddenCount === 1 ? "y" : "ies"} (deleted from the Catalogue while garments still use them)</label>}
         {filtering && <p className="mb-2 text-xs"><span className="text-muted-foreground">Showing {visible.length} of {rows.length} sub-categories.</span> <button type="button" className="ml-2 underline" onClick={() => setFilters({ gender: new Set(), category: new Set(), name: new Set(), season: new Set() })}>Clear filters</button></p>}
         <div className="overflow-x-auto">
@@ -377,15 +378,18 @@ function SubCategoryEditor() {
                 <th className="pb-2"><HeaderFilter label="Gender" values={genderValues} selected={filters.gender} onChange={(v) => setFilters((f) => ({ ...f, gender: v }))} format={(g) => GENDER_OPTIONS.find((o) => o.code === g)?.name ?? g} /></th>
                 <th className="pb-2"><HeaderFilter label="Category" values={categoryValues} selected={filters.category} onChange={(v) => setFilters((f) => ({ ...f, category: v }))} /></th>
                 <th className="pb-2"><HeaderFilter label="Sub-category" values={nameValues} selected={filters.name} onChange={(v) => setFilters((f) => ({ ...f, name: v }))} /></th>
-                <th className="pb-2">Cost Rs</th>
+                <th className="pb-2" title="Cost per piece, Rs, before sales tax">Cost</th>
                 <th className="pb-2" title="Tick the garments that also come heavy (winter wear bought by the kilo). The tag form asks Regular or Heavy for those only. Same website tag either way.">Heavy</th>
-                <th className="pb-2 text-right" title="Real margin per garment bought: revenue after markdowns, grade mix, never-sells and rejects, plus bulk recovery, ex tax, against landed cost.">Eff. GP</th>
-                <th className="pb-2 text-right">BNWT</th><th className="pb-2 text-right">Premium</th><th className="pb-2 text-right">Excellent</th><th className="pb-2 text-right">V. Good</th>
-                <th className="pb-2">Profile</th>
+                <th className="pb-2 pl-3 text-right" title="Real margin per garment bought: revenue after markdowns, grade mix, never-sells and rejects, plus bulk recovery, ex tax, against landed cost.">Eff. GP</th>
+                <th className="border-l pb-2 pl-3 text-right" title="Shelf price, Rs">BNWT</th>
+                <th className="bg-amber-50 pb-2 pl-3 pr-3 text-right font-bold text-amber-900 dark:bg-amber-950/60 dark:text-amber-200" title="Shelf price, Rs — the grade most stock sells at">Premium</th>
+                <th className="pb-2 pl-3 text-right" title="Shelf price, Rs">Excellent</th>
+                <th className="border-r pb-2 pl-3 pr-3 text-right" title="Shelf price, Rs">Very Good</th>
+                <th className="pb-2 pl-3">Profile</th>
                 <th className="pb-2" title="Value index">VI</th>
-                <th className="pb-2" title="Market price: sets the Premium price directly">Market Rs</th>
-                <th className="pb-2 text-right">Landed</th>
-                <th className="pb-2 text-right" title="Landed cost with markdowns, grade mix, never-sells, rejects and bulk recovery spread onto the garment that sells at Premium. Premium ex tax = loaded ÷ (1 − target GP).">Loaded</th>
+                <th className="pb-2" title="Market price, Rs: sets the Premium price directly">Market</th>
+                <th className="pb-2 pl-3 text-right" title="Landed cost, Rs">Landed</th>
+                <th className="pb-2 pl-3 text-right" title="Loaded cost, Rs: landed with markdowns, grade mix, never-sells, rejects and bulk recovery spread onto the garment that sells at Premium. Premium ex tax = loaded ÷ (1 − target GP).">Loaded</th>
                 <th className="pb-2" title="SKU code">Code</th>
               </tr>
             </thead>
@@ -417,19 +421,19 @@ function SubCategoryEditor() {
                       )}
                     </td>
                     <td className={cn(num, "font-semibold", est && targetGp != null && (est.effective_gp_pct + 1e-9 < targetGp ? "text-red-600 dark:text-red-400" : "text-green-700 dark:text-green-400"))} title={est ? `${targetGp != null ? `Target ${(targetGp * 100).toFixed(0)}%. ` : ""}Full-price margin on this one garment: ${pct(est.gp_pct)}` : undefined}>{est ? pct(est.effective_gp_pct) : "—"}</td>
-                    <td className={num}>{est ? rs(est.bnwt) : "—"}</td>
-                    <td className={cn(num, "font-semibold")}>{est ? rs(est.premium) : "—"}</td>
-                    <td className={num}>{est ? rs(est.excellent) : "—"}</td>
-                    <td className={num}>{est ? rs(est.very_good) : "—"}</td>
-                    <td className="py-1 pr-2">
+                    <td className={cn(num, "border-l pl-3")}>{est ? n0(est.bnwt) : "—"}</td>
+                    <td className={cn(num, "bg-amber-50 pl-3 pr-3 text-sm font-bold text-amber-900 dark:bg-amber-950/60 dark:text-amber-200")}>{est ? n0(est.premium) : "—"}</td>
+                    <td className={cn(num, "pl-3")}>{est ? n0(est.excellent) : "—"}</td>
+                    <td className={cn(num, "border-r pl-3 pr-3")}>{est ? n0(est.very_good) : "—"}</td>
+                    <td className="py-1 pl-3 pr-2">
                       <select value={v.profile_code} onChange={(ev) => edit(r.slug, { profile_code: ev.target.value })} className={cn("h-7 rounded-md border border-input bg-transparent px-1 text-xs", changed("profile_code") && "border-amber-500")}>
                         <option value="fast">Fast</option><option value="standard">Standard</option><option value="slow">Slow</option>
                       </select>
                     </td>
                     <td className="py-1 pr-2"><Input type="number" step="0.05" min="0.05" value={v.value_index} onChange={(ev) => edit(r.slug, { value_index: Number(ev.target.value) })} className={cn("h-7 w-12 px-1 text-xs", changed("value_index") && "border-amber-500")} /></td>
                     <td className="py-1 pr-2"><Input type="number" step="100" min="0" value={v.market_price ?? ""} onChange={(ev) => edit(r.slug, { market_price: ev.target.value === "" ? null : Number(ev.target.value) })} className={cn("h-7 w-20 text-xs", changed("market_price") && "border-amber-500")} placeholder="—" /></td>
-                    <td className={cn(num, !previewing && "text-muted-foreground")}>{est ? rs(est.landed_cost) : "—"}</td>
-                    <td className={cn(num, !previewing && "text-muted-foreground")}>{est ? rs(est.loaded_cost) : "—"}</td>
+                    <td className={cn(num, "pl-3", !previewing && "text-muted-foreground")}>{est ? n0(est.landed_cost) : "—"}</td>
+                    <td className={cn(num, "pl-3", !previewing && "text-muted-foreground")}>{est ? n0(est.loaded_cost) : "—"}</td>
                     <td className="py-1 font-mono text-[10px] text-muted-foreground">{r.code}</td>
                   </tr>
                 );
