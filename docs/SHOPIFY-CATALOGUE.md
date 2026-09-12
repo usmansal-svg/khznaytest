@@ -1,4 +1,4 @@
-# Khazanay website catalogue — proposal (12 Sep 2026)
+# Khazanay website catalogue (12 Sep 2026)
 
 **Purpose.** The tagging catalogue (gender → category → sub-category) is also the
 website's navigation. Every garment carries tags built from it, Shopify's
@@ -21,8 +21,7 @@ For a men's formal shirt tagged for summer the garment carries:
 | `Men` | the top-level Men page |
 | `Men Shirts` | the category page in the Men menu (**new tag**) |
 | `Men Formal Shirt` | the sub-category page |
-| `Formal Shirt` | cross-gender search / "all shirts" |
-| `Summer`, `Summer Men`, `Summer Men Formal Shirt` | seasonal collections |
+| `Summer`, `Summer Men`, `Summer Men Formal Shirt` | seasonal collections — the season is picked on the tag form, so no seasonal sub-categories are needed |
 | `Kids`, `Teens`, `Toddlers`, `Infants` | band collections for children's wear |
 | `POS only` / `Website` / `Draft` | channel (already in place) |
 
