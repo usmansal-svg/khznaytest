@@ -131,13 +131,7 @@ export function ItemSearch() {
         <p className="text-sm text-muted-foreground">Every tagged garment. Filter any column the way you would in Excel, tick the ones you want, and export exactly those.</p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search SKU, brand or garment type (all time)…" className="h-12 min-w-[16rem] flex-1 text-base" autoFocus />
-        <div className={cn("flex items-center overflow-hidden rounded-md border border-input", q.trim() && "opacity-50")} title={q.trim() ? "A search looks across all dates" : "Tagged between these dates"}>
-          <span className="pl-3 text-sm text-muted-foreground">Tagged</span>
-          <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-12 w-[9.5rem] rounded-none border-0 shadow-none focus-visible:ring-0" aria-label="From" />
-          <span className="text-muted-foreground">→</span>
-          <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-12 w-[9.5rem] rounded-none border-0 shadow-none focus-visible:ring-0" aria-label="To" />
-        </div>
+        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search SKU, brand or garment type (all time)…" className="h-12 flex-1 text-base" autoFocus />
       </div>
       {total > cap && !q.trim() && <p className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">{total.toLocaleString("en-PK")} garments were tagged in this window; the list shows the latest {cap.toLocaleString("en-PK")}. Narrow the dates to see the rest here. The Excel export of a date range always includes every garment.</p>}
       {error && <p className="text-sm text-destructive">{error}</p>}
@@ -150,6 +144,14 @@ export function ItemSearch() {
               <div className="flex items-start gap-3">
                 <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-emerald-600/10 text-emerald-700 dark:text-emerald-400"><FileSpreadsheet className="size-5" /></span>
                 <div><div className="font-semibold">Export to Excel</div><div className="text-xs text-muted-foreground">Every field on the tag plus station, tagger, lot, outlet, shipment and received dates.</div></div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+        <div className={cn("flex items-center overflow-hidden rounded-md border border-input", q.trim() && "opacity-50")} title={q.trim() ? "A search looks across all dates" : "The list above and the export both follow these dates"}>
+          <span className="pl-3 text-sm text-muted-foreground">Tagged</span>
+          <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-10 w-[9.5rem] rounded-none border-0 shadow-none focus-visible:ring-0" aria-label="From" />
+          <span className="text-muted-foreground">→</span>
+          <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-10 w-[9.5rem] rounded-none border-0 shadow-none focus-visible:ring-0" aria-label="To" />
+        </div>
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 {pickedVisible.length ? (
