@@ -107,7 +107,6 @@ export function PricingAdmin() {
           <TabsTrigger value="profiles">Selling profiles</TabsTrigger>
           <TabsTrigger value="grades">Grades</TabsTrigger>
           <TabsTrigger value="subcategories">Categories</TabsTrigger>
-          <TabsTrigger value="rare">Rare finds</TabsTrigger>
           <TabsTrigger value="history">History</TabsTrigger>
         </TabsList>
 
@@ -238,9 +237,6 @@ export function PricingAdmin() {
           <SubCategoryEditor />
         </TabsContent>
 
-        <TabsContent value="rare">
-          <RareReasonsEditor />
-        </TabsContent>
 
         <TabsContent value="history" className="space-y-6">
           <Card>
@@ -376,13 +372,24 @@ function SubCategoryEditor() {
         {hiddenCount > 0 && <label className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground"><input type="checkbox" checked={showHidden} onChange={(e) => setShowHidden(e.target.checked)} /> Show {hiddenCount} hidden sub-categor{hiddenCount === 1 ? "y" : "ies"} (deleted from the Catalogue while garments still use them)</label>}
         {filtering && <p className="mb-2 text-xs"><span className="text-muted-foreground">Showing {visible.length} of {rows.length} sub-categories.</span> <button type="button" className="ml-2 underline" onClick={() => setFilters({ gender: new Set(), category: new Set(), name: new Set(), season: new Set() })}>Clear filters</button></p>}
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase text-muted-foreground">
+          <table className="w-full text-xs">
+            <thead className="text-left text-[11px] uppercase text-muted-foreground">
               <tr>
                 <th className="pb-2"><HeaderFilter label="Gender" values={genderValues} selected={filters.gender} onChange={(v) => setFilters((f) => ({ ...f, gender: v }))} format={(g) => GENDER_OPTIONS.find((o) => o.code === g)?.name ?? g} /></th>
                 <th className="pb-2"><HeaderFilter label="Category" values={categoryValues} selected={filters.category} onChange={(v) => setFilters((f) => ({ ...f, category: v }))} /></th>
                 <th className="pb-2"><HeaderFilter label="Sub-category" values={nameValues} selected={filters.name} onChange={(v) => setFilters((f) => ({ ...f, name: v }))} /></th>
-                <th className="pb-2">Code</th><th className="pb-2"><HeaderFilter label="Season" values={["summer", "winter", "all"]} selected={filters.season} onChange={(v) => setFilters((f) => ({ ...f, season: v }))} format={(v) => SEASON_LABEL[v] ?? v} /></th><th className="pb-2">Cost per piece Rs</th><th className="pb-2" title="Tick the garments that also come heavy (winter wear bought by the kilo). The tag form asks Regular or Heavy for those only. Same website tag either way.">Heavy version</th><th className="pb-2">Profile</th><th className="pb-2">Value index</th><th className="pb-2">Market price → Premium</th><th className="pb-2 text-right" title="Real margin per garment bought: revenue after markdowns, grade mix, never-sells and rejects, plus bulk recovery, ex tax, against landed cost.">Effective GP %</th><th className="pb-2 text-right">Landed</th><th className="pb-2 text-right" title="Landed cost with markdowns, grade mix, never-sells, rejects and bulk recovery spread onto the garment that sells at Premium. Premium ex tax = loaded ÷ (1 − target GP).">Loaded</th><th className="pb-2 text-right">BNWT</th><th className="pb-2 text-right">Premium</th><th className="pb-2 text-right">Excellent</th><th className="pb-2 text-right">Very Good</th><th className="pb-2">Active</th></tr>
+                <th className="pb-2"><HeaderFilter label="Season" values={["summer", "winter", "all"]} selected={filters.season} onChange={(v) => setFilters((f) => ({ ...f, season: v }))} format={(v) => SEASON_LABEL[v] ?? v} /></th>
+                <th className="pb-2">Cost Rs</th>
+                <th className="pb-2" title="Tick the garments that also come heavy (winter wear bought by the kilo). The tag form asks Regular or Heavy for those only. Same website tag either way.">Heavy</th>
+                <th className="pb-2 text-right" title="Real margin per garment bought: revenue after markdowns, grade mix, never-sells and rejects, plus bulk recovery, ex tax, against landed cost.">Eff. GP</th>
+                <th className="pb-2 text-right">BNWT</th><th className="pb-2 text-right">Premium</th><th className="pb-2 text-right">Excellent</th><th className="pb-2 text-right">V. Good</th>
+                <th className="pb-2">Profile</th>
+                <th className="pb-2" title="Value index">VI</th>
+                <th className="pb-2" title="Market price: sets the Premium price directly">Market Rs</th>
+                <th className="pb-2 text-right">Landed</th>
+                <th className="pb-2 text-right" title="Landed cost with markdowns, grade mix, never-sells, rejects and bulk recovery spread onto the garment that sells at Premium. Premium ex tax = loaded ÷ (1 − target GP).">Loaded</th>
+                <th className="pb-2" title="SKU code">Code</th>
+              </tr>
             </thead>
             <tbody className="divide-y">
               {visible.map((r) => {
@@ -392,48 +399,45 @@ function SubCategoryEditor() {
                 const lv = live[r.slug];
                 const est = lv ? lv.estimate : r.estimate;
                 const previewing = Boolean(lv);
-                const num = cn("py-1.5 pr-2 text-right tabular-nums", previewing && "text-amber-700 dark:text-amber-400");
+                const num = cn("py-1 pr-2 text-right text-xs tabular-nums", previewing && "text-amber-700 dark:text-amber-400");
                 return (
                   <tr key={r.slug} className={cn(!v.active && "opacity-50")}>
-                    <td className="py-1.5 pr-2 text-xs capitalize text-muted-foreground">{r.gender}</td>
-                    <td className="py-1.5 pr-2 text-sm">{r.category}</td>
-                    <td className="py-1.5 pr-2"><Input value={v.name} onChange={(ev) => edit(r.slug, { name: ev.target.value })} className={cn("h-8 w-44", changed("name") && "border-amber-500")} /></td>
-                    <td className="py-1.5 pr-2 font-mono text-xs">{r.code}</td>
-                    <td className="py-1.5 pr-2">
-                      <select value={v.season} onChange={(ev) => edit(r.slug, { season: ev.target.value as SubRow["season"] })} className={cn("h-8 rounded-md border border-input bg-transparent px-2 text-sm", changed("season") && "border-amber-500")}>
+                    <td className="py-1 pr-2 text-xs text-muted-foreground">{GENDER_OPTIONS.find((o) => o.code === r.gender)?.name ?? r.gender}</td>
+                    <td className="py-1 pr-2 text-xs">{r.category}</td>
+                    <td className="py-1 pr-2"><Input value={v.name} onChange={(ev) => edit(r.slug, { name: ev.target.value })} className={cn("h-7 w-32 text-xs", changed("name") && "border-amber-500")} /></td>
+                    <td className="py-1 pr-2">
+                      <select value={v.season} onChange={(ev) => edit(r.slug, { season: ev.target.value as SubRow["season"] })} className={cn("h-7 rounded-md border border-input bg-transparent px-1 text-xs", changed("season") && "border-amber-500")}>
                         <option value="summer">Summer</option><option value="winter">Winter</option><option value="all">All year</option>
                       </select>
                     </td>
-                    <td className="py-1.5 pr-2"><Input type="number" step="10" min="1" value={v.standard_cost_pkr ?? ""} placeholder="set me" onChange={(ev) => edit(r.slug, { standard_cost_pkr: ev.target.value === "" ? null : Number(ev.target.value) })} className={cn("h-8 w-28", changed("standard_cost_pkr") && "border-amber-500", !v.standard_cost_pkr && "border-amber-500")} /></td>
-                    <td className="py-1.5 pr-2">
+                    <td className="py-1 pr-2"><Input type="number" step="10" min="1" value={v.standard_cost_pkr ?? ""} placeholder="set me" onChange={(ev) => edit(r.slug, { standard_cost_pkr: ev.target.value === "" ? null : Number(ev.target.value) })} className={cn("h-7 w-20 text-xs", changed("standard_cost_pkr") && "border-amber-500", !v.standard_cost_pkr && "border-amber-500")} /></td>
+                    <td className="py-1 pr-2">
                       {v.heavy_cost_pkr == null ? (
                         v.season === "summer" ? <span className="text-xs text-muted-foreground">—</span> : (
-                          <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground" title="Tick if this garment also comes in a heavy version. The heavy cost starts at 30% above the cost per piece; the tag form then asks Regular or Heavy for this garment only.">
-                            <input type="checkbox" checked={false} disabled={!v.standard_cost_pkr} onChange={() => edit(r.slug, { heavy_cost_pkr: Math.round((Number(v.standard_cost_pkr) * 1.3) / 10) * 10 })} /> Heavy version
-                          </label>
+                          <input type="checkbox" checked={false} disabled={!v.standard_cost_pkr} title="Tick if this garment also comes in a heavy version. The heavy cost starts at 30% above the cost per piece; the tag form then asks Regular or Heavy for this garment only." onChange={() => edit(r.slug, { heavy_cost_pkr: Math.round((Number(v.standard_cost_pkr) * 1.3) / 10) * 10 })} />
                         )
                       ) : (
-                        <div className="flex items-center gap-1">
+                        <span className="flex items-center gap-1">
                           <input type="checkbox" checked onChange={() => edit(r.slug, { heavy_cost_pkr: null })} title="Untick: no heavy version, the tag form stops asking" />
-                          <Input type="number" step="10" min="1" value={v.heavy_cost_pkr} onChange={(ev) => edit(r.slug, { heavy_cost_pkr: ev.target.value === "" ? null : Number(ev.target.value) })} className={cn("h-8 w-24", changed("heavy_cost_pkr") && "border-amber-500")} />
-                        </div>
+                          <Input type="number" step="10" min="1" value={v.heavy_cost_pkr} onChange={(ev) => edit(r.slug, { heavy_cost_pkr: ev.target.value === "" ? null : Number(ev.target.value) })} className={cn("h-7 w-20 text-xs", changed("heavy_cost_pkr") && "border-amber-500")} />
+                        </span>
                       )}
                     </td>
-                    <td className="py-1.5 pr-2">
-                      <select value={v.profile_code} onChange={(ev) => edit(r.slug, { profile_code: ev.target.value })} className={cn("h-8 rounded-md border border-input bg-transparent px-2 text-sm", changed("profile_code") && "border-amber-500")}>
-                        <option value="fast">Fast</option><option value="standard">Standard</option><option value="slow">Slow</option>
-                      </select>
-                    </td>
-                    <td className="py-1.5 pr-2"><Input type="number" step="0.05" min="0.05" value={v.value_index} onChange={(ev) => edit(r.slug, { value_index: Number(ev.target.value) })} className={cn("h-8 w-24", changed("value_index") && "border-amber-500")} /></td>
-                    <td className="py-1.5 pr-2"><Input type="number" step="100" min="0" value={v.market_price ?? ""} onChange={(ev) => edit(r.slug, { market_price: ev.target.value === "" ? null : Number(ev.target.value) })} className={cn("h-8 w-28", changed("market_price") && "border-amber-500")} placeholder="—" /></td>
                     <td className={cn(num, "font-semibold", est && targetGp != null && (est.effective_gp_pct + 1e-9 < targetGp ? "text-red-600 dark:text-red-400" : "text-green-700 dark:text-green-400"))} title={est ? `${targetGp != null ? `Target ${(targetGp * 100).toFixed(0)}%. ` : ""}Full-price margin on this one garment: ${pct(est.gp_pct)}` : undefined}>{est ? pct(est.effective_gp_pct) : "—"}</td>
-                    <td className={cn(num, !previewing && "text-muted-foreground")}>{est ? rs(est.landed_cost) : "—"}</td>
-                    <td className={cn(num, !previewing && "text-muted-foreground")}>{est ? rs(est.loaded_cost) : "—"}</td>
                     <td className={num}>{est ? rs(est.bnwt) : "—"}</td>
                     <td className={cn(num, "font-semibold")}>{est ? rs(est.premium) : "—"}</td>
                     <td className={num}>{est ? rs(est.excellent) : "—"}</td>
                     <td className={num}>{est ? rs(est.very_good) : "—"}</td>
-                    <td className="py-1.5"><Checkbox checked={v.active} onCheckedChange={(c) => edit(r.slug, { active: c === true })} /></td>
+                    <td className="py-1 pr-2">
+                      <select value={v.profile_code} onChange={(ev) => edit(r.slug, { profile_code: ev.target.value })} className={cn("h-7 rounded-md border border-input bg-transparent px-1 text-xs", changed("profile_code") && "border-amber-500")}>
+                        <option value="fast">Fast</option><option value="standard">Standard</option><option value="slow">Slow</option>
+                      </select>
+                    </td>
+                    <td className="py-1 pr-2"><Input type="number" step="0.05" min="0.05" value={v.value_index} onChange={(ev) => edit(r.slug, { value_index: Number(ev.target.value) })} className={cn("h-7 w-12 px-1 text-xs", changed("value_index") && "border-amber-500")} /></td>
+                    <td className="py-1 pr-2"><Input type="number" step="100" min="0" value={v.market_price ?? ""} onChange={(ev) => edit(r.slug, { market_price: ev.target.value === "" ? null : Number(ev.target.value) })} className={cn("h-7 w-20 text-xs", changed("market_price") && "border-amber-500")} placeholder="—" /></td>
+                    <td className={cn(num, !previewing && "text-muted-foreground")}>{est ? rs(est.landed_cost) : "—"}</td>
+                    <td className={cn(num, !previewing && "text-muted-foreground")}>{est ? rs(est.loaded_cost) : "—"}</td>
+                    <td className="py-1 font-mono text-[10px] text-muted-foreground">{r.code}</td>
                   </tr>
                 );
               })}
@@ -442,100 +446,6 @@ function SubCategoryEditor() {
         </div>
       </CardContent>
     </Card>
-    </div>
-  );
-}
-
-/* ----------------------------------------------------- rare-find reasons */
-
-type Reason = { code: string; label: string; tag: string; web: string; sort_order?: number; active?: boolean };
-
-function RareReasonsEditor() {
-  const [rows, setRows] = useState<Reason[] | null>(null);
-  const [edits, setEdits] = useState<Record<string, Partial<{ label: string; tag_line: string; web_text: string }>>>({});
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
-  const [add, setAdd] = useState({ label: "", tag_line: "", web_text: "" });
-  const load = () => fetch("/api/admin/rare-reasons").then((r) => r.json()).then((j) => setRows(j.reasons ?? []));
-  useEffect(() => { void load(); }, []);
-  const edit = (code: string, p: Partial<{ label: string; tag_line: string; web_text: string }>) => setEdits((e) => ({ ...e, [code]: { ...e[code], ...p } }));
-  async function save() {
-    const payload = Object.entries(edits).map(([code, p]) => ({ code, ...p }));
-    if (!payload.length) return;
-    setBusy(true); setMessage(null);
-    const res = await fetch("/api/admin/rare-reasons", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ rows: payload }) });
-    const j = await res.json();
-    const failed = ((j.results ?? []) as { code: string; ok: boolean; error?: string }[]).filter((r) => !r.ok);
-    setMessage(failed.length ? { tone: "error", text: failed.map((f) => `${f.code}: ${f.error}`).join(" · ") } : { tone: "ok", text: "Saved. New tags and listings use the new wording; garments already tagged keep the reason and pick up the wording when printed or pushed." });
-    setEdits({}); await load(); setBusy(false);
-  }
-  async function toggle(r: Reason) {
-    setBusy(true);
-    await fetch("/api/admin/rare-reasons", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ rows: [{ code: r.code, active: !r.active }] }) });
-    await load(); setBusy(false);
-  }
-  async function addReason() {
-    setBusy(true); setMessage(null);
-    const res = await fetch("/api/admin/rare-reasons", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(add) });
-    const j = await res.json();
-    if (!res.ok) setMessage({ tone: "error", text: j.error ?? "Could not add." });
-    else { setMessage({ tone: "ok", text: `Added ${add.label}.` }); setAdd({ label: "", tag_line: "", web_text: "" }); await load(); }
-    setBusy(false);
-  }
-  if (!rows) return <p className="text-muted-foreground">Loading…</p>;
-  const dirty = Object.keys(edits).length;
-  return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
-            <span>Rare find reasons <span className="font-normal text-muted-foreground">· what the customer reads</span></span>
-            <span className="flex items-center gap-2">
-              {message && <span className={cn("text-xs", message.tone === "ok" ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400")}>{message.text}</span>}
-              <Button size="sm" onClick={save} disabled={!dirty || busy}>{busy ? "Saving…" : `Save ${dirty || ""} change${dirty === 1 ? "" : "s"}`}</Button>
-            </span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-xs text-muted-foreground">The tagger picks <strong>one</strong> reason per rare find. Its <strong>tag line</strong> prints on the outlet tag under the ★ Rare find heading — keep it to about 60 characters so it fits in two lines. Its <strong>web text</strong> opens the Shopify listing under a ★ Rare find heading — three or four lines reads well. Any free text the tagger adds follows both. Switch a reason off to hide it from the form without losing it.</p>
-          <div className="grid gap-4">
-            {rows.map((r) => {
-              const v = { label: r.label, tag_line: r.tag, web_text: r.web, ...edits[r.code] };
-              const changed = (k: "label" | "tag_line" | "web_text") => edits[r.code]?.[k] !== undefined;
-              return (
-                <div key={r.code} className={cn("grid gap-2 rounded-md border p-3 sm:grid-cols-[12rem_1fr]", !r.active && "opacity-60")}>
-                  <div className="grid content-start gap-2">
-                    <Input value={v.label} onChange={(e) => edit(r.code, { label: e.target.value })} className={cn("h-9 font-medium", changed("label") && "border-amber-500")} />
-                    <label className="flex items-center gap-2 text-xs"><Checkbox checked={r.active !== false} disabled={busy} onCheckedChange={() => toggle(r)} /> Shown on the form</label>
-                    <span className="font-mono text-[10px] text-muted-foreground">{r.code}</span>
-                  </div>
-                  <div className="grid gap-2">
-                    <div className="grid gap-1">
-                      <Label className="text-xs">Tag line <span className="font-normal text-muted-foreground">· {v.tag_line.length}/90</span></Label>
-                      <Input value={v.tag_line} maxLength={90} onChange={(e) => edit(r.code, { tag_line: e.target.value })} className={cn("h-9", changed("tag_line") && "border-amber-500")} />
-                    </div>
-                    <div className="grid gap-1">
-                      <Label className="text-xs">Web text <span className="font-normal text-muted-foreground">· {v.web_text.length}/600</span></Label>
-                      <textarea value={v.web_text} maxLength={600} rows={3} onChange={(e) => edit(r.code, { web_text: e.target.value })} className={cn("w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm", changed("web_text") && "border-amber-500")} />
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-base">Add a reason</CardTitle></CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-[12rem_1fr]">
-          <div className="grid gap-1"><Label htmlFor="rr-label">Label</Label><Input id="rr-label" value={add.label} onChange={(e) => setAdd({ ...add, label: e.target.value })} placeholder="e.g. Designer collaboration" /></div>
-          <div className="grid gap-2">
-            <div className="grid gap-1"><Label htmlFor="rr-tag">Tag line</Label><Input id="rr-tag" value={add.tag_line} maxLength={90} onChange={(e) => setAdd({ ...add, tag_line: e.target.value })} placeholder="One line for the price tag" /></div>
-            <div className="grid gap-1"><Label htmlFor="rr-web">Web text</Label><textarea id="rr-web" value={add.web_text} maxLength={600} rows={3} onChange={(e) => setAdd({ ...add, web_text: e.target.value })} placeholder="Three or four lines for the Shopify listing" className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm" /></div>
-            <div><Button disabled={busy || !add.label.trim() || !add.tag_line.trim() || !add.web_text.trim()} onClick={addReason}>Add reason</Button></div>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }
