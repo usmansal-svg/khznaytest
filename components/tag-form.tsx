@@ -486,7 +486,7 @@ export function TagForm() {
             </Field>
 
             <ButtonGroup label="Season" hint="Shows that season's catalogue; goes into the SKU and the Shopify tags" options={SEASON_OPTIONS} value={season} onChange={setSeason} />
-            {selectedSub?.has_heavy && <ButtonGroup label="Weight" hint="Bought by the kilo: a heavy piece costs more, so it prices from the heavy cost. Same tag on the website." options={[{ code: "light", label: "Light" }, { code: "heavy", label: "Heavy" }]} value={heavy ? "heavy" : "light"} onChange={(v) => setHeavy(v === "heavy")} />}
+            {selectedSub?.has_heavy && <ButtonGroup label="Weight" hint="This garment type has a heavy version: a heavy piece prices from its heavy cost. Same tag on the website." options={[{ code: "light", label: "Regular" }, { code: "heavy", label: "Heavy" }]} value={heavy ? "heavy" : "light"} onChange={(v) => setHeavy(v === "heavy")} />}
             <Field label="Wearer">
               <select className={selectClass} value={wearer} onChange={(e) => setWearer(e.target.value as Wearer)}>
                 {WEARER_OPTIONS.map((w) => <option key={w} value={w}>{WEARER_LABELS[w]}</option>)}
