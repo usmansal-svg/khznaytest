@@ -23,6 +23,8 @@ type Preview = { wearer: Wearer; season: "summer" | "winter"; cat: string; sub: 
 
 const GENDER_LABEL: Record<string, string> = { men: "Men", women: "Women", kid: "Kids (2–8)", teenage: "Teens (9–14)", toddler: "Toddlers (1–2)", infant: "Infants (0–1)" };
 const GENDER_TAG: Record<string, string> = { men: "Men", women: "Women", kid: "Kids", teenage: "Teens", toddler: "Toddlers", infant: "Infants" };
+/** Inside a child band the boy / girl split is the wearer picked on the tag form; each row also produces these tags. */
+const BAND_WEARERS: Record<string, [string, string]> = { kid: ["Kids Boys", "Kids Girls"], teenage: ["Teen Boys", "Teen Girls"], toddler: ["Toddler Boys", "Toddler Girls"], infant: ["Infant Boys", "Infant Girls"] };
 
 export function CatalogueTree() {
   const [tree, setTree] = useState<Branch[] | null>(null);
@@ -91,6 +93,11 @@ export function CatalogueTree() {
         <label className="flex items-center gap-1.5 text-xs text-muted-foreground"><input type="checkbox" checked={showOff} onChange={(e) => setShowOff(e.target.checked)} /> Show hidden</label>
       </div>
 
+      {BAND_WEARERS[gender] && (
+        <p className="rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-sm text-sky-900 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-200">
+          <b>Boys and girls share this catalogue.</b> The tagger picks the wearer on the tag form ({BAND_WEARERS[gender][0].replace(/s$/, "")} or {BAND_WEARERS[gender][1].replace(/s$/, "")}), and every garment then carries the band tag <span className="font-mono text-xs">{GENDER_TAG[gender]} …</span> <i>and</i> the boy or girl tag <span className="font-mono text-xs">{BAND_WEARERS[gender][0]} …</span> / <span className="font-mono text-xs">{BAND_WEARERS[gender][1]} …</span> at category and sub-category level, so the website can have {GENDER_TAG[gender]} → Boys → Hoodies and {GENDER_TAG[gender]} → Girls → Hoodies from the same row.
+        </p>
+      )}
       <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
         {/* Left: categories */}
         <div className="rounded-xl border bg-background">
@@ -122,6 +129,7 @@ export function CatalogueTree() {
               <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
                 <InlineName value={current.name} busy={busy} big onSave={(name) => act({ action: "rename", kind: "category", slug: current.slug, name }, `Renamed to ${name}. Garments tagged from now on carry the new tag.`)} />
                 <TagEdit tag={current.tag} auto={current.auto_tag} custom={current.custom} busy={busy} onSave={(tag) => act({ action: "set_tag", kind: "category", slug: current.slug, tag }, tag ? `Tag set to ${tag}.` : "Tag back to automatic.")} />
+                {BAND_WEARERS[gender] && <span className="font-mono text-[10px] text-muted-foreground">+ {BAND_WEARERS[gender][0]} {current.tag.replace(/^\S+\s/, "")} · {BAND_WEARERS[gender][1]} {current.tag.replace(/^\S+\s/, "")}</span>}
                 <span className="text-xs text-muted-foreground tabular-nums">{live(current)} sub-categories · {current.items.toLocaleString("en-PK")} garments tagged</span>
                 <span className="ml-auto flex items-center gap-2">
                   {!current.active && <Button size="sm" variant="outline" className="h-8" disabled={busy} onClick={() => act({ action: "toggle", kind: "category", slug: current.slug, active: true }, `${current.name} restored.`)}>Restore</Button>}
@@ -136,7 +144,7 @@ export function CatalogueTree() {
                 {current.subs.filter((s) => (showOff || s.active) && matches(s)).map((s) => (
                   <li key={s.slug} className={cn("grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1 px-2 py-2 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_auto_auto]", !s.active && "opacity-50")}>
                     <InlineName value={s.name} busy={busy} onSave={(name) => act({ action: "rename", kind: "sub", slug: s.slug, name }, `Renamed to ${name}. Garments tagged from now on carry the new tag.`)} />
-                    <div className="col-span-2 flex flex-wrap items-center gap-2 sm:col-span-1"><TagEdit tag={s.tag ?? ""} auto={s.auto_tag ?? ""} custom={s.custom} busy={busy} onSave={(tag) => act({ action: "set_tag", kind: "sub", slug: s.slug, tag }, tag ? `Tag set to ${tag}.` : "Tag back to automatic.")} /><span className="text-[11px] text-muted-foreground">SKU {s.code}</span></div>
+                    <div className="col-span-2 flex flex-wrap items-center gap-2 sm:col-span-1"><TagEdit tag={s.tag ?? ""} auto={s.auto_tag ?? ""} custom={s.custom} busy={busy} onSave={(tag) => act({ action: "set_tag", kind: "sub", slug: s.slug, tag }, tag ? `Tag set to ${tag}.` : "Tag back to automatic.")} /><span className="text-[11px] text-muted-foreground">SKU {s.code}</span>{BAND_WEARERS[gender] && <span className="w-full font-mono text-[10px] text-muted-foreground sm:w-auto">+ {BAND_WEARERS[gender][0]} {(s.tag ?? "").replace(/^\S+\s/, "")} · {BAND_WEARERS[gender][1]} {(s.tag ?? "").replace(/^\S+\s/, "")}</span>}</div>
                     <div className="text-right text-xs text-muted-foreground tabular-nums" title="Garments tagged under it">{s.items ? `${s.items} tagged` : ""}</div>
                     <div className="flex items-center justify-end gap-1">
                       {!s.active && <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy} onClick={() => act({ action: "toggle", kind: "sub", slug: s.slug, active: true }, `${s.name} restored.`)}>Restore</Button>}

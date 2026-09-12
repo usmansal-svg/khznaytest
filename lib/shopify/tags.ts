@@ -99,7 +99,9 @@ export function shopifyTags(item: TaggableItem): string[] {
   const catTag = (m: string) => (m === own && item.category_tag?.trim()) || `${m} ${category}`;
   const subTag = (m: string) => (m === own && item.sub_tag?.trim()) || `${m} ${type}`;
   for (const m of menus) { if (!tags.includes(m)) tags.push(m); tags.push(catTag(m)); tags.push(subTag(m)); }
-  if (wearer && !menus.includes(wearer)) tags.push(`${wearer} ${type}`); // "Kids Girls Hoodie"
+  // The boy / girl split inside a child band comes from the wearer, at every
+  // menu level: "Teen Girls", "Teen Girls Sweaters & Hoodies", "Teen Girls Hoodie".
+  if (wearer && !menus.includes(wearer)) { tags.push(`${wearer} ${category}`); tags.push(`${wearer} ${type}`); }
   if (item.season && SEASON[item.season]) {
     // Season on its own and with each menu gender: "Summer", "Summer Men", "Summer Men T-Shirt".
     tags.push(SEASON[item.season]);
