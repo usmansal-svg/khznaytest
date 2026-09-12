@@ -349,7 +349,9 @@ function SubCategoryEditor() {
     (skip === "gender" || !filters.gender.size || filters.gender.has(r.gender)) &&
     (skip === "category" || !filters.category.size || filters.category.has(r.category)) &&
     (skip === "name" || !filters.name.size || filters.name.has(r.name));
-  const visible = rows.filter((r) => pass(r));
+  const [showHidden, setShowHidden] = useState(false);
+  const visible = rows.filter((r) => pass(r) && (showHidden || r.active));
+  const hiddenCount = rows.filter((r) => !r.active).length;
   // Each list offers the values still reachable under the other two filters, as Excel does.
   const genderValues = [...new Set(rows.filter((r) => pass(r, "gender")).map((r) => r.gender))].sort((a, b) => GENDER_OPTIONS.findIndex((g) => g.code === a) - GENDER_OPTIONS.findIndex((g) => g.code === b));
   const categoryValues = [...new Set(rows.filter((r) => pass(r, "category")).map((r) => r.category))].sort();
@@ -371,6 +373,7 @@ function SubCategoryEditor() {
       </CardHeader>
       <CardContent>
         <p className="mb-3 text-xs text-muted-foreground"><strong>Cost per piece</strong> is what a garment costs you <strong>before sales tax</strong>, duty included — enter it that way whether the vendor charged tax or not. <strong>Landed</strong> adds the non-recoverable part of input tax and the sorting cost. <strong>Loaded</strong> then spreads every constant and the selling profile onto the one garment that sells at Premium — markdowns, grade mix, never-sells, rejects, bulk recovery and the target GP — so Premium ex tax is loaded ÷ (1 − target GP). The value index and grades give the four shelf prices, and <strong>Effective GP</strong> is the real margin per garment bought after all of that (it sits at the target, moved only by rounding and the value index). A <strong>market price</strong> sets the Premium price directly (the other grades follow it); clear it to return to the calculation. Everything updates as you type, in amber until you press Save. Weights are the spec&apos;s open item #1 — weigh 20 pieces per category and replace the estimates. Click a column heading to filter the list the way Excel does. <strong>Effective GP</strong> is green at or above your target gross profit and red below it.</p>
+        {hiddenCount > 0 && <label className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground"><input type="checkbox" checked={showHidden} onChange={(e) => setShowHidden(e.target.checked)} /> Show {hiddenCount} hidden sub-categor{hiddenCount === 1 ? "y" : "ies"} (deleted from the Catalogue while garments still use them)</label>}
         {filtering && <p className="mb-2 text-xs"><span className="text-muted-foreground">Showing {visible.length} of {rows.length} sub-categories.</span> <button type="button" className="ml-2 underline" onClick={() => setFilters({ gender: new Set(), category: new Set(), name: new Set(), season: new Set() })}>Clear filters</button></p>}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
