@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { HeaderFilter } from "@/components/header-filter";
 import { Input } from "@/components/ui/input";
+import { fetchRetry } from "@/lib/fetch-retry";
 import { cn } from "@/lib/utils";
 
 /**
@@ -66,7 +67,7 @@ export function ItemSearch() {
         setPushing((p) => p && { ...p, done: p.done + batch.length, failed: [...p.failed, ...(j.results as { ok: boolean; sku: string; error?: string }[]).filter((r) => !r.ok).map((r) => ({ sku: r.sku, error: r.error ?? "failed" }))] });
       } catch (e) { setPushing((p) => p && { ...p, done: p.done + batch.length, failed: [...p.failed, ...batch.map((sku) => ({ sku, error: e instanceof Error ? e.message : "failed" }))] }); }
     }
-    const res = await fetch(listUrl(q, from, to)); const json = await res.json(); if (res.ok) { setRows(json.items); setTotal(json.total); }
+    const res = await fetchRetry(listUrl(q, from, to)); const json = await res.json().catch(() => ({})); if (res.ok) { setRows(json.items); setTotal(json.total); }
   }
 
   useEffect(() => {
@@ -83,9 +84,9 @@ export function ItemSearch() {
     const t = setTimeout(async () => {
       setLoading(true);
       try {
-        const res = await fetch(listUrl(q, from, to), { signal: ctrl.signal });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error ?? "Search failed.");
+        const res = await fetchRetry(listUrl(q, from, to), { signal: ctrl.signal });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(res.status >= 500 ? "The database did not answer in time. Reload in a moment." : json.error ?? "Search failed.");
         setRows(json.items); setTotal(json.total ?? json.items.length); setCap(json.cap ?? 5000); setError(null); setPage(1);
       } catch (e) { if (!(e instanceof DOMException && e.name === "AbortError")) setError(e instanceof Error ? e.message : "Search failed."); } finally { setLoading(false); }
     }, 250);
