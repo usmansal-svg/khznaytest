@@ -39,7 +39,8 @@ export async function pushItem(db: SupabaseClient, sku: string, visibility: Visi
   const cutFor = (p: Photo) => cutouts.find((c) => c.source === p.path) ?? cutouts.find((c) => !c.source && (c.taken_at ?? "") > (p.taken_at ?? "") && !originals.some((o) => (o.taken_at ?? "") > (p.taken_at ?? "") && (o.taken_at ?? "") < (c.taken_at ?? "")));
   const imageUrls = originals.length ? originals.map((p) => cutFor(p)?.url ?? p.url) : cutouts.map((c) => c.url);
   const taggable = { wearer: item.wearer, season: item.season, category, sub_category: subCategory, brand: item.brand_text, brand_tier: item.brand_tier, grade: item.grade_code, size_label: item.size_label, colour: item.colour, fabric: item.fabric, is_rare: item.is_rare };
-  const tags = shopifyTags(taggable);
+  // A channel tag so the store's automated collections (feeds, "all products") can exclude outlet stock with one rule.
+  const tags = [...shopifyTags(taggable), visibility === "pos" ? "POS only" : visibility === "draft" ? "Draft" : "Website"];
   // Received at an outlet: its own location. Otherwise the warehouse — the location mapped to the Online outlet —
   // rather than whichever location Shopify happens to list first.
   const receivedAt = one<{ shopify_location_id: string | null }>(item.outlets)?.shopify_location_id ?? null;
