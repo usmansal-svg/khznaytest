@@ -39,7 +39,7 @@ Managers add staff at **Admin → Staff** (name, role, home outlet, PIN, daily t
 | Sign in | `/login` | all | Name grid + keypad; first run sets up the founder |
 | **Tag item** | `/tag` | tagger+ | The one screen that must be fast (§5) |
 | Photos | `/photos` · `/photos/[sku]` | tagger+, photographer | Photography station: scan-and-shoot on the iPhone, review per garment |
-| Items | `/items` | tagger+ | Every garment with Lot, Brand, Item, Grade, Size, **Station**, Channel, Tagger; Excel-style filters on every column; tick boxes with Select all; export exactly the ticked rows or all shown, or by date range (managers) |
+| Items | `/items` | tagger+ | Garments tagged in a date window (this month by default; a search looks across all time), up to 5,000 in the browser with the true count shown; Lot, Brand, Item, Grade, Size, **Station**, Channel, Shopify, Price; Excel-style filters on every column; 50 / 100 / 200 per page; tick boxes with Select all; managers export the ticked rows or all shown to Excel, or every garment in the date range straight from the database (no cap, no CSV), and upload ticked garments to Shopify with a POS only / Website + POS / Website only / Draft switch |
 | Garment | `/items/[sku]` | tagger+ | Channel, destination outlet, photos, listing preview, Shopify push |
 | Print tag | `/items/[sku]/print` · `/print?skus=…` | tagger+ | One tag, or a whole session's tags in one print job |
 | Transfers | `/transfers` | QC senior+, outlet manager | Pack → dispatch → receive (scan-check) → reconcile (§7) |
