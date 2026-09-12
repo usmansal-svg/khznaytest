@@ -12,29 +12,38 @@ const FIELD: Record<string, string> = { grade: "Condition", brand_text: "Brand",
 const GRADE: Record<string, string> = { bnwt: "BNWT", premium: "Premium", excellent: "Excellent", very_good: "Very Good", rejected: "Rejected" };
 const fmt = (v: string | boolean | null) => (v == null || v === "" ? "—" : typeof v === "boolean" ? (v ? "yes" : "no") : GRADE[v] ?? v);
 
-/** The monthly tagger scorecard: target achievement and QC accuracy, one score, finalised by a manager. */
-export function TaggersAdmin() {
+type Photographer = { id: number; name: string; role: string; days_worked: number; shot: number; per_day: number; target: number; expected: number; target_pct: number; complete: number; complete_pct: number; pictures_per_garment: number; cutouts: number; score: number; finalised: { score: number; note: string | null; at: string; by: string } | null };
+type Reviewer = { id: number; name: string; role: string; days_worked: number; reviewed: number; per_day: number; corrected: number; correction_rate: number; price_impact: number };
+
+/**
+ * The monthly scorecard for everyone with a KPI (12 Sep): taggers (target +
+ * QC accuracy), photographers (target + completeness), QC reviewers
+ * (activity). A manager finalises each score with a note.
+ */
+export function ScorecardAdmin() {
   const [month, setMonth] = useState("");
-  const [data, setData] = useState<{ month: string; weights: { target: number; accuracy: number }; default_target: number; taggers: Tagger[] } | null>(null);
+  const [data, setData] = useState<{ month: string; weights: { target: number; accuracy: number }; default_target: number; taggers: Tagger[]; photographers: Photographer[]; reviewers: Reviewer[] } | null>(null);
   const [open, setOpen] = useState<number | null>(null);
   const [note, setNote] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   useEffect(() => { setMonth(new Date(Date.now() + 5 * 3600_000).toISOString().slice(0, 7)); }, []);
-  const load = useCallback(async () => { if (!month) return; const r = await fetch(`/api/admin/taggers?month=${month}`); const j = await r.json(); if (r.ok) setData(j); else setMsg(j.error); }, [month]);
+  const load = useCallback(async () => { if (!month) return; const r = await fetch(`/api/admin/scorecard?month=${month}`); const j = await r.json(); if (r.ok) setData(j); else setMsg(j.error); }, [month]);
   useEffect(() => { void load(); }, [load]);
-  async function finalise(id: number) {
-    const r = await fetch("/api/admin/taggers", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ month, staff_id: id, note }) });
+  async function finalise(id: number, kind: "tagging" | "photography" = "tagging") {
+    const r = await fetch("/api/admin/scorecard", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ month, staff_id: id, kind, note }) });
     const j = await r.json(); setMsg(r.ok ? `Score ${j.score} finalised.` : j.error); setNote(""); void load();
   }
   const tone = (n: number | null) => (n == null ? "" : n >= 90 ? "text-green-700 dark:text-green-400" : n >= 70 ? "text-amber-700 dark:text-amber-300" : "text-red-700 dark:text-red-400");
   return (
     <div className="mx-auto max-w-6xl space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div><h1 className="text-2xl font-bold">Taggers · monthly scorecard</h1><p className="text-sm text-muted-foreground">Score = {data ? Math.round(data.weights.target * 100) : 60}% target achievement + {data ? Math.round(data.weights.accuracy * 100) : 40}% QC accuracy. Target achievement is garments tagged against days worked × daily target; accuracy is the share of QC-reviewed garments that needed no correction.</p></div>
+        <div><h1 className="text-2xl font-bold">Scorecard · {data ? new Date(`${data.month}-01T00:00:00`).toLocaleDateString("en-PK", { month: "long", year: "numeric" }) : ""}</h1><p className="text-sm text-muted-foreground">Everyone with a KPI, one score each out of 100. The daily target is per person on Staff (else the default in Pricing); target achievement is work done against days worked × target, capped at 100%.</p></div>
         <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="h-10 w-44" />
       </div>
       {msg && <p className="text-sm text-muted-foreground">{msg}</p>}
       {data && (
+        <>
+        <h2 className="pt-2 text-lg font-semibold">Taggers <span className="text-sm font-normal text-muted-foreground">· score = {Math.round(data.weights.target * 100)}% target achievement + {Math.round(data.weights.accuracy * 100)}% QC accuracy (share of reviewed garments needing no correction)</span></h2>
         <Card><CardContent className="overflow-x-auto p-0">
           <table className="w-full text-sm">
             <thead className="text-left text-xs uppercase text-muted-foreground"><tr><th className="p-2">Tagger</th><th className="p-2 text-right">Days</th><th className="p-2 text-right">Tagged</th><th className="p-2 text-right">Per day / target</th><th className="p-2 text-right">Target</th><th className="p-2 text-right">Reviewed</th><th className="p-2 text-right">Corrected</th><th className="p-2 text-right">Accuracy</th><th className="p-2 text-right">Under-priced</th><th className="p-2 text-right">Score</th><th className="p-2"></th></tr></thead>
@@ -76,6 +85,46 @@ export function TaggersAdmin() {
             </tbody>
           </table>
         </CardContent></Card>
+
+        <h2 className="pt-4 text-lg font-semibold">Photographers <span className="text-sm font-normal text-muted-foreground">· score = {Math.round(data.weights.target * 100)}% target achievement + {Math.round(data.weights.accuracy * 100)}% completeness (garments with a cut-out cover and at least two pictures)</span></h2>
+        <Card><CardContent className="overflow-x-auto p-0">
+          <table className="w-full text-sm">
+            <thead className="text-left text-xs uppercase text-muted-foreground"><tr><th className="p-2">Photographer</th><th className="p-2 text-right">Days</th><th className="p-2 text-right">Photographed</th><th className="p-2 text-right">Per day / target</th><th className="p-2 text-right">Target</th><th className="p-2 text-right">Complete</th><th className="p-2 text-right">Completeness</th><th className="p-2 text-right">Pictures / garment</th><th className="p-2 text-right">Score</th><th className="p-2"></th></tr></thead>
+            <tbody className="divide-y">
+              {data.photographers.map((p) => (
+                <tr key={p.id}>
+                  <td className="p-2 font-medium">{p.name}{p.role !== "photographer" && <span className="ml-1 text-xs text-muted-foreground">({p.role.replace("_", " ")})</span>}{p.finalised && <span className="ml-2 rounded-full border border-green-600 px-2 text-[11px] text-green-700 dark:text-green-400">finalised {p.finalised.score}</span>}</td>
+                  <td className="p-2 text-right tabular-nums">{p.days_worked}</td><td className="p-2 text-right tabular-nums">{p.shot}</td><td className="p-2 text-right tabular-nums">{p.per_day} / {p.target}</td>
+                  <td className={cn("p-2 text-right tabular-nums font-semibold", tone(p.target_pct))}>{p.target_pct}%</td>
+                  <td className="p-2 text-right tabular-nums">{p.complete}</td>
+                  <td className={cn("p-2 text-right tabular-nums font-semibold", tone(p.complete_pct))}>{p.complete_pct}%</td>
+                  <td className="p-2 text-right tabular-nums">{p.pictures_per_garment}</td>
+                  <td className={cn("p-2 text-right text-lg font-bold tabular-nums", tone(p.score))}>{p.score}</td>
+                  <td className="p-2"><div className="flex items-center gap-2"><Button size="sm" variant="outline" onClick={() => finalise(p.id, "photography")}>{p.finalised ? "Re-finalise" : "Finalise"}</Button>{p.finalised && <span className="text-xs text-muted-foreground">{new Date(p.finalised.at).toLocaleDateString("en-PK")} · {p.finalised.by}</span>}</div></td>
+                </tr>
+              ))}
+              {data.photographers.length === 0 && <tr><td colSpan={10} className="p-6 text-center text-muted-foreground">Nothing photographed in {data.month}.</td></tr>}
+            </tbody>
+          </table>
+        </CardContent></Card>
+
+        <h2 className="pt-4 text-lg font-semibold">QC reviewers <span className="text-sm font-normal text-muted-foreground">· activity only; no review target is set yet</span></h2>
+        <Card><CardContent className="overflow-x-auto p-0">
+          <table className="w-full text-sm">
+            <thead className="text-left text-xs uppercase text-muted-foreground"><tr><th className="p-2">Reviewer</th><th className="p-2 text-right">Days</th><th className="p-2 text-right">Reviewed</th><th className="p-2 text-right">Per day</th><th className="p-2 text-right">Corrected</th><th className="p-2 text-right">Correction rate</th><th className="p-2 text-right">Net price change</th></tr></thead>
+            <tbody className="divide-y">
+              {data.reviewers.map((r) => (
+                <tr key={r.id}>
+                  <td className="p-2 font-medium">{r.name} <span className="text-xs text-muted-foreground">({r.role.replace("_", " ")})</span></td>
+                  <td className="p-2 text-right tabular-nums">{r.days_worked}</td><td className="p-2 text-right tabular-nums">{r.reviewed}</td><td className="p-2 text-right tabular-nums">{r.per_day}</td><td className="p-2 text-right tabular-nums">{r.corrected}</td><td className="p-2 text-right tabular-nums">{r.correction_rate}%</td>
+                  <td className="p-2 text-right tabular-nums">{r.price_impact > 0 ? "+" : ""}Rs {r.price_impact.toLocaleString()}</td>
+                </tr>
+              ))}
+              {data.reviewers.length === 0 && <tr><td colSpan={7} className="p-6 text-center text-muted-foreground">No QC reviews in {data.month}.</td></tr>}
+            </tbody>
+          </table>
+        </CardContent></Card>
+        </>
       )}
     </div>
   );

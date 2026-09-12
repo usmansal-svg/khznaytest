@@ -1,11 +1,17 @@
 /**
- * GET  /api/admin/taggers?month=YYYY-MM — the monthly scorecard per tagger
- * POST /api/admin/taggers { month, staff_id, note? } — finalise a score
+ * GET  /api/admin/scorecard?month=YYYY-MM — the monthly scorecard for everyone with a KPI
+ * POST /api/admin/scorecard { month, staff_id, kind, note? } — finalise a score
  *
- * Two KPIs, one score:
+ * Taggers, two KPIs, one score:
  *   target achievement = garments tagged ÷ (days worked × daily target), capped at 100
  *   accuracy           = 100 − (garments corrected by QC ÷ garments reviewed)
  *   score              = 60% target achievement + 40% accuracy
+ * Photographers, two KPIs, one score:
+ *   target achievement = garments photographed ÷ (days worked × daily target), capped at 100
+ *   completeness       = share of photographed garments with a cut-out cover and at least two pictures
+ *   score              = 60% target achievement + 40% completeness
+ * QC reviewers are listed with their activity (reviews per day, corrections found).
+ * The daily target is per person on Staff, else the default in Pricing.
  */
 import { NextResponse } from "next/server";
 
@@ -30,13 +36,14 @@ export async function GET(request: Request) {
   const month = url.searchParams.get("month") ?? new Date(Date.now() + 5 * 3600_000).toISOString().slice(0, 7);
   const { start, end, first } = monthRange(month);
   const db = gate.db;
-  const [{ data: staff }, { data: items }, { data: reviews }, { data: alerts }, { data: settings }, { data: finals }] = await Promise.all([
-    db.from("staff").select("id, name, role, active, daily_target").in("role", ["tagger", "qc_senior", "manager", "founder"]),
+  const [{ data: staff }, { data: items }, { data: shot }, { data: reviews }, { data: alerts }, { data: settings }, { data: finals }] = await Promise.all([
+    db.from("staff").select("id, name, role, active, daily_target"),
     db.from("items").select("id, tagged_by, tagged_at, grade_code, price_manual").gte("tagged_at", start).lt("tagged_at", end).limit(100000),
+    db.from("items").select("id, photographed_by, photographed_at, photos").gte("photographed_at", start).lt("photographed_at", end).limit(100000),
     db.from("qc_reviews").select("id, item_id, tagger_id, reviewed_by, reviewed_at, outcome, corrections, price_before, price_after, note, items(sku)").gte("reviewed_at", start).lt("reviewed_at", end).limit(20000),
     db.from("price_alerts").select("tagged_by").gte("created_at", start).lt("created_at", end).limit(20000),
     db.from("settings").select("default_daily_target").order("version", { ascending: false }).limit(1).maybeSingle(),
-    db.from("tagger_scores").select("staff_id, score, note, finalised_at, finalised_by").eq("month", first),
+    db.from("tagger_scores").select("staff_id, kind, score, note, finalised_at, finalised_by").eq("month", first),
   ]);
   const defaultTarget = Number(settings?.default_daily_target ?? 60);
   const name = new Map((staff ?? []).map((s) => [s.id, s.name]));
@@ -64,7 +71,7 @@ export async function GET(request: Request) {
   }
   const under = new Map<number, number>();
   for (const a of alerts ?? []) under.set(a.tagged_by ?? 0, (under.get(a.tagged_by ?? 0) ?? 0) + 1);
-  const finalBy = new Map((finals ?? []).map((f) => [f.staff_id, f]));
+  const finalBy = new Map((finals ?? []).map((f) => [`${f.kind ?? "tagging"}:${f.staff_id}`, f]));
 
   const ids = new Set<number>([...byTagger.keys(), ...revBy.keys()]);
   const taggers = [...ids].filter((id) => id).map((id) => {
@@ -75,7 +82,7 @@ export async function GET(request: Request) {
     const targetPct = expected ? Math.min(100, Math.round((t.tagged / expected) * 100)) : 0;
     const accuracyPct = r.reviewed ? Math.round(100 - (r.corrected / r.reviewed) * 100) : null;
     const score = Math.round(W_TARGET * targetPct + W_ACCURACY * (accuracyPct ?? 100));
-    const f = finalBy.get(id);
+    const f = finalBy.get(`tagging:${id}`);
     return {
       id, name: name.get(id) ?? "Unknown", days_worked: t.days.size, tagged: t.tagged, per_day: t.days.size ? Math.round(t.tagged / t.days.size) : 0, target, expected, target_pct: targetPct,
       reviewed: r.reviewed, corrected: r.corrected, correction_rate: r.reviewed ? Math.round((r.corrected / r.reviewed) * 100) : null, accuracy_pct: accuracyPct,
@@ -83,20 +90,63 @@ export async function GET(request: Request) {
       score, finalised: f ? { score: f.score, note: f.note, at: f.finalised_at, by: name.get(f.finalised_by ?? 0) ?? "" } : null, recent: r.recent,
     };
   }).sort((a, b) => b.score - a.score);
-  return NextResponse.json({ month, weights: { target: W_TARGET, accuracy: W_ACCURACY }, default_target: defaultTarget, taggers });
+
+  // Photographers: garments photographed against target; completeness of what was shot.
+  const byPhotographer = new Map<number, { days: Set<string>; shot: number; complete: number; pictures: number; cutouts: number }>();
+  for (const i of shot ?? []) {
+    const k = i.photographed_by ?? 0;
+    const e = byPhotographer.get(k) ?? { days: new Set<string>(), shot: 0, complete: 0, pictures: 0, cutouts: 0 };
+    const photos = (Array.isArray(i.photos) ? i.photos : []) as { kind?: string }[];
+    const originals = photos.filter((p) => p.kind !== "cutout").length, cutouts = photos.filter((p) => p.kind === "cutout").length;
+    e.days.add(dayOf(i.photographed_at)); e.shot++; e.pictures += originals; e.cutouts += cutouts;
+    if (cutouts > 0 && originals >= 2) e.complete++;
+    byPhotographer.set(k, e);
+  }
+  const photographers = [...byPhotographer.keys()].filter((id) => id).map((id) => {
+    const p = byPhotographer.get(id)!;
+    const target = (staff ?? []).find((s) => s.id === id)?.daily_target ?? defaultTarget;
+    const expected = p.days.size * target;
+    const targetPct = expected ? Math.min(100, Math.round((p.shot / expected) * 100)) : 0;
+    const completePct = p.shot ? Math.round((p.complete / p.shot) * 100) : 0;
+    const score = Math.round(W_TARGET * targetPct + W_ACCURACY * completePct);
+    const f = finalBy.get(`photography:${id}`);
+    return {
+      id, name: name.get(id) ?? "Unknown", role: (staff ?? []).find((s) => s.id === id)?.role ?? "", days_worked: p.days.size, shot: p.shot, per_day: p.days.size ? Math.round(p.shot / p.days.size) : 0, target, expected, target_pct: targetPct,
+      complete: p.complete, complete_pct: completePct, pictures_per_garment: p.shot ? Math.round((p.pictures / p.shot) * 10) / 10 : 0, cutouts: p.cutouts,
+      score, finalised: f ? { score: f.score, note: f.note, at: f.finalised_at, by: name.get(f.finalised_by ?? 0) ?? "" } : null,
+    };
+  }).sort((a, b) => b.score - a.score);
+
+  // QC reviewers: activity, no score yet — a review target is not set anywhere.
+  const byReviewer = new Map<number, { days: Set<string>; reviewed: number; corrected: number; rupees: number }>();
+  for (const r of reviews ?? []) {
+    const k = r.reviewed_by ?? 0;
+    const e = byReviewer.get(k) ?? { days: new Set<string>(), reviewed: 0, corrected: 0, rupees: 0 };
+    e.days.add(dayOf(r.reviewed_at)); e.reviewed++;
+    if (r.outcome === "corrected") { e.corrected++; if (r.price_after != null && r.price_before != null) e.rupees += r.price_after - r.price_before; }
+    byReviewer.set(k, e);
+  }
+  const reviewers = [...byReviewer.keys()].filter((id) => id).map((id) => {
+    const r = byReviewer.get(id)!;
+    return { id, name: name.get(id) ?? "Unknown", role: (staff ?? []).find((s) => s.id === id)?.role ?? "", days_worked: r.days.size, reviewed: r.reviewed, per_day: r.days.size ? Math.round(r.reviewed / r.days.size) : 0, corrected: r.corrected, correction_rate: r.reviewed ? Math.round((r.corrected / r.reviewed) * 100) : 0, price_impact: r.rupees };
+  }).sort((a, b) => b.reviewed - a.reviewed);
+
+  return NextResponse.json({ month, weights: { target: W_TARGET, accuracy: W_ACCURACY }, default_target: defaultTarget, taggers, photographers, reviewers });
 }
 
 export async function POST(request: Request) {
   const gate = await requireManager();
   if ("response" in gate) return gate.response;
-  let body: { month?: string; staff_id?: number; note?: string | null };
+  let body: { month?: string; staff_id?: number; kind?: string; note?: string | null };
   try { body = await request.json(); } catch { return NextResponse.json({ error: "Body must be JSON." }, { status: 400 }); }
+  const kind = body.kind === "photography" ? "photography" : "tagging";
   if (!/^\d{4}-\d{2}$/.test(String(body.month)) || !Number.isInteger(body.staff_id)) return NextResponse.json({ error: "month and staff_id are required." }, { status: 400 });
-  const res = await GET(new Request(`http://x/api/admin/taggers?month=${body.month}`));
+  const res = await GET(new Request(`http://x/api/admin/scorecard?month=${body.month}`));
   const j = await res.json();
-  const t = (j.taggers as { id: number; score: number; target_pct: number; accuracy_pct: number | null; tagged: number; reviewed: number; corrected: number }[]).find((x) => x.id === body.staff_id);
-  if (!t) return NextResponse.json({ error: "No activity for that tagger in that month." }, { status: 404 });
-  const { error } = await gate.db.from("tagger_scores").upsert({ month: `${body.month}-01`, staff_id: t.id, score: t.score, target_pct: t.target_pct, accuracy_pct: t.accuracy_pct ?? 100, tagged: t.tagged, reviewed: t.reviewed, corrected: t.corrected, note: body.note?.trim() || null, finalised_by: gate.staff.id, finalised_at: new Date().toISOString() }, { onConflict: "month,staff_id" });
+  type Scored = { id: number; score: number; target_pct: number; accuracy_pct?: number | null; complete_pct?: number; tagged?: number; shot?: number; reviewed?: number; corrected?: number; complete?: number };
+  const t = ((kind === "photography" ? j.photographers : j.taggers) as Scored[]).find((x) => x.id === body.staff_id);
+  if (!t) return NextResponse.json({ error: "No activity for that person in that month." }, { status: 404 });
+  const { error } = await gate.db.from("tagger_scores").upsert({ month: `${body.month}-01`, staff_id: t.id, kind, score: t.score, target_pct: t.target_pct, accuracy_pct: kind === "photography" ? t.complete_pct ?? 0 : t.accuracy_pct ?? 100, tagged: t.tagged ?? t.shot ?? 0, reviewed: t.reviewed ?? 0, corrected: t.corrected ?? t.complete ?? 0, note: body.note?.trim() || null, finalised_by: gate.staff.id, finalised_at: new Date().toISOString() }, { onConflict: "month,staff_id,kind" });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true, score: t.score });
 }

@@ -1,7 +1,6 @@
-import { TaggersAdmin } from "@/components/admin/taggers-admin";
+import { redirect } from "next/navigation";
 
-export const metadata = { title: "Taggers · Khazanay" };
-
+/** The tagger scorecard became the scorecard for everyone (12 Sep). */
 export default function TaggersPage() {
-  return <TaggersAdmin />;
+  redirect("/admin/scorecard");
 }
