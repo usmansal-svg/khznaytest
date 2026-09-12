@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, Pencil, Plus, Power, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Check, ChevronRight, FlaskConical, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,29 +10,31 @@ import { shopifyTags, shopifyTitle } from "@/lib/shopify/tags";
 import { cn } from "@/lib/utils";
 
 /**
- * The catalogue as a family tree: gender → category → sub-category. Every
- * node shows the Shopify tag it puts on a garment, so the tree *is* the
- * website menu. Managers add, rename, switch off and delete here; the
- * numbers behind each sub-category stay on Pricing → Categories.
+ * The catalogue as an editor: gender → category (left) → sub-categories
+ * (right). Every node shows the Shopify tag it puts on a garment, so this
+ * screen *is* the website menu. Managers add, rename, switch off and delete
+ * here; the numbers behind each sub-category stay on Pricing → Categories.
  */
 
 type Sub = { slug: string; code: string; name: string; active: boolean; cost: number | null; items: number; tag: string | null };
 type Cat = { slug: string; name: string; active: boolean; tag: string; subs: Sub[]; items: number };
 type Branch = { gender: string; categories: Cat[] };
+type Preview = { wearer: Wearer; season: "summer" | "winter"; cat: string; sub: string; brand: string; grade: string; size: string };
 
 const GENDER_LABEL: Record<string, string> = { men: "Men", women: "Women", kid: "Kids", teenage: "Teens", toddler: "Toddlers", infant: "Infants" };
 const GENDER_TAG: Record<string, string> = { men: "Men", women: "Women", kid: "Kids", teenage: "Kids", toddler: "Kids", infant: "Kids" };
+const DEFAULT_WEARER: Record<string, Wearer> = { men: "men", women: "women", kid: "kids_boy", teenage: "teen_boy", toddler: "toddler_boy", infant: "infant_boy" };
 
 export function CatalogueTree() {
   const [tree, setTree] = useState<Branch[] | null>(null);
   const [gender, setGender] = useState("men");
-  const [closed, setClosed] = useState<Set<string>>(new Set());
-  const [adding, setAdding] = useState<string | null>(null); // category slug with the add box open, or "category"
-  const [draft, setDraft] = useState("");
+  const [selected, setSelected] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [showOff, setShowOff] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
-  const [showOff, setShowOff] = useState(true);
-  const [preview, setPreview] = useState<{ wearer: Wearer; season: "summer" | "winter"; cat: string; sub: string; brand: string; grade: string; size: string }>({ wearer: "men", season: "summer", cat: "", sub: "", brand: "Nike", grade: "premium", size: "L" });
+  const [preview, setPreview] = useState<Preview>({ wearer: "men", season: "summer", cat: "", sub: "", brand: "Nike", grade: "premium", size: "L" });
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const load = useCallback(async () => {
     const r = await fetch("/api/admin/catalogue");
@@ -40,6 +42,7 @@ export function CatalogueTree() {
     if (r.ok) setTree(j.tree); else setMsg({ tone: "error", text: j.error });
   }, []);
   useEffect(() => { void load(); try { const g = localStorage.getItem("khz_catalogue_gender"); if (g) setGender(g); } catch { /* fine */ } }, [load]);
+  useEffect(() => { if (msg?.tone === "ok") { const t = setTimeout(() => setMsg(null), 6000); return () => clearTimeout(t); } }, [msg]);
 
   async function act(body: Record<string, unknown>, ok: string) {
     setBusy(true); setMsg(null);
@@ -47,119 +50,110 @@ export function CatalogueTree() {
       const r = await fetch("/api/admin/catalogue", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error ?? "Failed.");
-      setMsg({ tone: "ok", text: ok + (j.copied_from ? ` Numbers copied from a sibling; cost Rs ${Math.round(j.cost)}.` : j.cost ? ` No sibling to copy from — cost set to the typical Rs ${Math.round(j.cost)}; adjust it on Pricing → Categories.` : "") });
+      setMsg({ tone: "ok", text: ok + (j.copied_from ? ` Cost Rs ${Math.round(j.cost)} copied from a sibling; tune it on Pricing → Categories.` : j.cost ? ` No sibling to copy from, so the cost is the typical Rs ${Math.round(j.cost)}; set it on Pricing → Categories.` : "") });
       await load();
-      return true;
-    } catch (e) { setMsg({ tone: "error", text: e instanceof Error ? e.message : "Failed." }); return false; } finally { setBusy(false); }
+      return j;
+    } catch (e) { setMsg({ tone: "error", text: e instanceof Error ? e.message : "Failed." }); return null; } finally { setBusy(false); }
   }
 
-  const rename = async (kind: "category" | "sub", slug: string, current: string) => {
-    const name = window.prompt(`New name for “${current}”. This is also the Shopify tag, so name it the way it should read on the website:`, current);
-    if (name == null || !name.trim() || name.trim() === current) return;
-    await act({ action: "rename", kind, slug, name }, `Renamed to ${name.trim()}. Garments tagged from now on carry the new tag; already-uploaded products keep the old one until re-uploaded.`);
-  };
-  const remove = async (kind: "category" | "sub", slug: string, name: string) => {
-    if (!window.confirm(`Delete “${name}”? This is only allowed when nothing has been tagged under it.`)) return;
-    await act({ action: "delete", kind, slug }, `${name} deleted.`);
-  };
-  const submitAdd = async () => {
-    if (!draft.trim()) return;
-    const ok = adding === "category" ? await act({ action: "add_category", gender, name: draft }, `Category ${draft.trim()} added.`) : await act({ action: "add_sub", category_slug: adding, name: draft }, `${draft.trim()} added.`);
-    if (ok) { setDraft(""); setAdding(null); }
-  };
+  const branch = useMemo(() => tree?.find((b) => b.gender === gender) ?? { gender, categories: [] }, [tree, gender]);
+  const q = query.trim().toLowerCase();
+  const matches = (s: Sub) => !q || s.name.toLowerCase().includes(q) || (s.tag ?? "").toLowerCase().includes(q) || s.code.toLowerCase().includes(q);
+  const visibleCats = branch.categories.filter((c) => (showOff || c.active) && (!q || c.name.toLowerCase().includes(q) || c.subs.some(matches)));
+  const current = branch.categories.find((c) => c.slug === selected) ?? visibleCats[0] ?? null;
+  const live = (c: Cat) => c.subs.filter((s) => s.active).length;
+  const totals = { cats: branch.categories.filter((c) => c.active).length, subs: branch.categories.reduce((n, c) => n + live(c), 0) };
 
   if (!tree) return <p className="text-muted-foreground">Loading…</p>;
-  const branch = tree.find((b) => b.gender === gender) ?? { gender, categories: [] };
-  const live = (c: Cat) => c.subs.filter((s) => s.active).length;
-  const totals = { cats: branch.categories.filter((c) => c.active).length, subs: branch.categories.reduce((n, c) => n + live(c), 0), items: branch.categories.reduce((n, c) => n + c.items, 0) };
-  const toggleFold = (slug: string) => setClosed((s) => { const n = new Set(s); if (n.has(slug)) n.delete(slug); else n.add(slug); return n; });
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <div className="mx-auto max-w-6xl space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Catalogue</h1>
-          <p className="max-w-3xl text-sm text-muted-foreground">Gender → category → sub-category, exactly as the website menu. The grey code beside each name is the tag the garment carries to Shopify; build each collection on <i>tag equals</i> that code. Costs and weights are on Pricing → Categories.</p>
+          <p className="max-w-2xl text-sm text-muted-foreground">Gender → category → sub-category, exactly as the website menu. The grey code on each row is the tag Shopify receives; build each collection on <i>tag equals</i> that code.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex gap-1 rounded-full border bg-background p-1 text-sm">
-            {tree.map((b) => <button key={b.gender} type="button" onClick={() => { setGender(b.gender); try { localStorage.setItem("khz_catalogue_gender", b.gender); } catch { /* fine */ } }} className={cn("rounded-full px-3 py-1", gender === b.gender ? "bg-foreground font-semibold text-background" : "text-muted-foreground hover:text-foreground")}>{GENDER_LABEL[b.gender] ?? b.gender}<span className="ml-1 text-xs opacity-70">{b.categories.filter((c) => c.active).length}</span></button>)}
+        <Button variant={previewOpen ? "default" : "outline"} onClick={() => setPreviewOpen((v) => !v)}><FlaskConical className="size-4" /> Try a garment</Button>
+      </div>
+      {previewOpen && <TagPreview tree={tree} value={preview} onChange={setPreview} onClose={() => setPreviewOpen(false)} />}
+      {msg && <p className={cn("rounded-lg border px-3 py-2 text-sm", msg.tone === "error" ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200" : "border-green-300 bg-green-50 text-green-900 dark:border-green-800 dark:bg-green-950 dark:text-green-200")}>{msg.text}</p>}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex gap-1 rounded-full border bg-background p-1 text-sm">
+          {tree.map((b) => (
+            <button key={b.gender} type="button" onClick={() => { setGender(b.gender); setSelected(null); try { localStorage.setItem("khz_catalogue_gender", b.gender); } catch { /* fine */ } }} className={cn("rounded-full px-3.5 py-1.5 transition-colors", gender === b.gender ? "bg-foreground font-semibold text-background" : "text-muted-foreground hover:text-foreground")}>
+              {GENDER_LABEL[b.gender] ?? b.gender}<span className="ml-1.5 text-xs opacity-60 tabular-nums">{b.categories.filter((c) => c.active).length}</span>
+            </button>
+          ))}
+        </div>
+        <div className="relative ml-auto min-w-[14rem] flex-1 sm:flex-none">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={`Search ${GENDER_LABEL[gender]} sub-categories or tags`} className="h-9 pl-8" />
+          {query && <button type="button" onClick={() => setQuery("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground" aria-label="Clear search"><X className="size-4" /></button>}
+        </div>
+        <label className="flex items-center gap-1.5 text-xs text-muted-foreground"><input type="checkbox" checked={showOff} onChange={(e) => setShowOff(e.target.checked)} /> Show switched-off</label>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
+        {/* Left: categories */}
+        <div className="rounded-xl border bg-background">
+          <div className="flex items-center justify-between border-b px-3 py-2">
+            <div className="text-sm font-semibold">{GENDER_LABEL[gender]} <span className="font-normal text-muted-foreground">· {totals.cats} categories · {totals.subs} sub-categories</span></div>
+            <TagCode>{GENDER_TAG[gender]}</TagCode>
           </div>
-          <label className="flex items-center gap-1.5 text-xs text-muted-foreground"><input type="checkbox" checked={showOff} onChange={(e) => setShowOff(e.target.checked)} /> Show switched-off</label>
-        </div>
-      </div>
-      {msg && <p className={cn("rounded-md border p-3 text-sm", msg.tone === "error" ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200" : "bg-muted")}>{msg.text}</p>}
-
-      <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground tabular-nums">
-        <span><b className="text-lg text-foreground">{totals.cats}</b> categories</span>
-        <span><b className="text-lg text-foreground">{totals.subs}</b> sub-categories</span>
-        <span><b className="text-lg text-foreground">{totals.items.toLocaleString("en-PK")}</b> garments tagged</span>
-      </div>
-
-      <TagPreview tree={tree} value={preview} onChange={setPreview} />
-
-      <div className="flex items-center gap-3">
-        <span className="rounded-lg bg-foreground px-4 py-2 text-lg font-bold text-background">{GENDER_LABEL[gender] ?? gender}</span>
-        <Tag>{GENDER_TAG[gender]}</Tag>
-        {gender !== "men" && gender !== "women" && <span className="text-xs text-muted-foreground">The tag form&apos;s wearer adds Kids Boys / Infant Girls / Teens… on top.</span>}
-      </div>
-
-      <div className="ml-5 border-l-2 border-foreground pl-6">
-        {branch.categories.filter((c) => showOff || c.active).map((c) => {
-          const folded = closed.has(c.slug);
-          return (
-            <div key={c.slug} className={cn("relative py-2", !c.active && "opacity-60")}>
-              <span className="absolute -left-6 top-[1.35rem] h-0.5 w-6 bg-foreground" aria-hidden />
-              <div className="flex flex-wrap items-center gap-2">
-                <button type="button" onClick={() => toggleFold(c.slug)} className={cn("inline-flex items-center gap-2 rounded-lg border-2 bg-background px-3 py-1.5 font-semibold", c.active ? "border-foreground" : "border-dashed border-muted-foreground")}>
-                  {folded ? <ChevronRight className="size-4" /> : <ChevronDown className="size-4" />}{c.name}<span className="text-xs font-normal text-muted-foreground tabular-nums">{live(c)}</span>
+          <ul className="max-h-[60vh] overflow-auto p-1.5">
+            {visibleCats.map((c) => (
+              <li key={c.slug}>
+                <button type="button" onClick={() => setSelected(c.slug)} className={cn("flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors", current?.slug === c.slug ? "bg-foreground text-background" : "hover:bg-muted", !c.active && "opacity-50")}>
+                  <span className="min-w-0 flex-1 truncate">{c.name}{!c.active && <span className="ml-1 text-[10px] uppercase">off</span>}</span>
+                  <span className={cn("text-xs tabular-nums", current?.slug === c.slug ? "opacity-70" : "text-muted-foreground")}>{q ? c.subs.filter(matches).length : live(c)}</span>
+                  <ChevronRight className={cn("size-4 shrink-0", current?.slug === c.slug ? "opacity-70" : "text-muted-foreground")} />
                 </button>
-                <Tag>{c.tag}</Tag>
-                {!c.active && <span className="text-xs text-muted-foreground">switched off</span>}
-                <span className="ml-auto flex gap-1">
-                  <IconButton title="Rename" onClick={() => rename("category", c.slug, c.name)} disabled={busy}><Pencil className="size-3.5" /></IconButton>
-                  <IconButton title={c.active ? "Switch off (hides it and all its sub-categories from the tag form)" : "Switch on"} onClick={() => act({ action: "toggle", kind: "category", slug: c.slug, active: !c.active }, `${c.name} switched ${c.active ? "off" : "on"}.`)} disabled={busy}><Power className="size-3.5" /></IconButton>
-                  <IconButton title="Delete (only when empty)" onClick={() => remove("category", c.slug, c.name)} disabled={busy} danger><Trash2 className="size-3.5" /></IconButton>
+              </li>
+            ))}
+            {visibleCats.length === 0 && <li className="p-4 text-center text-sm text-muted-foreground">{q ? "Nothing matches." : "No categories yet."}</li>}
+          </ul>
+          <div className="border-t p-2">
+            <AddRow placeholder={`New category for ${GENDER_LABEL[gender]}, e.g. Suits & Formal`} busy={busy} onAdd={async (name) => { const j = await act({ action: "add_category", gender, name }, `${name} added.`); if (j?.slug) setSelected(j.slug); return Boolean(j); }} />
+          </div>
+        </div>
+
+        {/* Right: the selected category */}
+        <div className="rounded-xl border bg-background">
+          {current ? (
+            <>
+              <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
+                <InlineName value={current.name} busy={busy} big onSave={(name) => act({ action: "rename", kind: "category", slug: current.slug, name }, `Renamed to ${name}. Garments tagged from now on carry the new tag.`)} />
+                <TagCode>{current.tag}</TagCode>
+                <span className="text-xs text-muted-foreground tabular-nums">{live(current)} sub-categories · {current.items.toLocaleString("en-PK")} garments tagged</span>
+                <span className="ml-auto flex items-center gap-2">
+                  <Toggle on={current.active} busy={busy} label={current.active ? "On" : "Off"} onChange={(on) => act({ action: "toggle", kind: "category", slug: current.slug, active: on }, `${current.name} switched ${on ? "on" : "off"}${on ? "" : " with all its sub-categories"}.`)} />
+                  <IconButton title={current.subs.length ? "Delete (empty the category first, or switch it off)" : "Delete category"} danger disabled={busy || current.subs.length > 0} onClick={() => { if (window.confirm(`Delete “${current.name}”?`)) void act({ action: "delete", kind: "category", slug: current.slug }, `${current.name} deleted.`).then(() => setSelected(null)); }}><Trash2 className="size-4" /></IconButton>
                 </span>
               </div>
-              {!folded && (
-                <div className="ml-4 mt-2 flex flex-wrap items-center gap-2 border-l border-border pl-5">
-                  {c.subs.filter((s) => showOff || s.active).map((s) => (
-                    <span key={s.slug} className={cn("group inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-sm", s.active ? "border-sky-500 bg-sky-50 dark:bg-sky-950" : "border-dashed text-muted-foreground line-through")} title={`${s.tag ?? ""} · code ${s.code} · cost Rs ${s.cost ?? "—"} · ${s.items} tagged · click to try it in the tag preview`} onClick={() => setPreview((p) => ({ ...p, cat: c.slug, sub: s.slug, wearer: gender === "men" ? "men" : gender === "women" ? "women" : gender === "infant" ? "infant_boy" : gender === "toddler" ? "toddler_boy" : gender === "teenage" ? "teen_boy" : "kids_boy" }))}>
-                      {s.name}
-                      <span className="font-mono text-[10px] text-muted-foreground no-underline">{s.tag}</span>
-                      {s.items > 0 && <span className="text-[10px] text-muted-foreground tabular-nums">· {s.items}</span>}
-                      <span className="ml-1 hidden gap-0.5 group-hover:inline-flex">
-                        <IconButton title="Rename" onClick={() => rename("sub", s.slug, s.name)} disabled={busy}><Pencil className="size-3" /></IconButton>
-                        <IconButton title={s.active ? "Switch off" : "Switch on"} onClick={() => act({ action: "toggle", kind: "sub", slug: s.slug, active: !s.active }, `${s.name} switched ${s.active ? "off" : "on"}.`)} disabled={busy}><Power className="size-3" /></IconButton>
-                        <IconButton title="Delete" onClick={() => remove("sub", s.slug, s.name)} disabled={busy} danger><Trash2 className="size-3" /></IconButton>
-                      </span>
-                    </span>
-                  ))}
-                  {adding === c.slug ? (
-                    <form onSubmit={(e) => { e.preventDefault(); void submitAdd(); }} className="inline-flex items-center gap-1">
-                      <Input autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="e.g. Formal shirt" className="h-8 w-44" />
-                      <Button type="submit" size="sm" className="h-8" disabled={busy || !draft.trim()}>Add</Button>
-                      <Button type="button" size="sm" variant="ghost" className="h-8" onClick={() => { setAdding(null); setDraft(""); }}>Cancel</Button>
-                    </form>
-                  ) : (
-                    <button type="button" onClick={() => { setAdding(c.slug); setDraft(""); }} className="inline-flex items-center gap-1 rounded-md border border-dashed px-2.5 py-1 text-sm text-muted-foreground hover:border-foreground hover:text-foreground"><Plus className="size-3.5" /> Add sub-category</button>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-        <div className="relative py-2">
-          <span className="absolute -left-6 top-[1.35rem] h-0.5 w-6 bg-foreground" aria-hidden />
-          {adding === "category" ? (
-            <form onSubmit={(e) => { e.preventDefault(); void submitAdd(); }} className="inline-flex items-center gap-1">
-              <Input autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="e.g. Suits & Formal" className="h-9 w-56" />
-              <Button type="submit" size="sm" disabled={busy || !draft.trim()}>Add category</Button>
-              <Button type="button" size="sm" variant="ghost" onClick={() => { setAdding(null); setDraft(""); }}>Cancel</Button>
-            </form>
+              <div className="px-4 pt-3">
+                <AddRow placeholder={`Add a sub-category to ${current.name}, e.g. Formal shirt`} busy={busy} autoFocusKey={current.slug} onAdd={async (name) => Boolean(await act({ action: "add_sub", category_slug: current.slug, name }, `${name} added to ${current.name}.`))} />
+                <p className="mt-1.5 text-[11px] text-muted-foreground">Press Enter to add. The tag will read “{current.tag.split(" ")[0]} …name…”. Cost, weight and profile are copied from a sibling.</p>
+              </div>
+              <ul className="divide-y px-2 pb-2 pt-2">
+                {current.subs.filter((s) => (showOff || s.active) && matches(s)).map((s) => (
+                  <li key={s.slug} className={cn("grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1 px-2 py-2 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1.2fr)_auto_auto_auto]", !s.active && "opacity-50")}>
+                    <InlineName value={s.name} busy={busy} onSave={(name) => act({ action: "rename", kind: "sub", slug: s.slug, name }, `Renamed to ${name}. Garments tagged from now on carry the new tag.`)} />
+                    <div className="col-span-2 flex flex-wrap items-center gap-2 sm:col-span-1"><TagCode>{s.tag}</TagCode><span className="text-[11px] text-muted-foreground">SKU {s.code}</span></div>
+                    <div className="text-right text-xs text-muted-foreground tabular-nums">{s.cost != null ? `Rs ${Math.round(Number(s.cost)).toLocaleString("en-PK")}` : "no cost"}</div>
+                    <div className="text-right text-xs text-muted-foreground tabular-nums" title="Garments tagged under it">{s.items ? `${s.items} tagged` : ""}</div>
+                    <div className="flex items-center justify-end gap-1">
+                      <button type="button" onClick={() => { setPreview((p) => ({ ...p, cat: current.slug, sub: s.slug, wearer: DEFAULT_WEARER[gender] ?? "men" })); setPreviewOpen(true); }} className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground" title="See every tag this garment would get"><FlaskConical className="size-3.5" /></button>
+                      <Toggle on={s.active} busy={busy} onChange={(on) => act({ action: "toggle", kind: "sub", slug: s.slug, active: on }, `${s.name} switched ${on ? "on" : "off"}.`)} />
+                      <IconButton title={s.items ? "Garments were tagged under it — switch it off instead" : "Delete"} danger disabled={busy || s.items > 0} onClick={() => { if (window.confirm(`Delete “${s.name}”?`)) void act({ action: "delete", kind: "sub", slug: s.slug }, `${s.name} deleted.`); }}><Trash2 className="size-3.5" /></IconButton>
+                    </div>
+                  </li>
+                ))}
+                {current.subs.filter((s) => (showOff || s.active) && matches(s)).length === 0 && <li className="p-6 text-center text-sm text-muted-foreground">{q ? "Nothing matches in this category." : "No sub-categories yet. Add the first one above."}</li>}
+              </ul>
+            </>
           ) : (
-            <button type="button" onClick={() => { setAdding("category"); setDraft(""); }} className="inline-flex items-center gap-2 rounded-lg border-2 border-dashed px-3 py-1.5 font-semibold text-muted-foreground hover:border-foreground hover:text-foreground"><Plus className="size-4" /> Add category to {GENDER_LABEL[gender]}</button>
+            <div className="p-10 text-center text-sm text-muted-foreground">Pick a category on the left, or add one.</div>
           )}
         </div>
       </div>
@@ -167,30 +161,81 @@ export function CatalogueTree() {
   );
 }
 
-function Tag({ children }: { children: React.ReactNode }) {
-  return <span className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">{children}</span>;
+/* ------------------------------------------------------------ pieces */
+
+function TagCode({ children }: { children: React.ReactNode }) {
+  return <span className="rounded-md border bg-muted px-1.5 py-0.5 font-mono text-[11px] leading-4 text-muted-foreground">{children}</span>;
 }
 
 function IconButton({ children, title, onClick, disabled, danger }: { children: React.ReactNode; title: string; onClick: () => void; disabled?: boolean; danger?: boolean }) {
-  return <button type="button" title={title} aria-label={title} onClick={onClick} disabled={disabled} className={cn("rounded p-1 hover:bg-muted disabled:opacity-50", danger ? "text-red-700 hover:text-red-800 dark:text-red-400" : "text-muted-foreground hover:text-foreground")}>{children}</button>;
+  return <button type="button" title={title} aria-label={title} onClick={onClick} disabled={disabled} className={cn("rounded p-1 transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40", danger ? "text-red-700 hover:text-red-800 dark:text-red-400" : "text-muted-foreground hover:text-foreground")}>{children}</button>;
+}
+
+/** A small switch, the shape people know from their phone. */
+function Toggle({ on, onChange, busy, label }: { on: boolean; onChange: (on: boolean) => void; busy?: boolean; label?: string }) {
+  return (
+    <button type="button" role="switch" aria-checked={on} disabled={busy} onClick={() => onChange(!on)} title={on ? "Switch off (hidden from the tag form, history kept)" : "Switch on"} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground disabled:opacity-50">
+      <span className={cn("relative inline-block h-5 w-9 rounded-full transition-colors", on ? "bg-green-600" : "bg-muted-foreground/40")}><span className={cn("absolute top-0.5 size-4 rounded-full bg-white shadow transition-all", on ? "left-[18px]" : "left-0.5")} /></span>
+      {label}
+    </button>
+  );
+}
+
+/** Click the pencil (or the name) to edit in place; Enter saves, Escape cancels. */
+function InlineName({ value, onSave, busy, big }: { value: string; onSave: (name: string) => Promise<unknown>; busy?: boolean; big?: boolean }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  useEffect(() => { setDraft(value); }, [value]);
+  const save = async () => { const v = draft.trim(); if (v && v !== value) await onSave(v); setEditing(false); };
+  if (editing) {
+    return (
+      <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="flex min-w-0 items-center gap-1">
+        <Input autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") { setDraft(value); setEditing(false); } }} className={cn("h-8", big ? "w-64 text-base font-semibold" : "w-48 text-sm")} />
+        <button type="submit" className="rounded p-1 text-green-700 hover:bg-muted" aria-label="Save" disabled={busy}><Check className="size-4" /></button>
+        <button type="button" className="rounded p-1 text-muted-foreground hover:bg-muted" aria-label="Cancel" onClick={() => { setDraft(value); setEditing(false); }}><X className="size-4" /></button>
+      </form>
+    );
+  }
+  return (
+    <span className="group flex min-w-0 items-center gap-1">
+      <button type="button" onClick={() => setEditing(true)} className={cn("min-w-0 truncate text-left hover:underline", big ? "text-lg font-semibold" : "text-sm")} title="Click to rename">{value}</button>
+      <button type="button" onClick={() => setEditing(true)} className="rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100 focus:opacity-100" aria-label={`Rename ${value}`}><Pencil className="size-3.5" /></button>
+    </span>
+  );
+}
+
+/** One input, Enter to add, clears itself on success. */
+function AddRow({ placeholder, onAdd, busy, autoFocusKey }: { placeholder: string; onAdd: (name: string) => Promise<boolean>; busy?: boolean; autoFocusKey?: string }) {
+  const [name, setName] = useState("");
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => { setName(""); }, [autoFocusKey]);
+  return (
+    <form onSubmit={async (e) => { e.preventDefault(); if (!name.trim()) return; if (await onAdd(name.trim())) { setName(""); ref.current?.focus(); } }} className="flex items-center gap-2">
+      <div className="relative flex-1">
+        <Plus className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input ref={ref} value={name} onChange={(e) => setName(e.target.value)} placeholder={placeholder} className="h-9 pl-8" />
+      </div>
+      <Button type="submit" size="sm" className="h-9" disabled={busy || !name.trim()}>Add</Button>
+    </form>
+  );
 }
 
 /** Try a garment: pick what the tagger would pick and see every tag Shopify will receive. */
-function TagPreview({ tree, value, onChange }: { tree: Branch[]; value: { wearer: Wearer; season: "summer" | "winter"; cat: string; sub: string; brand: string; grade: string; size: string }; onChange: (v: typeof value) => void }) {
+function TagPreview({ tree, value, onChange, onClose }: { tree: Branch[]; value: Preview; onChange: (v: Preview) => void; onClose: () => void }) {
   const cats = tree.flatMap((b) => b.categories.filter((c) => c.active).map((c) => ({ ...c, gender: b.gender })));
   const cat = cats.find((c) => c.slug === value.cat) ?? cats[0];
   const subs = cat ? cat.subs.filter((s) => s.active) : [];
   const sub = subs.find((s) => s.slug === value.sub) ?? subs[0];
-  const set = (patch: Partial<typeof value>) => onChange({ ...value, ...patch });
+  const set = (patch: Partial<Preview>) => onChange({ ...value, ...patch });
   const item = cat && sub ? { wearer: value.wearer, season: value.season, category: cat.name, sub_category: sub.name, brand: value.brand || null, brand_tier: "regular", grade: value.grade, size_label: value.size || null, colour: null, fabric: null, is_rare: false } : null;
   const tags = item ? shopifyTags(item) : [];
   const menu = new Set(cat && sub ? [cat.tag, sub.tag ?? ""] : []);
   const sel = "h-9 rounded-md border border-input bg-background px-2 text-sm";
   return (
-    <div className="rounded-xl border bg-muted/30 p-4">
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <span className="font-semibold">Try a garment</span>
-        <span className="text-xs text-muted-foreground">Pick what the tagger would pick; every tag Shopify will receive is listed below. Click any chip in the tree to load it here.</span>
+    <div className="rounded-xl border border-dashed bg-muted/30 p-4">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div><span className="font-semibold">Try a garment</span> <span className="text-xs text-muted-foreground">· pick what the tagger would pick; every tag Shopify receives is listed below</span></div>
+        <button type="button" onClick={onClose} className="rounded p-1 text-muted-foreground hover:bg-muted" aria-label="Close"><X className="size-4" /></button>
       </div>
       <div className="flex flex-wrap items-end gap-2">
         <label className="grid gap-1 text-xs text-muted-foreground">Wearer<select className={sel} value={value.wearer} onChange={(e) => set({ wearer: e.target.value as Wearer })}>{WEARER_OPTIONS.map((w) => <option key={w} value={w}>{WEARER_LABELS[w]}</option>)}</select></label>
