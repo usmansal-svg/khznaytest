@@ -13,7 +13,7 @@ import { currentStaff, dbFor } from "@/lib/auth/staff";
 import { MANAGER_ROLES } from "@/lib/auth/session";
 import { type Adjustment, type GradeCode } from "@/lib/pricing/constants";
 import { ADJUSTMENTS, GRADE_CODES, quote } from "@/lib/pricing/quote";
-import { loadLot, loadPricingContext, resolveBrandDb } from "@/lib/pricing/repo";
+import { loadPricingContext, resolveBrandDb } from "@/lib/pricing/repo";
 
 type Body = {
   sub_category_id?: string;
@@ -50,15 +50,12 @@ export async function POST(request: Request) {
   const me = await currentStaff();
   const supabase = await dbFor(me);
   const ctx = await loadPricingContext(supabase);
-  const [brand, lot] = await Promise.all([
-    resolveBrandDb(supabase, body.brand_text),
-    Promise.resolve(null),
-  ]);
+  const brand = await resolveBrandDb(supabase, body.brand_text);
 
   const subCategory = ctx.subCategories.find((s) => s.slug === body.sub_category_id);
   if (!subCategory) return NextResponse.json({ error: `Unknown sub_category_id: ${body.sub_category_id ?? "(missing)"}` }, { status: 400 });
 
-  const q = quote({ subCategory, brand, grade, adjustment, adjustPct, isRare: Boolean(body.is_rare), lot, weightKg: body.weight_kg ?? null, heavy: Boolean(body.heavy) }, ctx);
+  const q = quote({ subCategory, brand, grade, adjustment, adjustPct, isRare: Boolean(body.is_rare), lot: null, weightKg: body.weight_kg ?? null, heavy: Boolean(body.heavy) }, ctx);
   // Taggers see the shelf price and the grade prices only. Cost, margin,
   // expected revenue, the multiple and the markdown ladder are management.
   if (!me || !MANAGER_ROLES.has(me.role)) {
