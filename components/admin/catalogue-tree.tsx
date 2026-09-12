@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronRight, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { Check, ChevronRight, FlaskConical, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,7 @@ type Preview = { wearer: Wearer; season: "summer" | "winter"; cat: string; sub: 
 
 const GENDER_LABEL: Record<string, string> = { men: "Men", women: "Women", kid: "Kids (2–8)", teenage: "Teens (9–14)", toddler: "Toddlers (1–2)", infant: "Infants (0–1)" };
 const GENDER_TAG: Record<string, string> = { men: "Men", women: "Women", kid: "Kids", teenage: "Teens", toddler: "Toddlers", infant: "Infants" };
+const DEFAULT_WEARER: Record<string, Wearer> = { men: "men", women: "women", kid: "kids_boy", teenage: "teen_boy", toddler: "toddler_boy", infant: "infant_boy" };
 /** Inside a child band the boy / girl split is the wearer picked on the tag form; each row also produces these tags. */
 const BAND_WEARERS: Record<string, [string, string]> = { kid: ["Kids Boys", "Kids Girls"], teenage: ["Teen Boys", "Teen Girls"], toddler: ["Toddler Boys", "Toddler Girls"], infant: ["Infant Boys", "Infant Girls"] };
 
@@ -154,6 +155,7 @@ export function CatalogueTree() {
                     <div className="col-span-2 flex flex-wrap items-center gap-2 sm:col-span-1"><TagEdit tag={s.tag ?? ""} auto={s.auto_tag ?? ""} custom={s.custom} busy={busy} onSave={(tag) => act({ action: "set_tag", kind: "sub", slug: s.slug, tag }, tag ? `Tag set to ${tag}.` : "Tag back to automatic.")} /><span className="text-[11px] text-muted-foreground">SKU {s.code}</span>{BAND_WEARERS[gender] && <span className="w-full font-mono text-[10px] text-muted-foreground sm:w-auto">+ {BAND_WEARERS[gender][0]} {(s.tag ?? "").replace(/^\S+\s/, "")} · {BAND_WEARERS[gender][1]} {(s.tag ?? "").replace(/^\S+\s/, "")}</span>}</div>
                     <div className="text-right text-xs text-muted-foreground tabular-nums" title="Garments tagged under it">{s.items ? `${s.items} tagged` : ""}</div>
                     <div className="flex items-center justify-end gap-1">
+                      <IconButton title="Try this garment: see every tag it would get" onClick={() => { setPreview((p) => ({ ...p, cat: current.slug, sub: s.slug, wearer: DEFAULT_WEARER[gender] ?? "men" })); window.scrollTo({ top: 0, behavior: "smooth" }); }}><FlaskConical className="size-3.5" /></IconButton>
                       {!s.active && <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy} onClick={() => act({ action: "toggle", kind: "sub", slug: s.slug, active: true }, `${s.name} restored.`)}>Restore</Button>}
                       <IconButton title={s.items ? `Delete (${s.items} garments use it, so it will be hidden and kept for them)` : "Delete"} danger disabled={busy} onClick={() => { if (window.confirm(`Delete “${s.name}”?${s.items ? ` ${s.items} garments were tagged under it, so it will be hidden and kept for them.` : ""}`)) void act({ action: "delete", kind: "sub", slug: s.slug }, `${s.name} deleted.`); }}><Trash2 className="size-3.5" /></IconButton>
                     </div>
@@ -222,8 +224,7 @@ function InlineName({ value, onSave, busy, big }: { value: string; onSave: (name
   }
   return (
     <span className="group flex min-w-0 items-center gap-1">
-      <button type="button" onClick={() => setEditing(true)} className={cn("min-w-0 truncate text-left hover:underline", big ? "text-lg font-semibold" : "text-sm")} title="Click to rename">{value}</button>
-      <button type="button" onClick={() => setEditing(true)} className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label={`Rename ${value}`} title="Edit name"><Pencil className="size-3.5" /></button>
+      <button type="button" onClick={() => setEditing(true)} className={cn("min-w-0 truncate text-left underline-offset-2 hover:underline", big ? "text-lg font-semibold" : "text-sm")} title="Click to rename">{value}</button>
     </span>
   );
 }
@@ -253,7 +254,6 @@ function TagPreview({ tree, value, onChange }: { tree: Branch[]; value: Preview;
   const set = (patch: Partial<Preview>) => onChange({ ...value, ...patch });
   const item = cat && sub ? { wearer: value.wearer, season: value.season, category: cat.name, sub_category: sub.name, brand: value.brand || null, brand_tier: "regular", grade: value.grade, size_label: value.size || null, colour: null, fabric: null, is_rare: false, category_tag: cat.custom ? cat.tag : null, sub_tag: sub.custom ? sub.tag : null } : null;
   const tags = item ? shopifyTags(item) : [];
-  const menu = new Set(cat && sub ? [cat.tag, sub.tag ?? ""] : []);
   const sel = "h-9 rounded-md border border-input bg-background px-2 text-sm";
   return (
     <div className="rounded-xl border border-dashed bg-muted/30 p-4">
@@ -271,9 +271,9 @@ function TagPreview({ tree, value, onChange }: { tree: Branch[]; value: Preview;
         <div className="mt-3 space-y-2">
           <p className="text-sm">Shopify title: <b>{shopifyTitle(item)}</b></p>
           <div className="flex flex-wrap gap-1.5">
-            {tags.map((t) => <span key={t} className={cn("rounded-md border px-2 py-0.5 font-mono text-xs", menu.has(t) ? "border-foreground bg-foreground text-background" : /^(Men|Women|Kids|Unisex|Teens|Toddlers|Infants)$/.test(t) || /^(Men|Women|Kids) /.test(t) || /^(Summer|Winter)/.test(t) ? "border-sky-500 bg-sky-50 text-sky-900 dark:bg-sky-950 dark:text-sky-200" : "bg-background text-muted-foreground")}>{t}</span>)}
+            {tags.map((t) => <span key={t} className="rounded-md border border-foreground bg-foreground px-2 py-0.5 font-mono text-xs text-background">{t}</span>)}
           </div>
-          <p className="text-xs text-muted-foreground">Black = the two menu tags from the tree · blue = gender, season and band tags for collections · grey = brand, condition, size and other filters. {tags.length} tags in all.</p>
+          <p className="text-xs text-muted-foreground">{tags.length} tags in all. Build each Shopify collection on <i>tag equals</i> one of these.</p>
         </div>
       )}
     </div>
