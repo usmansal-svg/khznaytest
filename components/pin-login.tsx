@@ -85,7 +85,8 @@ export function PinLogin() {
 
   return (
     <Card>
-      <h1 className="text-xl font-bold">Khazanay</h1>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/brand/khazanay-logo-black.png" alt="Khazanay" className="h-7 w-auto dark:invert" draggable={false} />
       {!who ? (
         <>
           <p className="mt-1 text-sm text-muted-foreground">Who&apos;s tagging?</p>
