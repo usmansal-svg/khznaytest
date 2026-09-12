@@ -210,15 +210,33 @@ export async function POST(request: Request) {
   });
 }
 
+/** The Items list holds at most this many garments in the browser; the date-range export has no such cap. */
+const LIST_CAP = 5000;
+
+/**
+ * GET /api/items?q=…&from=YYYY-MM-DD&to=YYYY-MM-DD
+ * A search term looks across all time; otherwise the window is the tagged
+ * dates given (Pakistan days). Returns up to LIST_CAP rows, newest first,
+ * and the true count so the screen can say when the window is larger.
+ */
 export async function GET(request: Request) {
-  const q = new URL(request.url).searchParams.get("q")?.trim() ?? "";
+  const params = new URL(request.url).searchParams;
+  const q = params.get("q")?.trim() ?? "";
+  const from = params.get("from") ?? "", to = params.get("to") ?? "";
+  const day = /^\d{4}-\d{2}-\d{2}$/;
   const supabase = await dbFor(await currentStaff());
 
   let query = supabase
     .from("items")
-    .select("id, sku, brand_text, grade_code, size_label, colour_tag, status, channel, online_status, qc_hold, photos, price, price_manual, weight_kg, tagged_at, season, wearer, is_rare, shopify_product_id, shopify_visibility, shopify_error, received_at, sub_categories(name, gender, categories(name)), lots(code), outlets(name), staff:tagged_by(name), transfer_items(transfers(status, outlets!transfers_to_outlet_id_fkey(name)))")
+    .select("id, sku, brand_text, grade_code, size_label, colour_tag, status, channel, online_status, qc_hold, photos, price, price_manual, weight_kg, tagged_at, season, wearer, is_rare, shopify_product_id, shopify_visibility, shopify_error, received_at, sub_categories(name, gender, categories(name)), lots(code), outlets(name), staff:tagged_by(name), transfer_items(transfers(status, outlets!transfers_to_outlet_id_fkey(name)))", { count: "exact" })
     .order("tagged_at", { ascending: false })
-    .limit(q ? 500 : 300);
+    .limit(LIST_CAP);
+
+  if (!q) {
+    // Pakistan is UTC+5: a local day starts at 19:00 UTC the evening before.
+    if (day.test(from)) query = query.gte("tagged_at", `${from}T00:00:00+05:00`);
+    if (day.test(to)) query = query.lte("tagged_at", `${to}T23:59:59.999+05:00`);
+  }
 
   if (q) {
     const { data: subs } = await supabase.from("sub_categories").select("slug").ilike("name", `%${q}%`);
@@ -228,11 +246,13 @@ export async function GET(request: Request) {
     query = query.or(ors.join(","));
   }
 
-  const { data, error } = await query;
+  const { data, error, count } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const one = <T,>(v: unknown) => (Array.isArray(v) ? v[0] : v) as T | null | undefined;
   return NextResponse.json({
+    total: count ?? data?.length ?? 0,
+    cap: LIST_CAP,
     items: (data ?? []).map((r) => {
       const sub = one<{ name: string; gender: string; categories: unknown }>(r.sub_categories);
       const transfers = ((r.transfer_items ?? []) as { transfers: unknown }[]).map((t) => one<{ status: string; outlets: unknown }>(t.transfers)).filter(Boolean);

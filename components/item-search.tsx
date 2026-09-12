@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, FileSpreadsheet, Printer } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, FileSpreadsheet, Printer } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,6 +29,7 @@ const COLS: { key: Key; label: string; format?: (v: string) => string }[] = [
 const SHOPIFY_LABEL: Record<string, string> = { "—": "Not on Shopify", pos: "POS only", online: "Website only", both: "Website + POS", draft: "Draft (hidden)" };
 const empty = (): Record<Key, Set<string>> => ({ lot: new Set(), brand: new Set(), sub_category: new Set(), grade: new Set(), size_label: new Set(), station: new Set(), channel: new Set(), shopify: new Set() });
 const valueOf = (r: Row, k: Key) => String(r[k] ?? "—");
+const listUrl = (q: string, from: string, to: string) => `/api/items?q=${encodeURIComponent(q.trim())}&from=${from}&to=${to}`;
 
 export function ItemSearch() {
   const [q, setQ] = useState("");
@@ -40,6 +41,10 @@ export function ItemSearch() {
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [total, setTotal] = useState(0);
+  const [cap, setCap] = useState(5000);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(100);
   const formRef = useRef<HTMLFormElement>(null);
   const [exportSkus, setExportSkus] = useState("");
   const [visibility, setVisibility] = useState<"pos" | "both" | "online" | "draft">("pos");
@@ -61,29 +66,31 @@ export function ItemSearch() {
         setPushing((p) => p && { ...p, done: p.done + batch.length, failed: [...p.failed, ...(j.results as { ok: boolean; sku: string; error?: string }[]).filter((r) => !r.ok).map((r) => ({ sku: r.sku, error: r.error ?? "failed" }))] });
       } catch (e) { setPushing((p) => p && { ...p, done: p.done + batch.length, failed: [...p.failed, ...batch.map((sku) => ({ sku, error: e instanceof Error ? e.message : "failed" }))] }); }
     }
-    const res = await fetch(`/api/items?q=${encodeURIComponent(q.trim())}`); const json = await res.json(); if (res.ok) setRows(json.items);
+    const res = await fetch(listUrl(q, from, to)); const json = await res.json(); if (res.ok) { setRows(json.items); setTotal(json.total); }
   }
 
   useEffect(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = new Date(Date.now() + 5 * 3600_000).toISOString().slice(0, 10);
     setFrom(today.slice(0, 8) + "01"); setTo(today);
+    try { const n = Number(localStorage.getItem("khz_items_page_size")); if ([50, 100, 200].includes(n)) setPageSize(n); } catch { /* fine */ }
     fetch("/api/auth/me").then((r) => r.json()).then((j) => setRole(j.staff?.role ?? null)).catch(() => {});
   }, []);
   const canExport = role === "manager" || role === "founder";
 
   useEffect(() => {
+    if (!from || !to) return;
     const ctrl = new AbortController();
     const t = setTimeout(async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/items?q=${encodeURIComponent(q.trim())}`, { signal: ctrl.signal });
+        const res = await fetch(listUrl(q, from, to), { signal: ctrl.signal });
         const json = await res.json();
         if (!res.ok) throw new Error(json.error ?? "Search failed.");
-        setRows(json.items); setError(null);
+        setRows(json.items); setTotal(json.total ?? json.items.length); setCap(json.cap ?? 5000); setError(null); setPage(1);
       } catch (e) { if (!(e instanceof DOMException && e.name === "AbortError")) setError(e instanceof Error ? e.message : "Search failed."); } finally { setLoading(false); }
     }, 250);
     return () => { clearTimeout(t); ctrl.abort(); };
-  }, [q]);
+  }, [q, from, to]);
 
   // Filters combine; each list offers only the values still reachable under the others, as Excel does.
   const pass = (r: Row, skip?: Key) => COLS.every((c) => c.key === skip || !filters[c.key].size || filters[c.key].has(valueOf(r, c.key)));
@@ -93,6 +100,23 @@ export function ItemSearch() {
   const allVisiblePicked = visible.length > 0 && visible.every((r) => picked.has(r.sku));
   const pickedVisible = visible.filter((r) => picked.has(r.sku));
   const toggleAll = () => setPicked((p) => { const n = new Set(p); if (allVisiblePicked) visible.forEach((r) => n.delete(r.sku)); else visible.forEach((r) => n.add(r.sku)); return n; });
+  const pageCount = Math.max(1, Math.ceil(visible.length / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const pageRows = visible.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const changePageSize = (n: number) => { setPageSize(n); setPage(1); try { localStorage.setItem("khz_items_page_size", String(n)); } catch { /* fine */ } };
+  const pager = (
+    <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+      <span className="text-muted-foreground">{visible.length ? `${(safePage - 1) * pageSize + 1}–${Math.min(safePage * pageSize, visible.length)} of ${visible.length.toLocaleString("en-PK")}` : "0"}{filtering ? ` (filtered from ${rows.length.toLocaleString("en-PK")})` : ""}</span>
+      <span className="flex items-center gap-2">
+        <label className="flex items-center gap-1 text-xs text-muted-foreground">Per page
+          <select value={pageSize} onChange={(e) => changePageSize(Number(e.target.value))} className="h-8 rounded-md border border-input bg-transparent px-1 text-sm text-foreground">{[50, 100, 200].map((n) => <option key={n} value={n}>{n}</option>)}</select>
+        </label>
+        <Button size="sm" variant="outline" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}><ChevronLeft className="size-4" /></Button>
+        <span className="tabular-nums">Page {safePage} of {pageCount}</span>
+        <Button size="sm" variant="outline" disabled={safePage >= pageCount} onClick={() => setPage(safePage + 1)}><ChevronRight className="size-4" /></Button>
+      </span>
+    </div>
+  );
 
   function exportList(skus: string[]) {
     if (!skus.length) return;
@@ -106,7 +130,16 @@ export function ItemSearch() {
         <h1 className="text-2xl font-bold">Items</h1>
         <p className="text-sm text-muted-foreground">Every tagged garment. Filter any column the way you would in Excel, tick the ones you want, and export exactly those.</p>
       </div>
-      <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search SKU, brand or garment type…" className="h-12 text-base" autoFocus />
+      <div className="flex flex-wrap items-center gap-2">
+        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search SKU, brand or garment type (all time)…" className="h-12 min-w-[16rem] flex-1 text-base" autoFocus />
+        <div className={cn("flex items-center overflow-hidden rounded-md border border-input", q.trim() && "opacity-50")} title={q.trim() ? "A search looks across all dates" : "Tagged between these dates"}>
+          <span className="pl-3 text-sm text-muted-foreground">Tagged</span>
+          <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-12 w-[9.5rem] rounded-none border-0 shadow-none focus-visible:ring-0" aria-label="From" />
+          <span className="text-muted-foreground">→</span>
+          <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-12 w-[9.5rem] rounded-none border-0 shadow-none focus-visible:ring-0" aria-label="To" />
+        </div>
+      </div>
+      {total > cap && !q.trim() && <p className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">{total.toLocaleString("en-PK")} garments were tagged in this window; the list shows the latest {cap.toLocaleString("en-PK")}. Narrow the dates to see the rest here. The Excel export of a date range always includes every garment.</p>}
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       {canExport && (
@@ -123,13 +156,8 @@ export function ItemSearch() {
                 <Button variant="outline" className="h-10" disabled={!visible.length} onClick={() => exportList(visible.map((r) => r.sku))}>Export all {visible.length} shown</Button>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm text-muted-foreground">Or tagged between</span>
-                <div className="flex items-center overflow-hidden rounded-md border border-input">
-                  <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-10 w-[9.5rem] rounded-none border-0 shadow-none focus-visible:ring-0" aria-label="From" />
-                  <span className="px-2 text-muted-foreground">→</span>
-                  <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-10 w-[9.5rem] rounded-none border-0 shadow-none focus-visible:ring-0" aria-label="To" />
-                </div>
-                <Button asChild variant="outline" className="h-10"><a href={`/api/export?what=items&format=xlsx&from=${from}&to=${to}`}><Download className="size-4" /> Export range</a></Button>
+                <Button asChild variant="outline" className="h-10"><a href={`/api/export?what=items&format=xlsx&from=${from}&to=${to}`}><Download className="size-4" /> Export every garment tagged {from} → {to}</a></Button>
+                <span className="text-xs text-muted-foreground">Straight from the database — {total.toLocaleString("en-PK")} garment{total === 1 ? "" : "s"}, whatever the list shows.</span>
               </div>
             </CardContent>
           </Card>
@@ -165,7 +193,7 @@ export function ItemSearch() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
-            <span>{q.trim() ? "Results" : "Recently tagged"} <span className="font-normal text-muted-foreground">· {visible.length}{filtering ? ` of ${rows.length}` : ""}{picked.size ? ` · ${pickedVisible.length} ticked` : ""}</span>{loading && <span className="ml-2 text-xs font-normal text-muted-foreground">searching…</span>}</span>
+            <span>{q.trim() ? "Results" : "Tagged in this window"} <span className="font-normal text-muted-foreground">· {visible.length.toLocaleString("en-PK")}{filtering ? ` of ${rows.length.toLocaleString("en-PK")}` : ""}{picked.size ? ` · ${pickedVisible.length} ticked` : ""}</span>{loading && <span className="ml-2 text-xs font-normal text-muted-foreground">searching…</span>}</span>
             <span className="flex gap-3 text-xs font-normal">
               {filtering && <button type="button" className="underline" onClick={() => setFilters(empty())}>Clear filters</button>}
               {picked.size > 0 && <button type="button" className="underline" onClick={() => setPicked(new Set())}>Untick all</button>}
@@ -176,6 +204,8 @@ export function ItemSearch() {
           {rows.length === 0 ? (
             <p className="py-8 text-center text-muted-foreground">{q.trim() ? "Nothing matches." : "No items tagged yet."}</p>
           ) : (
+            <div className="space-y-3">
+            {pager}
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="text-left text-xs uppercase text-muted-foreground">
@@ -188,7 +218,7 @@ export function ItemSearch() {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {visible.map((r) => (
+                  {pageRows.map((r) => (
                     <tr key={r.id} className={cn(picked.has(r.sku) && "bg-muted/40")}>
                       <td className="py-2 pr-2"><Checkbox checked={picked.has(r.sku)} onCheckedChange={(v) => setPicked((p) => { const n = new Set(p); if (v === true) n.add(r.sku); else n.delete(r.sku); return n; })} aria-label={`Select ${r.sku}`} /></td>
                       <td className="whitespace-nowrap py-2 pr-2 font-mono text-xs"><a href={`/items/${r.sku}`} className="underline-offset-2 hover:underline">{r.sku}</a>{r.rare ? " ★" : ""}</td>
@@ -207,6 +237,8 @@ export function ItemSearch() {
                   {visible.length === 0 && <tr><td colSpan={12} className="py-6 text-center text-muted-foreground">Nothing matches these filters.</td></tr>}
                 </tbody>
               </table>
+            </div>
+            {pager}
             </div>
           )}
         </CardContent>
