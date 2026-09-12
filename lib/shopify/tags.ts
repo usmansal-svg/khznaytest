@@ -22,6 +22,9 @@ export type TaggableItem = {
   colour: string | null;
   fabric: string | null;
   is_rare: boolean;
+  /** Hand-set Shopify tags from the Catalogue screen; blank = automatic. */
+  category_tag?: string | null;
+  sub_tag?: string | null;
 };
 
 const WEARER: Record<string, string> = {
@@ -62,10 +65,16 @@ export function menuGender(gender: string | null | undefined): string {
  * shows them and as Shopify collections should be built on them:
  *   gender "Men" · category "Men Shirts" · sub-category "Men Formal Shirt".
  */
-export function menuTags(gender: string | null | undefined, category: string, subCategory?: string | null) {
+export function menuTags(gender: string | null | undefined, category: string, subCategory?: string | null, overrides?: { category?: string | null; sub?: string | null }) {
   const g = menuGender(gender);
   const cat = title(category.trim());
-  return { gender: g, category: `${g} ${cat}`, sub: subCategory ? `${g} ${title(garmentType(subCategory))}` : null, type: subCategory ? title(garmentType(subCategory)) : null };
+  return {
+    gender: g,
+    category: overrides?.category?.trim() || `${g} ${cat}`,
+    sub: subCategory ? overrides?.sub?.trim() || `${g} ${title(garmentType(subCategory))}` : null,
+    type: subCategory ? title(garmentType(subCategory)) : null,
+    auto: { category: `${g} ${cat}`, sub: subCategory ? `${g} ${title(garmentType(subCategory))}` : null },
+  };
 }
 
 export function shopifyTags(item: TaggableItem): string[] {
@@ -83,7 +92,12 @@ export function shopifyTags(item: TaggableItem): string[] {
   if (kids && band !== "Kids" && wearer !== "Kids") tags.push("Kids");
   // Every catalogue tag carries the gender ("Men T-Shirt", never a bare
   // "T-Shirt"), so a collection can never mix men's and women's garments.
-  for (const m of menus) { if (!tags.includes(m)) tags.push(m); tags.push(`${m} ${category}`); tags.push(`${m} ${type}`); }
+  // A hand-set tag replaces the automatic one for the garment's own menu gender;
+  // a unisex adult piece still gets the automatic tag for the other gender.
+  const own = kids ? "Kids" : item.wearer === "unisex" ? null : wearer;
+  const catTag = (m: string) => (m === own && item.category_tag?.trim()) || `${m} ${category}`;
+  const subTag = (m: string) => (m === own && item.sub_tag?.trim()) || `${m} ${type}`;
+  for (const m of menus) { if (!tags.includes(m)) tags.push(m); tags.push(catTag(m)); tags.push(subTag(m)); }
   if (wearer && !menus.includes(wearer)) tags.push(`${wearer} ${type}`); // "Kids Girls Hoodie"
   if (item.season && SEASON[item.season]) {
     // Season on its own and with each menu gender: "Summer", "Summer Men", "Summer Men T-Shirt".

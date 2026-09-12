@@ -9,8 +9,9 @@
  *   { action: "add_category", gender, name }
  *   { action: "add_sub", category_slug, name }          numbers copied from a sibling in the same category
  *   { action: "rename", kind: "category"|"sub", slug, name }
+ *   { action: "set_tag", kind, slug, tag }               hand-set Shopify tag; blank = automatic
  *   { action: "toggle", kind, slug, active }
- *   { action: "delete", kind, slug }                     refused while garments or sub-categories reference it
+ *   { action: "delete", kind, slug }                     a sub-category with garments is hidden instead of deleted; a category must be empty
  */
 
 import { NextResponse } from "next/server";
@@ -29,8 +30,8 @@ export async function GET() {
   if ("response" in gate) return gate.response;
   const db = gate.db;
   const [{ data: cats, error }, { data: subs }, { data: items }] = await Promise.all([
-    db.from("categories").select("slug, name, gender, sort_order, active").not("gender", "is", null).order("gender").order("sort_order"),
-    db.from("sub_categories").select("slug, code, category_slug, gender, name, active, standard_cost_pkr").order("name"),
+    db.from("categories").select("slug, name, gender, sort_order, active, shopify_tag").not("gender", "is", null).order("gender").order("sort_order"),
+    db.from("sub_categories").select("slug, code, category_slug, gender, name, active, standard_cost_pkr, shopify_tag").order("name"),
     db.from("items").select("sub_category_slug").limit(200000),
   ]);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -39,14 +40,15 @@ export async function GET() {
   const tree = GENDERS.map((gender) => ({
     gender,
     categories: (cats ?? []).filter((c) => c.gender === gender).map((c) => {
-      const children = (subs ?? []).filter((s) => s.category_slug === c.slug).map((s) => ({ slug: s.slug, code: s.code, name: s.name, active: s.active, cost: s.standard_cost_pkr, items: used.get(s.slug) ?? 0, tag: menuTags(gender, c.name, s.name).sub }));
-      return { slug: c.slug, name: c.name, active: c.active, tag: menuTags(gender, c.name).category, subs: children, items: children.reduce((n, s) => n + s.items, 0) };
+      const children = (subs ?? []).filter((s) => s.category_slug === c.slug).map((s) => { const t = menuTags(gender, c.name, s.name, { category: c.shopify_tag, sub: s.shopify_tag }); return { slug: s.slug, code: s.code, name: s.name, active: s.active, cost: s.standard_cost_pkr, items: used.get(s.slug) ?? 0, tag: t.sub, auto_tag: t.auto.sub, custom: Boolean(s.shopify_tag) }; });
+      const t = menuTags(gender, c.name, null, { category: c.shopify_tag });
+      return { slug: c.slug, name: c.name, active: c.active, tag: t.category, auto_tag: t.auto.category, custom: Boolean(c.shopify_tag), subs: children, items: children.reduce((n, s) => n + s.items, 0) };
     }),
   }));
   return NextResponse.json({ tree });
 }
 
-type Body = { action?: string; gender?: string; name?: string; category_slug?: string; kind?: "category" | "sub"; slug?: string; active?: boolean };
+type Body = { action?: string; gender?: string; name?: string; category_slug?: string; kind?: "category" | "sub"; slug?: string; active?: boolean; tag?: string | null };
 
 export async function POST(request: Request) {
   const gate = await requireManager();
@@ -114,6 +116,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   }
 
+  if (body.action === "set_tag") {
+    const tag = (body.tag ?? "").trim().replace(/\s+/g, " ").slice(0, 255) || null;
+    const { data: before } = await db.from(table).select("shopify_tag").eq("slug", body.slug).maybeSingle();
+    if (!before) return bad("No such row.");
+    const { error } = await db.from(table).update({ shopify_tag: tag }).eq("slug", body.slug);
+    if (error) return bad(error.message);
+    await audit(db, me, table, body.slug, before, { shopify_tag: tag }, tag ? "Shopify tag set by hand" : "Shopify tag back to automatic");
+    return NextResponse.json({ ok: true, tag });
+  }
+
   if (body.action === "toggle") {
     const { data: before } = await db.from(table).select("active").eq("slug", body.slug).maybeSingle();
     if (!before) return bad("No such row.");
@@ -130,7 +142,14 @@ export async function POST(request: Request) {
       if (count) return bad(`This category still has ${count} sub-categor${count === 1 ? "y" : "ies"}. Delete or move those first, or switch the category off.`);
     } else {
       const { count } = await db.from("items").select("id", { count: "exact", head: true }).eq("sub_category_slug", body.slug);
-      if (count) return bad(`${count} garment${count === 1 ? " was" : "s were"} tagged under it, so it cannot be deleted. Switch it off instead; the garments keep their name.`);
+      if (count) {
+        // Garments point at it, so the row must stay: hide it instead. The
+        // garments keep their name; it can be restored with Show hidden.
+        const { data: before } = await db.from(table).select("name, active").eq("slug", body.slug).maybeSingle();
+        await db.from(table).update({ active: false }).eq("slug", body.slug);
+        await audit(db, me, table, body.slug, before, { active: false }, `hidden instead of deleted: ${count} garments tagged under it`);
+        return NextResponse.json({ ok: true, hidden: true, count });
+      }
     }
     const { data: before } = await db.from(table).select("*").eq("slug", body.slug).maybeSingle();
     if (!before) return bad("No such row.");
