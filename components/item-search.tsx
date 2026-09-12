@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { HeaderFilter } from "@/components/header-filter";
 import { Input } from "@/components/ui/input";
+import { DateField, formatDay } from "@/components/date-field";
 import { fetchRetry } from "@/lib/fetch-retry";
 import { cn } from "@/lib/utils";
 
@@ -147,11 +148,11 @@ export function ItemSearch() {
                 <div><div className="font-semibold">Export to Excel</div><div className="text-xs text-muted-foreground">Every field on the tag plus station, tagger, lot, outlet, shipment and received dates.</div></div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-        <div className={cn("flex items-center overflow-hidden rounded-md border border-input", q.trim() && "opacity-50")} title={q.trim() ? "A search looks across all dates" : "The list above and the export both follow these dates"}>
+        <div className={cn("flex items-center overflow-visible rounded-md border border-input", q.trim() && "opacity-50")} title={q.trim() ? "A search looks across all dates" : "The list above and the export both follow these dates"}>
           <span className="pl-3 text-sm text-muted-foreground">Tagged</span>
-          <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-10 w-[9.5rem] rounded-none border-0 shadow-none focus-visible:ring-0" aria-label="From" />
+          <DateField value={from} onChange={setFrom} label="From" />
           <span className="text-muted-foreground">→</span>
-          <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-10 w-[9.5rem] rounded-none border-0 shadow-none focus-visible:ring-0" aria-label="To" />
+          <DateField value={to} onChange={setTo} label="To" />
         </div>
               </div>
               <div className="flex flex-wrap items-center gap-3">
@@ -162,7 +163,7 @@ export function ItemSearch() {
                 ) : q.trim() ? (
                   <Button className="h-10" disabled={!visible.length} onClick={() => exportList(visible.map((r) => r.sku))}><Download className="size-4" /> Export {visible.length.toLocaleString("en-PK")} results</Button>
                 ) : (
-                  <Button asChild className="h-10"><a href={`/api/export?what=items&format=xlsx&from=${from}&to=${to}`}><Download className="size-4" /> Export {total.toLocaleString("en-PK")} tagged {from} → {to}</a></Button>
+                  <Button asChild className="h-10"><a href={`/api/export?what=items&format=xlsx&from=${from}&to=${to}`}><Download className="size-4" /> Export {total.toLocaleString("en-PK")} tagged {formatDay(from)} → {formatDay(to)}</a></Button>
                 )}
                 <span className="text-xs text-muted-foreground">{pickedVisible.length ? "Only the ticked garments. Untick all to export the whole range." : filtering && !q.trim() ? "Only what the column filters leave. Clear filters to export the whole range." : q.trim() ? "The search results. Clear the search to export by date." : "Every garment tagged in the date range above, straight from the database."}</span>
               </div>
