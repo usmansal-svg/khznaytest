@@ -52,6 +52,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ sku
   const taggable = {
     wearer: data.wearer, season: data.season, category: category?.name ?? "", sub_category: sub?.name ?? "", brand: data.brand_text,
     brand_tier: data.brand_tier, grade: data.grade_code, size_label: data.size_label, colour: data.colour, fabric: data.fabric, is_rare: data.is_rare,
+    sleeve: ((data.measurements ?? {}) as Record<string, unknown>).Sleeve as string | undefined ?? null,
     category_tag: (category as { shopify_tag?: string | null } | null | undefined)?.shopify_tag ?? null, sub_tag: (sub as { shopify_tag?: string | null } | null | undefined)?.shopify_tag ?? null,
   };
 

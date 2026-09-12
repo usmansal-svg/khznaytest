@@ -116,7 +116,7 @@ export function TagForm() {
   const [grade, setGrade] = useState<GradeCode>("premium");
   const [heavy, setHeavy] = useState(false);
   const [measure, setMeasure] = useState<Record<string, string>>({});
-  const [sleeve, setSleeve] = useState<string>("");
+  const [sleeve, setSleeve] = useState<string>("Half sleeve");
   const [adjustPct, setAdjustPct] = useState(0);
   const [manualOn, setManualOn] = useState(false);
   const [rareFind, setRareFind] = useState(false);
@@ -305,7 +305,7 @@ export function TagForm() {
   // Online: every detail, but no photo here — the photography station takes
   // proper pictures after the tag is on (see /photos).
   const outlet = channel === "outlet";
-  const sleeveOk = outlet || !asksSleeve || Boolean(sleeve);
+  const sleeveOk = !asksSleeve || Boolean(sleeve);
   const reasonOk = !below || belowReason.trim().length >= 3;
   const photoOk = !outlet || Boolean(photo) || rejected;
   // Outlets take only the better conditions. Under the outlet channel a
@@ -363,7 +363,7 @@ export function TagForm() {
           size_label: size,
           colour: outlet ? null : colour,
           fabric: null,
-          measurements: outlet ? {} : { ...Object.fromEntries(Object.entries(measure).filter(([, v]) => v !== "")), ...(asksSleeve && sleeve ? { Sleeve: sleeve } : {}) },
+          measurements: { ...(outlet ? {} : Object.fromEntries(Object.entries(measure).filter(([, v]) => v !== ""))), ...(asksSleeve && sleeve ? { Sleeve: sleeve } : {}) },
           outlet_id: null,
           lot_id: Number(lotId),
           heavy: heavy && Boolean(selectedSub?.has_heavy),
@@ -486,6 +486,7 @@ export function TagForm() {
             </Field>
 
             <ButtonGroup label="Season" hint="Shows that season's catalogue; goes into the SKU and the Shopify tags" options={SEASON_OPTIONS} value={season} onChange={setSeason} />
+            {asksSleeve && <ButtonGroup label="Sleeves" hint="Goes to Shopify as a filter tag; the same garment type covers every sleeve length" options={SLEEVE_TYPES.map((t) => ({ code: t, label: t }))} value={sleeve as (typeof SLEEVE_TYPES)[number]} onChange={(v) => setSleeve(v)} />}
             {selectedSub?.has_heavy && <ButtonGroup label="Weight" hint="This garment type has a heavy version: a heavy piece prices from its heavy cost. Same tag on the website." options={[{ code: "light", label: "Regular" }, { code: "heavy", label: "Heavy" }]} value={heavy ? "heavy" : "light"} onChange={(v) => setHeavy(v === "heavy")} />}
             <Field label="Wearer">
               <select className={selectClass} value={wearer} onChange={(e) => setWearer(e.target.value as Wearer)}>
@@ -685,9 +686,6 @@ export function TagForm() {
 
             {selectedSub && !outlet && (
               <div className="space-y-3">
-                {asksSleeve && (
-                  <ButtonGroup label="Sleeves" hint={!sleeve ? "Required before saving" : undefined} options={SLEEVE_TYPES.map((t) => ({ code: t, label: t }))} value={sleeve as (typeof SLEEVE_TYPES)[number]} onChange={(v) => setSleeve(v)} />
-                )}
                 <div>
                   <Label className="mb-2 block">Measured flat (inches)</Label>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

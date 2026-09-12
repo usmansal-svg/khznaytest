@@ -28,7 +28,7 @@ export const MEASUREMENT_FIELDS: Readonly<Record<MeasureType, readonly string[]>
 };
 
 /** Garment types that need the sleeve question answered. */
-export const ASKS_SLEEVE: ReadonlySet<MeasureType> = new Set(["top", "outer", "kids_top"]);
+export const ASKS_SLEEVE: ReadonlySet<MeasureType> = new Set(["top", "outer", "kids_top", "dress"]);
 export const SLEEVE_TYPES = ["Half sleeve", "Full sleeve", "Sleeveless"] as const;
 
 export type Category = {
