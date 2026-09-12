@@ -22,11 +22,13 @@ describe("Shopify tags", () => {
   });
 
   it("kids garments get both the wearer and a Kids collection tag", () => {
-    const tags = shopifyTags({ ...hoodie, wearer: "girl", category: "Children Winter", sub_category: "Kids Hoodie", size_label: "4–5 Y" });
-    assert.ok(tags.includes("Girls"));
+    const tags = shopifyTags({ ...hoodie, wearer: "kids_girl", category: "Children Winter", sub_category: "Kids Hoodie", size_label: "4–5 Y" });
+    assert.ok(tags.includes("Kids Girls"));
     assert.ok(tags.includes("Kids"));
-    assert.ok(tags.includes("Girls Hoodie"));
+    assert.ok(tags.includes("Kids Girls Hoodie"));
     assert.ok(tags.includes("Kids Hoodie"));
+    const infant = shopifyTags({ ...hoodie, wearer: "infant_boy", category: "Children Winter", sub_category: "Kids Hoodie", size_label: "6–9 M" });
+    assert.ok(infant.includes("Infant Boys") && infant.includes("Infants") && infant.includes("Kids"));
   });
 
   it("never emits duplicates and skips empty fields", () => {

@@ -150,6 +150,10 @@ Taggers see only the shelf price and the grade prices — no cost, margin or lad
 
 **Station** (`lib/pricing/station.ts`) says where a garment is in the words the floor uses, and is the same on the Items screen and in the export. Online: *Tagging → Photography station → Packing station → Online shelf → Sold*. Outlet: *Tagging station → Packing · X → In transit · X → Receiving · X → Stockroom · X → On floor · X → Sold*, and *Missing · X* for a garment never scanned in at the outlet (§7). Either: *QC rail · Set aside · Pulled · Returned damaged · Rejected · Unlisted*.
 
+**Wearer (12 Sep list).** Men · Women · Unisex adult · Teen boy / Teen girl (9–14 years) · Kids boy / Kids girl (2–8 years) · Toddler boy / Toddler girl (12–24 months) · Infant boy / Infant girl (0–12 months). The wearer filters the category buttons to its age group, sets the SKU letter (M W U · T N · B G · D L · I J) and goes into the Shopify tags as *Kids Girls*, *Infant Boys*, … plus the band (*Teens*, *Kids*, *Toddlers*, *Infants*) and *Kids* for every child band, so collections can be built per wearer, per band, or for all children. Older values (boy, girl, infant, kid, toddler, teenage) stay valid on garments tagged before. The list lives in `lib/pricing/sku.ts`.
+
+---
+
 ## 6. Lots (read-only here since 12 Sep)
 
 A **lot** is a purchase, and purchasing is **commercial**: supplier, basis, rate, kg or pieces, duty and tax treatment, splits, closing with true-up and the lot P&L all moved to **Khazanay Commercials** (khazanay-commercials.vercel.app → Lots → *Record & manage*; the original code is kept in `archive/lots/` with the table contract). Both systems share one database; the commercial software **owns** `public.lots` and this app **reads** five columns only: `id`, `code`, `description`, `pieces` (quantity expected) and `status`. Financial columns are never selected.

@@ -13,6 +13,8 @@
 
 import { NextResponse } from "next/server";
 
+import { WEARERS } from "@/lib/pricing/sku";
+
 import { requireStaff } from "@/lib/auth/staff";
 import { GRADE_RANK, type GradeCode } from "@/lib/pricing/constants";
 import { quote } from "@/lib/pricing/quote";
@@ -89,6 +91,7 @@ export async function POST(request: Request) {
   // What changed, field by field.
   const corrections: { field: string; label: string; from: string | boolean | null; to: string | boolean | null }[] = [];
   const patch: Record<string, unknown> = {};
+  if (body.wearer !== undefined && !(WEARERS as readonly string[]).includes(body.wearer)) return NextResponse.json({ error: "Unknown wearer." }, { status: 400 });
   const want = { grade: body.grade, brand_text: body.brand_text?.trim(), sub_category_slug: body.sub_category_slug, size_label: body.size_label?.trim(), season: body.season, wearer: body.wearer, is_rare: body.is_rare };
   const current: Record<string, string | boolean | null> = { grade: item.grade_code, brand_text: item.brand_text, sub_category_slug: item.sub_category_slug, size_label: item.size_label, season: item.season, wearer: item.wearer, is_rare: item.is_rare };
   for (const f of FIELDS) {

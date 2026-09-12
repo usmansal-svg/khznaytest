@@ -87,8 +87,9 @@ export async function POST(request: Request) {
 
   const subCategory = ctx.subCategories.find((s) => s.slug === body.sub_category_id);
   if (!subCategory) return bad(`Unknown category: ${body.sub_category_id ?? "(missing)"}`);
-  // The category's gender is the garment's wearer; it drives the SKU letter.
-  const wearer = (WEARERS.includes(subCategory.gender as Wearer) ? subCategory.gender : "unisex") as Wearer;
+  // The wearer chosen on the form (12 Sep list) drives the SKU letter and the
+  // Shopify tags; with none given, the category's gender stands in.
+  const wearer = (WEARERS.includes(body.wearer as Wearer) ? body.wearer : WEARERS.includes(subCategory.gender as Wearer) ? subCategory.gender : "unisex") as Wearer;
 
   if (staff.role === "photographer") return NextResponse.json({ error: "Photographers take pictures; tagging is for taggers." }, { status: 403 });
   const q = quote({ subCategory, brand, grade, adjustment, adjustPct, isRare: Boolean(body.is_rare), lot: null, weightKg: body.weight_kg ?? null }, ctx);

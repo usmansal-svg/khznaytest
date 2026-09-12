@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { WEARER_LABELS, WEARER_OPTIONS, type Wearer } from "@/lib/pricing/sku";
 import { cn } from "@/lib/utils";
 
 /**
@@ -23,7 +24,6 @@ type Draft = { grade: string; brand_text: string; sub_category_slug: string; siz
 type Verdict = { sku: string; outcome: string; corrections: { label: string; from: string | boolean | null; to: string | boolean | null }[]; price_before: number | null; price_after: number | null; reprint: boolean };
 
 const GRADE_LABEL: Record<string, string> = { bnwt: "BNWT", premium: "Premium", excellent: "Excellent", very_good: "Very Good", rejected: "Rejected" };
-const WEARERS = ["men", "women", "boy", "girl", "infant", "unisex"];
 const pkr = (n: number) => `Rs ${Math.round(n).toLocaleString("en-PK")}`;
 const fmt = (v: string | boolean | null) => (v == null || v === "" ? "—" : typeof v === "boolean" ? (v ? "yes" : "no") : GRADE_LABEL[v] ?? v);
 
@@ -141,7 +141,7 @@ export function QcPage() {
                       <select value={draft.sub_category_slug} onChange={(e) => setDraft({ ...draft, sub_category_slug: e.target.value })} className={cn("h-9 rounded-md border border-input bg-transparent px-2 text-sm", draft.sub_category_slug !== current.sub_category_slug && "border-amber-500")}>{subsFor(currentCat).map((s) => <option key={s.slug} value={s.slug}>{s.name}</option>)}</select>
                     </div>
                     <div className="grid gap-1"><Label>Season</Label><select value={draft.season} onChange={(e) => setDraft({ ...draft, season: e.target.value })} className={cn("h-9 rounded-md border border-input bg-transparent px-2 text-sm", draft.season !== current.season && "border-amber-500")}><option value="summer">Summer</option><option value="winter">Winter</option></select></div>
-                    <div className="grid gap-1"><Label>Wearer</Label><select value={draft.wearer} onChange={(e) => setDraft({ ...draft, wearer: e.target.value })} className={cn("h-9 rounded-md border border-input bg-transparent px-2 text-sm capitalize", draft.wearer !== current.wearer && "border-amber-500")}>{WEARERS.map((w) => <option key={w} value={w}>{w}</option>)}</select></div>
+                    <div className="grid gap-1"><Label>Wearer</Label><select value={draft.wearer} onChange={(e) => setDraft({ ...draft, wearer: e.target.value })} className={cn("h-9 rounded-md border border-input bg-transparent px-2 text-sm", draft.wearer !== current.wearer && "border-amber-500")}>{[...WEARER_OPTIONS, ...(WEARER_OPTIONS.includes(draft.wearer as Wearer) ? [] : [draft.wearer as Wearer])].map((w) => <option key={w} value={w}>{WEARER_LABELS[w] ?? w}</option>)}</select></div>
                   </div>
                   <label className="flex items-center gap-2 text-sm"><Checkbox checked={draft.is_rare} onCheckedChange={(v) => setDraft({ ...draft, is_rare: v === true })} /> ★ Rare find</label>
                   {changed && <Input value={draft.note} onChange={(e) => setDraft({ ...draft, note: e.target.value })} placeholder="Note for the tagger — optional, e.g. stain on the cuff was missed" className="h-9" />}

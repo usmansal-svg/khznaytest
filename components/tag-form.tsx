@@ -15,7 +15,7 @@ import { GRADE_RANK, type ColourTag, type GradeCode } from "@/lib/pricing/consta
 import { ADULT_SIZES, KIDS_SIZES } from "@/lib/pricing/kids-sizes";
 import { sizeSeriesFor } from "@/lib/pricing/sizes";
 import { rareTagLine } from "@/lib/pricing/rare-reasons";
-import { GENDER_LABELS, type Gender, type Season, type Wearer } from "@/lib/pricing/sku";
+import { GENDER_LABELS, type Gender, type Season, type Wearer, WEARER_OPTIONS, WEARER_LABELS, WEARER_GENDERS, isChildWearer } from "@/lib/pricing/sku";
 import { SLEEVE_TYPES } from "@/lib/pricing/sub-categories";
 
 /* ---------------------------------------------------------------- types */
@@ -79,13 +79,9 @@ type Saved = {
 
 const GRADE_LABELS: Record<GradeCode, string> = { bnwt: "BNWT", premium: "Premium", excellent: "Excellent", very_good: "Very Good", rejected: "Rejected" };
 const SEASON_OPTIONS: { code: Season; label: string }[] = [{ code: "summer", label: "Summer" }, { code: "winter", label: "Winter" }];
-const WEARER_OPTIONS: { code: Wearer; label: string }[] = [{ code: "men", label: "Men" }, { code: "women", label: "Women" }, { code: "boy", label: "Boy" }, { code: "girl", label: "Girl" }, { code: "infant", label: "Infant" }, { code: "unisex", label: "Unisex" }];
 const GENDER_ORDER: Gender[] = ["men", "women", "teenage", "kid", "toddler", "infant"];
-/** Which genders' categories a wearer can be tagged under. */
-const WEARER_GENDERS: Partial<Record<Wearer, Gender[]>> = { men: ["men"], women: ["women"], boy: ["kid", "toddler", "teenage"], girl: ["kid", "toddler", "teenage"], infant: ["infant", "toddler", "kid"], unisex: GENDER_ORDER };
 
 const MARKDOWN_LABELS: Record<string, string> = { md1: "25% OFF", md2: "HALF PRICE", md3: "LAST CHANCE 75%" };
-const KIDS = new Set<Wearer>(["boy", "girl", "infant"]);
 
 const pkr = (n: number) => `Rs ${Math.round(n).toLocaleString("en-PK")}`;
 
@@ -214,7 +210,7 @@ export function TagForm() {
     setFind("");
     requestAnimationFrame(() => brandRef.current?.focus());
   }
-  const isKids = KIDS.has(wearer);
+  const isKids = isChildWearer(wearer);
   // Quick-pick brands follow the category: sports piles want Nike and Puma,
   // shirt piles want Calvin Klein and Zara. The general list is the fallback.
   const quickBrands = useMemo(() => {
@@ -489,7 +485,7 @@ export function TagForm() {
             <ButtonGroup label="Season" hint="Shows that season's catalogue; goes into the SKU and the Shopify tags" options={SEASON_OPTIONS} value={season} onChange={setSeason} />
             <Field label="Wearer">
               <select className={selectClass} value={wearer} onChange={(e) => setWearer(e.target.value as Wearer)}>
-                {WEARER_OPTIONS.map((w) => <option key={w.code} value={w.code}>{w.label}</option>)}
+                {WEARER_OPTIONS.map((w) => <option key={w} value={w}>{WEARER_LABELS[w]}</option>)}
               </select>
             </Field>
             <Field label="Find a garment type" hint="Shortcut — type a few letters, e.g. crop, jeans">

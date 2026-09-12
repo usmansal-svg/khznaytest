@@ -24,7 +24,13 @@ export type TaggableItem = {
   is_rare: boolean;
 };
 
-const WEARER: Record<string, string> = { men: "Men", women: "Women", teenage: "Teens", kid: "Kids", toddler: "Toddlers", infant: "Infants", boy: "Boys", girl: "Girls", unisex: "Unisex" };
+const WEARER: Record<string, string> = {
+  men: "Men", women: "Women", unisex: "Unisex",
+  teen_boy: "Teen Boys", teen_girl: "Teen Girls", kids_boy: "Kids Boys", kids_girl: "Kids Girls", toddler_boy: "Toddler Boys", toddler_girl: "Toddler Girls", infant_boy: "Infant Boys", infant_girl: "Infant Girls",
+  teenage: "Teens", kid: "Kids", toddler: "Toddlers", infant: "Infants", boy: "Boys", girl: "Girls",
+};
+/** The age band on its own, so a collection can gather both boys and girls. */
+const BAND: Record<string, string> = { teen_boy: "Teens", teen_girl: "Teens", kids_boy: "Kids", kids_girl: "Kids", toddler_boy: "Toddlers", toddler_girl: "Toddlers", infant_boy: "Infants", infant_girl: "Infants", teenage: "Teens", toddler: "Toddlers", infant: "Infants", boy: "Kids", girl: "Kids" };
 const SEASON: Record<string, string> = { summer: "Summer", winter: "Winter", all_season: "All Season" };
 const GRADE: Record<string, string> = { bnwt: "Brand New With Tags", premium: "Premium", excellent: "Excellent", very_good: "Very Good" };
 const TIER: Record<string, string> = { affordable_luxury: "Affordable Luxury", ultra_luxury: "Luxury" };
@@ -50,10 +56,12 @@ export function shopifyTags(item: TaggableItem): string[] {
   const tags: string[] = [];
   const wearer = item.wearer ? WEARER[item.wearer] : undefined;
   const type = title(garmentType(item.sub_category));
-  const kids = ["boy", "girl", "infant", "kid", "toddler"].includes(item.wearer ?? "");
+  const band = item.wearer ? BAND[item.wearer] : undefined;
+  const kids = !!item.wearer && !["men", "women", "unisex"].includes(item.wearer);
 
   if (wearer) tags.push(wearer);
-  if (kids && item.wearer !== "kid") tags.push("Kids");
+  if (band && band !== wearer) tags.push(band);
+  if (kids && band !== "Kids" && wearer !== "Kids") tags.push("Kids");
   tags.push(type);
   if (wearer) tags.push(`${wearer} ${type}`); // the collection tag: "Men Hoodie"
   if (kids) tags.push(`Kids ${type}`);
