@@ -26,6 +26,18 @@ export const instant = false;
 const GENDERS = ["men", "women", "teenage", "kid", "toddler", "infant"] as const;
 const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const bad = (message: string) => NextResponse.json({ error: message }, { status: 400 });
+const GENDER_LABEL: Record<string, string> = { men: "Men", women: "Women", teenage: "Teens", kid: "Kids", toddler: "Toddlers", infant: "Infants" };
+/** "Formal shirt", "formal-shirt" and "Formal Shirts" are the same sub-category. */
+const sameName = (a: string, b: string) => a.toLowerCase().replace(/[^a-z0-9]/g, "").replace(/s$/, "") === b.toLowerCase().replace(/[^a-z0-9]/g, "").replace(/s$/, "");
+
+/** A sub-category name may exist once per gender: the tag would be identical and the tag form ambiguous. */
+async function duplicateSub(db: Awaited<ReturnType<typeof requireManager>> extends infer G ? (G extends { db: infer D } ? D : never) : never, gender: string, name: string, exceptSlug?: string) {
+  const { data: subs } = await db.from("sub_categories").select("slug, name, category_slug, active, categories(name)").eq("gender", gender);
+  const hit = (subs ?? []).find((s) => s.slug !== exceptSlug && sameName(s.name, name));
+  if (!hit) return null;
+  const cat = (Array.isArray(hit.categories) ? hit.categories[0] : hit.categories) as { name: string } | null;
+  return `“${hit.name}” already exists under ${GENDER_LABEL[gender] ?? gender} › ${cat?.name ?? hit.category_slug}${hit.active ? "" : " (hidden)"}. A name can appear only once per gender — delete it there first, or pick a different name.`;
+}
 
 export async function GET() {
   const gate = await requireManager();
@@ -64,10 +76,13 @@ export async function POST(request: Request) {
   if (body.action === "add_category") {
     if (!(GENDERS as readonly string[]).includes(String(body.gender))) return bad("Pick a gender.");
     if (name.length < 2) return bad("Give the category a name.");
+    const { data: existing } = await db.from("categories").select("name").eq("gender", body.gender);
+    const clash = (existing ?? []).find((c) => sameName(c.name, name));
+    if (clash) return bad(`A category called “${clash.name}” already exists under ${GENDER_LABEL[String(body.gender)] ?? body.gender}.`);
     const slug = `${body.gender}-${slugify(name)}`;
     const { data: last } = await db.from("categories").select("sort_order").eq("gender", body.gender).order("sort_order", { ascending: false }).limit(1).maybeSingle();
     const { error } = await db.from("categories").insert({ slug, name, gender: body.gender, sort_order: (last?.sort_order ?? 0) + 1, active: true });
-    if (error) return bad(error.code === "23505" ? `A category called ${name} already exists for that gender.` : error.message);
+    if (error) return bad(error.code === "23505" ? `A category called “${name}” already exists under ${GENDER_LABEL[String(body.gender)] ?? body.gender}.` : error.message);
     await audit(db, me, "categories", slug, null, { name, gender: body.gender }, "created from the catalogue tree");
     return NextResponse.json({ ok: true, slug });
   }
@@ -77,6 +92,8 @@ export async function POST(request: Request) {
     const { data: cat } = await db.from("categories").select("slug, name, gender").eq("slug", body.category_slug ?? "").not("gender", "is", null).maybeSingle();
     if (!cat) return bad("Pick a category.");
     const gender = cat.gender as string;
+    const dup = await duplicateSub(db, gender, name);
+    if (dup) return bad(dup);
     // Numbers come from a sibling in the same category, else from the gender's most common values.
     const { data: siblings } = await db.from("sub_categories").select("weight_kg, profile_code, value_index, measure_type, standard_cost_pkr, season, code, slug").eq("category_slug", cat.slug).order("standard_cost_pkr", { ascending: false, nullsFirst: false });
     const { data: all } = await db.from("sub_categories").select("code, slug, standard_cost_pkr, measure_type").eq("gender", gender);
@@ -110,8 +127,14 @@ export async function POST(request: Request) {
 
   if (body.action === "rename") {
     if (name.length < 2) return bad("Give it a name.");
-    const { data: before } = await db.from(table).select("name").eq("slug", body.slug).maybeSingle();
+    const { data: before } = await db.from(table).select("name, gender").eq("slug", body.slug).maybeSingle();
     if (!before) return bad("No such row.");
+    if (table === "sub_categories") { const dup = await duplicateSub(db, String(before.gender), name, body.slug); if (dup) return bad(dup); }
+    if (table === "categories") {
+      const { data: cats } = await db.from("categories").select("slug, name").eq("gender", before.gender);
+      const hit = (cats ?? []).find((c) => c.slug !== body.slug && sameName(c.name, name));
+      if (hit) return bad(`A category called “${hit.name}” already exists under ${GENDER_LABEL[String(before.gender)] ?? before.gender}.`);
+    }
     const { error } = await db.from(table).update({ name }).eq("slug", body.slug);
     if (error) return bad(error.message);
     await audit(db, me, table, body.slug, before, { name }, "renamed from the catalogue tree");
