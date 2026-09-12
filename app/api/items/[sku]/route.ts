@@ -22,7 +22,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ sku
     supabase
       .from("items")
       .select(
-        "id, sku, brand_id, brand_text, brand_tier, grade_code, is_rare, rare_triggers, rare_reasons, rare_note, flaw_note, season, wearer, size_label, colour, fabric, measurements, weight_kg, adjustment, colour_tag, floored_on, landed_cost, price, price_manual, status, tagged_at, outlet_id, channel, photos, description, online_status, shopify_product_id, shopify_handle, shopify_tags, shopify_synced_at, shopify_error, sub_category_slug, outlets(name), lots(code), sub_categories(name, code, measure_type, market_price, category_slug, categories(name))",
+        "id, sku, brand_id, brand_text, brand_tier, grade_code, is_rare, rare_triggers, rare_reasons, rare_note, flaw_note, season, wearer, size_label, colour, fabric, measurements, weight_kg, adjustment, colour_tag, floored_on, landed_cost, price, price_manual, status, tagged_at, outlet_id, channel, photos, description, online_status, shopify_product_id, shopify_handle, shopify_tags, shopify_synced_at, shopify_error, sub_category_slug, outlets!items_outlet_id_fkey(name), lots(code), sub_categories(name, code, measure_type, market_price, category_slug, categories(name))",
       )
       .eq("sku", sku)
       .maybeSingle(),

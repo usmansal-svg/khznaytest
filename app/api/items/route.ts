@@ -228,7 +228,7 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from("items")
-    .select("id, sku, brand_text, grade_code, size_label, colour_tag, status, channel, online_status, qc_hold, photos, price, price_manual, weight_kg, tagged_at, season, wearer, is_rare, shopify_product_id, shopify_visibility, shopify_error, received_at, sub_categories(name, gender, categories(name)), lots(code), outlets(name), staff:tagged_by(name), transfer_items(transfers(status, outlets!transfers_to_outlet_id_fkey(name)))", { count: "exact" })
+    .select("id, sku, brand_text, grade_code, size_label, colour_tag, status, channel, online_status, qc_hold, photos, price, price_manual, weight_kg, tagged_at, season, wearer, is_rare, shopify_product_id, shopify_visibility, shopify_error, received_at, sub_categories(name, gender, categories(name)), lots(code), outlets!items_outlet_id_fkey(name), staff:tagged_by(name), transfer_items(transfers(status, outlets!transfers_to_outlet_id_fkey(name)))", { count: "exact" })
     .order("tagged_at", { ascending: false })
     .limit(LIST_CAP);
 

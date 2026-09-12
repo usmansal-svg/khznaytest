@@ -47,7 +47,7 @@ async function run(p: { what: string; format: string | null; from: string | null
   if (what === "items") {
     let q = db
       .from("items")
-      .select("sku, tagged_at, status, channel, online_status, qc_hold, photos, brand_text, brand_tier, grade_code, is_rare, is_unsure, flaw_note, season, wearer, size_label, colour, fabric, measurements, weight_kg, adjustment, colour_tag, floored_on, landed_cost, price, price_manual, settings_version, sold_at, sold_price, sold_stage, received_at, shopify_product_id, staff:tagged_by(name), lots(code, supplier), outlets(name), sub_categories(name, code, categories(name)), transfer_items(transfers(code, sent_at, received_at, status, outlets!transfers_to_outlet_id_fkey(name)))")
+      .select("sku, tagged_at, status, channel, online_status, qc_hold, photos, brand_text, brand_tier, grade_code, is_rare, is_unsure, flaw_note, season, wearer, size_label, colour, fabric, measurements, weight_kg, adjustment, colour_tag, floored_on, landed_cost, price, price_manual, settings_version, sold_at, sold_price, sold_stage, received_at, shopify_product_id, staff:tagged_by(name), lots(code, supplier), outlets!items_outlet_id_fkey(name), sub_categories(name, code, categories(name)), transfer_items(transfers(code, sent_at, received_at, status, outlets!transfers_to_outlet_id_fkey(name)))")
       .order("tagged_at", { ascending: false })
       .limit(50000);
     if (skus?.length) q = q.in("sku", skus);

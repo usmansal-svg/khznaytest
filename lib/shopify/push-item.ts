@@ -16,7 +16,7 @@ import { shopifyTags, shopifyTitle } from "@/lib/shopify/tags";
 
 type Photo = { url: string; path: string; kind: "original" | "cutout"; source?: string; taken_at?: string };
 const one = <T,>(v: unknown) => (Array.isArray(v) ? v[0] : v) as T | null | undefined;
-const SELECT = "id, sku, brand_text, brand_tier, grade_code, is_rare, rare_reasons, rare_note, season, wearer, size_label, colour, fabric, measurements, price, price_manual, status, channel, online_status, photos, description, shopify_product_id, shopify_visibility, outlet_id, outlets(shopify_location_id), sub_categories(name, categories(name))";
+const SELECT = "id, sku, brand_text, brand_tier, grade_code, is_rare, rare_reasons, rare_note, season, wearer, size_label, colour, fabric, measurements, price, price_manual, status, channel, online_status, photos, description, shopify_product_id, shopify_visibility, outlet_id, outlets!items_outlet_id_fkey(shopify_location_id), sub_categories(name, categories(name))";
 
 export type PushOutcome = { ok: true; sku: string; product_id: string; handle: string; admin_url: string; created: boolean; visibility: Visibility } | { ok: false; sku: string; error: string };
 
