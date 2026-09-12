@@ -30,9 +30,9 @@ Menu: **Men → Shirts → Formal Shirts** is three collections with the rules
 Once approved, the app can create every collection and the menu itself
 through Shopify's API, and keep them in step when a sub-category is added.
 
-Children's wear: one catalogue for kids, teens, toddlers and infants; the
-wearer picked on the tag form adds `Kids Boys` / `Infant Girls` / `Teens` and
-so on, so the website can have Kids → Boys → T-Shirts and Kids → Baby.
+Children's wear: four catalogues, one per age band (Infants, Toddlers, Kids,
+Teens), each with its own menu tags; the wearer picked on the tag form adds
+`Kids Boys` / `Infant Girls` and the umbrella `Kids`. See the Children section.
 
 ---
 
@@ -104,23 +104,19 @@ so on, so the website can have Kids → Boys → T-Shirts and Kids → Baby.
 
 ---
 
-## KIDS (boys, girls, teens, toddlers, infants share this catalogue)
+## CHILDREN — four age bands, each its own menu (13 Sep 2026)
 
-**Tops** — T-shirt *(have)*, Polo shirt *(have)*, Shirt, Blouse, Tank top, Long sleeve T-shirt
+Each band is its own catalogue and its own menu gender, so the tags never mix ages: **Infants** (0–12 months, tag `Infants`), **Toddlers** (12–24 months, `Toddlers`), **Kids** (2–8 years, `Kids`), **Teens** (9–14 years, `Teens`). The wearer picked on the tag form (Infant girl, Kids boy…) chooses the band's catalogue and adds the boy/girl tag (`Infant Girls`, `Kids Boys`). Every child garment also carries the umbrella tag `Kids` so one collection can gather all children's wear. "Baby" is not a category: it is the Infants band.
 
-**Bottoms** — Jeans, Trousers *(have)*, Shorts *(have)*, Leggings, Joggers / sweatpants *(have)*, Cargo pant
+**Infants** — Bodysuits & Onesies (Short sleeve bodysuit, Long sleeve bodysuit, Sleeveless bodysuit) · Rompers & Sleepsuits (Romper, Sleepsuit, Dungarees) · Sets (Baby set, Top & bottom set, Gift set) · Tops (T-shirt, Shirt, Vest) · Bottoms (Leggings, Trousers, Shorts, Joggers) · Dresses (Baby dress, Party dress) · Sweaters & Cardigans (Cardigan, Sweater, Hoodie) · Jackets & Coats (Puffer jacket, Snowsuit / pramsuit, Fleece, Jacket) · Nightwear (Pajama set, Sleeping bag, Nightgown)
 
-**Dresses & Skirts** — Dress *(have)*, Skirt *(have)*, Jumpsuit / romper, Party dress
+**Toddlers** — Tops (T-shirt, Long sleeve T-shirt, Polo shirt, Shirt, Blouse, Tank top) · Bottoms (Jeans, Trousers, Leggings, Shorts, Joggers, Dungarees) · Dresses & Skirts (Dress, Party dress, Skirt, Romper / playsuit) · Sets (Two-piece set, Tracksuit) · Sweaters & Hoodies (Hoodie, Sweatshirt, Sweater, Cardigan) · Jackets & Coats (Puffer jacket, Jacket, Coat, Raincoat, Fleece, Snowsuit) · Nightwear (Pajama set, Sleepsuit)
 
-**Sweaters & Hoodies** — Hoodie *(have)*, Sweatshirt *(have)*, Sweater *(have)*, Cardigan, Zip-up hoodie
+**Kids** — Tops (T-shirt, Polo shirt, Shirt, Blouse, Tank top, Long sleeve T-shirt) · Bottoms (Jeans, Trousers, Shorts, Leggings, Joggers / sweatpants, Cargo pant) · Dresses & Skirts (Dress, Skirt, Jumpsuit / romper, Party dress) · Sweaters & Hoodies (Hoodie, Sweatshirt, Sweater, Cardigan, Zip-up hoodie) · Jackets & Coats (Puffer jacket, Jacket, Coat, Raincoat, Fleece) · Activewear (Sports T-shirt, Sports shorts, Tracksuit, Sports leggings) · Nightwear (Pajama set, Sleepsuit)
 
-**Jackets & Coats** — Puffer jacket *(have)*, Jacket *(have)*, Coat, Raincoat, Fleece
+**Teens** — T-Shirts (Basic, Graphic, Long sleeve, Oversized) · Polo Shirts (Polo shirt) · Shirts (Casual, Formal, Denim, Flannel) · Tops & Blouses (Blouse, Crop top, Tank top, Casual top) · Jeans (Slim, Straight, Relaxed, Ripped) · Pants & Trousers (Chinos, Cargo pant, Joggers, Leggings, Casual trouser) · Shorts (Denim, Cargo, Casual) · Dresses & Skirts (Dress, Party dress, Skirt, Jumpsuit) · Sweaters & Hoodies (Hoodie, Zip-up hoodie, Sweatshirt, Sweater, Cardigan) · Jackets & Coats (Puffer, Bomber, Denim jacket, Coat, Windbreaker, Fleece, Raincoat) · Activewear (Sports T-shirt, Sports shorts, Sports leggings, Tracksuit, Sports hoodie) · Nightwear (Pajama set)
 
-**Activewear** *(new category)* — Sports T-shirt, Sports shorts, Tracksuit, Sports leggings
-
-**Nightwear** *(new category)* — Pajama set, Sleepsuit
-
-**Baby** *(new category, infants and toddlers)* — Bodysuit / onesie, Romper, Sleepsuit, Baby set, Baby dress
+Seeded by `scripts/seed-age-bands-2026-09.mjs`; costs copied from the Kids sub-category with the closest name.
 
 ---
 
