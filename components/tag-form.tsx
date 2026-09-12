@@ -491,17 +491,6 @@ export function TagForm() {
                 {WEARER_OPTIONS.map((w) => <option key={w} value={w}>{WEARER_LABELS[w]}</option>)}
               </select>
             </Field>
-            <div className="grid gap-2 sm:col-span-2">
-              <Label>Category</Label>
-              <div className="flex flex-wrap gap-2">
-                {cats.map((c) => (
-                  <Button key={c.slug} type="button" size="sm" variant={c.slug === category ? "default" : "outline"} onClick={() => setCategory(c.slug)} className="h-11 px-4 text-sm md:h-8 md:px-3 md:text-xs">
-                    {genders.length > 1 ? `${GENDER_LABELS[c.gender]} · ${c.name}` : c.name}
-                  </Button>
-                ))}
-                {cats.length === 0 && <p className="text-xs text-muted-foreground">No categories for this wearer yet — add one under Pricing.</p>}
-              </div>
-            </div>
             <Field label="Find a garment type" hint="Shortcut — type a few letters, e.g. crop, jeans">
               <div className="relative">
                 <Input value={find} onChange={(e) => setFind(e.target.value)} placeholder="Search sub-categories…" autoComplete="off" onKeyDown={(e) => { if (e.key === "Enter" && hits[0]) { e.preventDefault(); e.stopPropagation(); pick(hits[0]); } }} />
@@ -514,6 +503,17 @@ export function TagForm() {
                 )}
               </div>
             </Field>
+            <div className="grid gap-2 sm:col-span-2">
+              <Label>Category</Label>
+              <div className="flex flex-wrap gap-2">
+                {cats.map((c) => (
+                  <Button key={c.slug} type="button" size="sm" variant={c.slug === category ? "default" : "outline"} onClick={() => setCategory(c.slug)} className="h-11 px-4 text-sm md:h-8 md:px-3 md:text-xs">
+                    {genders.length > 1 ? `${GENDER_LABELS[c.gender]} · ${c.name}` : c.name}
+                  </Button>
+                ))}
+                {cats.length === 0 && <p className="text-xs text-muted-foreground">No categories for this wearer yet — add one under Pricing.</p>}
+              </div>
+            </div>
             <div className="grid gap-2 sm:col-span-2">
               <Label>Sub-category {selectedSub && <span className="font-normal text-muted-foreground">· {selectedSub.code}{outlet ? "" : ` · ${selectedSub.profile_code}`}</span>}</Label>
               <div className="flex flex-wrap gap-2">
