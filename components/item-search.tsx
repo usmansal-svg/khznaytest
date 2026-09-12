@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { HeaderFilter } from "@/components/header-filter";
 import { Input } from "@/components/ui/input";
-import { DateField, formatDay } from "@/components/date-field";
+import { DateField } from "@/components/date-field";
 import { fetchRetry } from "@/lib/fetch-retry";
 import { cn } from "@/lib/utils";
 
@@ -157,15 +157,15 @@ export function ItemSearch() {
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 {pickedVisible.length ? (
-                  <Button className="h-10" onClick={() => exportList(pickedVisible.map((r) => r.sku))}><Download className="size-4" /> Export {pickedVisible.length.toLocaleString("en-PK")} ticked</Button>
+                  <Button className="h-10" onClick={() => exportList(pickedVisible.map((r) => r.sku))}><Download className="size-4" /> Export</Button>
                 ) : filtering && !q.trim() ? (
-                  <Button className="h-10" disabled={!visible.length} onClick={() => exportList(visible.map((r) => r.sku))}><Download className="size-4" /> Export {visible.length.toLocaleString("en-PK")} filtered</Button>
+                  <Button className="h-10" disabled={!visible.length} onClick={() => exportList(visible.map((r) => r.sku))}><Download className="size-4" /> Export</Button>
                 ) : q.trim() ? (
-                  <Button className="h-10" disabled={!visible.length} onClick={() => exportList(visible.map((r) => r.sku))}><Download className="size-4" /> Export {visible.length.toLocaleString("en-PK")} results</Button>
+                  <Button className="h-10" disabled={!visible.length} onClick={() => exportList(visible.map((r) => r.sku))}><Download className="size-4" /> Export</Button>
                 ) : (
-                  <Button asChild className="h-10"><a href={`/api/export?what=items&format=xlsx&from=${from}&to=${to}`}><Download className="size-4" /> Export {total.toLocaleString("en-PK")} tagged {formatDay(from)} → {formatDay(to)}</a></Button>
+                  <Button asChild className="h-10"><a href={`/api/export?what=items&format=xlsx&from=${from}&to=${to}`}><Download className="size-4" /> Export</a></Button>
                 )}
-                <span className="text-xs text-muted-foreground">{pickedVisible.length ? "Only the ticked garments. Untick all to export the whole range." : filtering && !q.trim() ? "Only what the column filters leave. Clear filters to export the whole range." : q.trim() ? "The search results. Clear the search to export by date." : "Every garment tagged in the date range above, straight from the database."}</span>
+                <span className="text-xs text-muted-foreground">{pickedVisible.length ? `${pickedVisible.length.toLocaleString("en-PK")} ticked garments. Untick all to export the whole range.` : filtering && !q.trim() ? `${visible.length.toLocaleString("en-PK")} garments left by the column filters. Clear filters to export the whole range.` : q.trim() ? `${visible.length.toLocaleString("en-PK")} search results. Clear the search to export by date.` : `${total.toLocaleString("en-PK")} garments tagged in the date range above, straight from the database.`}</span>
               </div>
             </CardContent>
           </Card>
