@@ -484,7 +484,7 @@ function ProfilesEditor() {
   }
 
   const Pct = ({ r, k }: { r: ProfileRow; k: keyof ProfileRow }) => (
-    <Input type="number" step="0.5" min="0" max="100" value={Math.round((v(r)[k] as number) * 1000) / 10} onChange={(e) => setDraft((d) => ({ ...d, [r.code]: { ...d[r.code], [k]: Number(e.target.value) / 100 } }))} className={cn("h-8 w-20 text-right", draft[r.code]?.[k] !== undefined && "border-amber-500")} />
+    <Input type="number" step="0.5" min="0" max="100" value={Math.round((v(r)[k] as number) * 1000) / 10} onChange={(e) => setDraft((d) => ({ ...d, [r.code]: { ...d[r.code], [k]: Number(e.target.value) / 100 } }))} className={cn("ml-auto block h-8 w-20 text-right", draft[r.code]?.[k] !== undefined && "border-amber-500")} />
   );
 
   return (
@@ -498,12 +498,12 @@ function ProfilesEditor() {
       <CardContent>
         <p className="mb-3 text-xs text-muted-foreground">These are the spec&apos;s open item #1 — estimates until one cycle of real sell-through replaces them. Full + 25% + 50% + 75% must add to 100%; &quot;never sells&quot; is on top and gets pulled at month five. The multiple is recomputed from these, never stored.</p>
         <div className="overflow-x-auto"><table className="w-full text-sm">
-          <thead className="text-left text-xs uppercase text-muted-foreground"><tr><th className="pb-2">Profile</th><th className="pb-2 text-right">Never sells %</th><th className="pb-2 text-right">Full price %</th><th className="pb-2 text-right">25% off</th><th className="pb-2 text-right">50% off</th><th className="pb-2 text-right">75% off</th><th className="pb-2 text-right">Sum</th><th className="pb-2 text-right">Multiple</th></tr></thead>
+          <thead className="text-left text-xs uppercase text-muted-foreground"><tr><th className="pb-2">Profile</th><th className="w-28 pb-2 pl-3 text-right">Never sells %</th><th className="w-28 pb-2 pl-3 text-right">Full price %</th><th className="w-28 pb-2 pl-3 text-right">25% off %</th><th className="w-28 pb-2 pl-3 text-right">50% off %</th><th className="w-28 pb-2 pl-3 text-right">75% off %</th><th className="w-20 pb-2 pl-3 text-right">Sum</th><th className="w-32 pb-2 pl-3 text-right">Multiple</th></tr></thead>
           <tbody className="divide-y">{rows.map((r) => (
             <tr key={r.code}><td className="py-1.5 font-medium">{r.name}</td>
-              <td className="py-1.5 text-right"><Pct r={r} k="pulledShare" /></td><td className="py-1.5 text-right"><Pct r={r} k="volFull" /></td><td className="py-1.5 text-right"><Pct r={r} k="volMd1" /></td><td className="py-1.5 text-right"><Pct r={r} k="volMd2" /></td><td className="py-1.5 text-right"><Pct r={r} k="volMd3" /></td>
-              <td className={cn("py-1.5 text-right tabular-nums", Math.abs(sum(r) - 1) > 0.0005 ? "font-semibold text-red-700 dark:text-red-400" : "text-muted-foreground")}>{(sum(r) * 100).toFixed(1)}%</td>
-              <td className="py-1.5 text-right font-mono tabular-nums">{r.multiple.toFixed(4)}{draft[r.code] && <span className="ml-1 text-xs text-amber-600">→ save to recompute</span>}</td>
+              <td className="py-1.5 pl-3"><Pct r={r} k="pulledShare" /></td><td className="py-1.5 pl-3"><Pct r={r} k="volFull" /></td><td className="py-1.5 pl-3"><Pct r={r} k="volMd1" /></td><td className="py-1.5 pl-3"><Pct r={r} k="volMd2" /></td><td className="py-1.5 pl-3"><Pct r={r} k="volMd3" /></td>
+              <td className={cn("py-1.5 pl-3 text-right tabular-nums", Math.abs(sum(r) - 1) > 0.0005 ? "font-semibold text-red-700 dark:text-red-400" : "text-muted-foreground")}>{(sum(r) * 100).toFixed(1)}%</td>
+              <td className="py-1.5 pl-3 text-right font-mono tabular-nums">{r.multiple.toFixed(4)}{draft[r.code] && <span className="block text-[10px] text-amber-600">save to recompute</span>}</td>
             </tr>))}</tbody>
         </table></div>
       </CardContent>
@@ -542,13 +542,13 @@ function GradesEditor() {
       </CardHeader>
       <CardContent>
         <table className="w-full text-sm">
-          <thead className="text-left text-xs uppercase text-muted-foreground"><tr><th className="pb-2">Grade</th><th className="pb-2 text-right">× Premium</th><th className="pb-2 text-right">Share of intake %</th></tr></thead>
+          <thead className="text-left text-xs uppercase text-muted-foreground"><tr><th className="pb-2">Grade</th><th className="w-32 pb-2 pl-3 text-right">× Premium</th><th className="w-36 pb-2 pl-3 text-right">Share of intake %</th></tr></thead>
           <tbody className="divide-y">{rows.map((r) => (
             <tr key={r.code}><td className="py-1.5 font-medium">{r.name}</td>
-              <td className="py-1.5 text-right"><Input type="number" step="0.05" min="0" max="5" disabled={r.code === "premium" || r.code === "rejected"} value={v(r).multiplier} onChange={(e) => setDraft((d) => ({ ...d, [r.code]: { ...d[r.code], multiplier: Number(e.target.value) } }))} className={cn("h-8 w-24 text-right", draft[r.code]?.multiplier !== undefined && "border-amber-500")} /></td>
-              <td className="py-1.5 text-right"><Input type="number" step="0.5" min="0" max="100" value={Math.round(v(r).shareOfIntake * 1000) / 10} onChange={(e) => setDraft((d) => ({ ...d, [r.code]: { ...d[r.code], shareOfIntake: Number(e.target.value) / 100 } }))} className={cn("h-8 w-24 text-right", draft[r.code]?.shareOfIntake !== undefined && "border-amber-500")} /></td>
+              <td className="py-1.5 pl-3"><Input type="number" step="0.05" min="0" max="5" disabled={r.code === "premium" || r.code === "rejected"} value={v(r).multiplier} onChange={(e) => setDraft((d) => ({ ...d, [r.code]: { ...d[r.code], multiplier: Number(e.target.value) } }))} className={cn("ml-auto block h-8 w-24 text-right", draft[r.code]?.multiplier !== undefined && "border-amber-500")} /></td>
+              <td className="py-1.5 pl-3"><Input type="number" step="0.5" min="0" max="100" value={Math.round(v(r).shareOfIntake * 1000) / 10} onChange={(e) => setDraft((d) => ({ ...d, [r.code]: { ...d[r.code], shareOfIntake: Number(e.target.value) / 100 } }))} className={cn("ml-auto block h-8 w-24 text-right", draft[r.code]?.shareOfIntake !== undefined && "border-amber-500")} /></td>
             </tr>))}
-            <tr><td className="pt-2 text-xs text-muted-foreground">Premium is fixed at 1.00; Rejected at 0.</td><td /><td className={cn("pt-2 text-right text-xs tabular-nums", Math.abs(shareSum - 1) > 0.0005 ? "font-semibold text-red-700 dark:text-red-400" : "text-muted-foreground")}>sum {(shareSum * 100).toFixed(1)}%</td></tr>
+            <tr><td className="pt-2 text-xs text-muted-foreground">Premium is fixed at 1.00; Rejected at 0.</td><td /><td className={cn("pt-2 pl-3 text-right text-xs tabular-nums", Math.abs(shareSum - 1) > 0.0005 ? "font-semibold text-red-700 dark:text-red-400" : "text-muted-foreground")}>sum {(shareSum * 100).toFixed(1)}%</td></tr>
           </tbody>
         </table>
       </CardContent>
