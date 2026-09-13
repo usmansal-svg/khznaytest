@@ -9,11 +9,12 @@ import { NextResponse } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
 import { audit, requireManager } from "@/lib/admin/auth";
+import { brandTiersFrom } from "@/lib/pricing/constants";
 import { computePrice } from "@/lib/pricing/engine";
 import { loadPricingContext } from "@/lib/pricing/repo";
 
 const PROFILES = ["fast", "standard", "slow"];
-const EDITABLE = ["category_slug", "gender", "name", "weight_kg", "profile_code", "value_index", "season", "market_ceiling", "market_price", "per_piece_cost", "per_piece_share", "planning_rate_usd_per_kg", "standard_cost_pkr", "heavy_cost_pkr", "active"] as const;
+const EDITABLE = ["category_slug", "gender", "name", "weight_kg", "profile_code", "value_index", "season", "market_ceiling", "market_price", "per_piece_cost", "per_piece_share", "planning_rate_usd_per_kg", "standard_cost_pkr", "heavy_cost_pkr", "affordable_luxury_multiplier", "active"] as const;
 const SEASONS = ["summer", "winter", "all"];
 const GENDERS = ["men", "women", "teenage", "kid", "toddler", "infant"];
 
@@ -21,7 +22,7 @@ export async function GET() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("sub_categories")
-    .select("slug, code, category_slug, gender, name, weight_kg, profile_code, value_index, measure_type, season, market_ceiling, market_price, per_piece_cost, per_piece_share, planning_rate_usd_per_kg, standard_cost_pkr, heavy_cost_pkr, active, categories(name, sort_order)")
+    .select("slug, code, category_slug, gender, name, weight_kg, profile_code, value_index, measure_type, season, market_ceiling, market_price, per_piece_cost, per_piece_share, planning_rate_usd_per_kg, standard_cost_pkr, heavy_cost_pkr, affordable_luxury_multiplier, active, categories(name, sort_order)")
     .order("name");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   const genderOrder = ["men", "women", "teenage", "kid", "toddler", "infant"];
@@ -36,15 +37,15 @@ export async function GET() {
         category: cat?.name ?? "",
         category_order: cat?.sort_order ?? 0,
         categories: undefined,
-        ...estimates({ weight_kg: Number(r.weight_kg), profile_code: r.profile_code, value_index: Number(r.value_index), planning_rate_usd_per_kg: r.planning_rate_usd_per_kg == null ? null : Number(r.planning_rate_usd_per_kg), per_piece_cost: r.per_piece_cost == null ? null : Number(r.per_piece_cost), standard_cost_pkr: r.standard_cost_pkr == null ? null : Number(r.standard_cost_pkr), market_price: r.market_price == null ? null : Number(r.market_price) }, ctx),
+        ...estimates({ weight_kg: Number(r.weight_kg), profile_code: r.profile_code, value_index: Number(r.value_index), planning_rate_usd_per_kg: r.planning_rate_usd_per_kg == null ? null : Number(r.planning_rate_usd_per_kg), per_piece_cost: r.per_piece_cost == null ? null : Number(r.per_piece_cost), standard_cost_pkr: r.standard_cost_pkr == null ? null : Number(r.standard_cost_pkr), market_price: r.market_price == null ? null : Number(r.market_price), affordable_luxury_multiplier: r.affordable_luxury_multiplier == null ? null : Number(r.affordable_luxury_multiplier) }, ctx),
       };
     })
     .sort((a, b) => genderOrder.indexOf(a.gender) - genderOrder.indexOf(b.gender) || a.category_order - b.category_order || a.name.localeCompare(b.name));
   return NextResponse.json({ rows, basis: { planning_rate: ctx.settings.blendedRate, fx: ctx.settings.fx, target_gp: ctx.settings.targetGP } });
 }
 
-type EstimateInput = { weight_kg: number; profile_code: string; value_index: number; planning_rate_usd_per_kg: number | null; per_piece_cost: number | null; standard_cost_pkr: number | null; market_price: number | null };
-type Estimate = { landed_cost: number; loaded_cost: number; bnwt: number; premium: number; excellent: number; very_good: number; gp_pct: number; effective_gp_pct: number };
+type EstimateInput = { weight_kg: number; profile_code: string; value_index: number; planning_rate_usd_per_kg: number | null; per_piece_cost: number | null; standard_cost_pkr: number | null; market_price: number | null; affordable_luxury_multiplier?: number | null };
+type Estimate = { landed_cost: number; loaded_cost: number; bnwt: number; premium: number; excellent: number; very_good: number; gp_pct: number; effective_gp_pct: number; al_multiplier: number; al_premium: number };
 
 /**
  * Planning estimates for both buying bases. Per kg uses the sub-category's
@@ -56,7 +57,9 @@ type Estimate = { landed_cost: number; loaded_cost: number; bnwt: number; premiu
 function estimates(r: EstimateInput, ctx: Awaited<ReturnType<typeof loadPricingContext>>): { estimate: Estimate | null } {
   if (!r.standard_cost_pkr) return { estimate: null };
   const e = computePrice({ weightKg: 0, basis: "pc", effectiveRate: r.standard_cost_pkr, imported: true, profileCode: r.profile_code as "fast", valueIndex: r.value_index, premiumOverride: r.market_price }, ctx.settings, ctx.refs);
-  return { estimate: { landed_cost: Math.round(e.landedCost), loaded_cost: Math.round(e.loadedCost), effective_gp_pct: e.effectiveGpPct, bnwt: e.gradePrices.bnwt, premium: e.gradePrices.premium, excellent: e.gradePrices.excellent, very_good: e.gradePrices.very_good, gp_pct: e.gpPct } };
+  const alMult = r.affordable_luxury_multiplier ?? ctx.settings.affordableLuxuryMultiplier;
+  const al = computePrice({ weightKg: 0, basis: "pc", effectiveRate: r.standard_cost_pkr, imported: true, profileCode: r.profile_code as "fast", valueIndex: r.value_index, premiumOverride: r.market_price, tier: "affordable_luxury" }, ctx.settings, { ...ctx.refs, brandTiers: brandTiersFrom({ ...ctx.settings, affordableLuxuryMultiplier: alMult }) });
+  return { estimate: { landed_cost: Math.round(e.landedCost), loaded_cost: Math.round(e.loadedCost), effective_gp_pct: e.effectiveGpPct, bnwt: e.gradePrices.bnwt, premium: e.gradePrices.premium, excellent: e.gradePrices.excellent, very_good: e.gradePrices.very_good, gp_pct: e.gpPct, al_multiplier: alMult, al_premium: al.gradePrices.premium } };
 }
 
 /**
@@ -67,14 +70,14 @@ function estimates(r: EstimateInput, ctx: Awaited<ReturnType<typeof loadPricingC
 export async function POST(request: Request) {
   const gate = await requireManager();
   if ("response" in gate) return gate.response;
-  let body: { rows?: { slug?: string; profile_code?: string; value_index?: number; standard_cost_pkr?: number | null; market_price?: number | null }[] };
+  let body: { rows?: { slug?: string; profile_code?: string; value_index?: number; standard_cost_pkr?: number | null; market_price?: number | null; affordable_luxury_multiplier?: number | null }[] };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Body must be JSON." }, { status: 400 });
   }
   const ctx = await loadPricingContext(gate.db);
-  const { data: current } = await gate.db.from("sub_categories").select("slug, weight_kg, profile_code, value_index, planning_rate_usd_per_kg, per_piece_cost, standard_cost_pkr, market_price").in("slug", (body.rows ?? []).map((r) => r.slug ?? ""));
+  const { data: current } = await gate.db.from("sub_categories").select("slug, weight_kg, profile_code, value_index, planning_rate_usd_per_kg, per_piece_cost, standard_cost_pkr, market_price, affordable_luxury_multiplier").in("slug", (body.rows ?? []).map((r) => r.slug ?? ""));
   const out: Record<string, ReturnType<typeof estimates>> = {};
   for (const r of body.rows ?? []) {
     const base = (current ?? []).find((s) => s.slug === r.slug);
@@ -89,6 +92,7 @@ export async function POST(request: Request) {
       per_piece_cost: base.per_piece_cost == null ? null : Number(base.per_piece_cost),
       standard_cost_pkr: opt(r.standard_cost_pkr, base.standard_cost_pkr == null ? null : Number(base.standard_cost_pkr)),
       market_price: opt(r.market_price, base.market_price == null ? null : Number(base.market_price)),
+      affordable_luxury_multiplier: opt(r.affordable_luxury_multiplier, base.affordable_luxury_multiplier == null ? null : Number(base.affordable_luxury_multiplier)),
     }, ctx);
   }
   return NextResponse.json({ estimates: out });
@@ -183,7 +187,7 @@ export async function PATCH(request: Request) {
 
     const { data: before } = await supabase
       .from("sub_categories")
-      .select("category_slug, gender, name, weight_kg, profile_code, value_index, season, market_ceiling, market_price, per_piece_cost, per_piece_share, planning_rate_usd_per_kg, standard_cost_pkr, heavy_cost_pkr, active")
+      .select("category_slug, gender, name, weight_kg, profile_code, value_index, season, market_ceiling, market_price, per_piece_cost, per_piece_share, planning_rate_usd_per_kg, standard_cost_pkr, heavy_cost_pkr, affordable_luxury_multiplier, active")
       .eq("slug", slug)
       .maybeSingle();
     if (!before) {
@@ -214,7 +218,7 @@ function check(p: Record<string, unknown>): string | null {
   if ("season" in p && !SEASONS.includes(String(p.season))) return "season must be summer, winter or all.";
   if ("gender" in p && !GENDERS.includes(String(p.gender))) return "gender must be men, women, teenage, kid, toddler or infant.";
   if ("name" in p && !String(p.name ?? "").trim()) return "name cannot be empty.";
-  for (const k of ["market_ceiling", "market_price", "per_piece_cost", "planning_rate_usd_per_kg", "standard_cost_pkr", "heavy_cost_pkr"] as const) {
+  for (const k of ["market_ceiling", "market_price", "per_piece_cost", "planning_rate_usd_per_kg", "standard_cost_pkr", "heavy_cost_pkr", "affordable_luxury_multiplier"] as const) {
     if (k in p && p[k] !== null && !(typeof p[k] === "number" && (p[k] as number) >= 0)) return `${k} must be a non-negative number or empty.`;
   }
   if ("per_piece_share" in p && !(typeof p.per_piece_share === "number" && p.per_piece_share >= 0 && p.per_piece_share <= 1)) return "per_piece_share must be between 0 and 1.";

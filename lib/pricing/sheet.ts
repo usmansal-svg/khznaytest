@@ -14,10 +14,10 @@ import { SETTINGS_FIELDS } from "@/lib/pricing/settings-fields";
 export type PricingCtx = Awaited<ReturnType<typeof loadPricingContext>>;
 export type SheetSubRow = {
   slug: string; code: string; gender: string; name: string; weight_kg: number; profile_code: string; value_index: number;
-  market_ceiling: number | null; market_price: number | null; standard_cost_pkr: number | null; heavy_cost_pkr?: number | null; active: boolean; season?: string | null;
+  market_ceiling: number | null; market_price: number | null; standard_cost_pkr: number | null; heavy_cost_pkr?: number | null; affordable_luxury_multiplier?: number | null; active: boolean; season?: string | null;
   categories: { name: string } | { name: string }[] | null;
 };
-export const SUB_SELECT = "slug, code, gender, name, weight_kg, profile_code, value_index, season, market_ceiling, market_price, standard_cost_pkr, heavy_cost_pkr, active, categories(name, sort_order)";
+export const SUB_SELECT = "slug, code, gender, name, weight_kg, profile_code, value_index, season, market_ceiling, market_price, standard_cost_pkr, heavy_cost_pkr, affordable_luxury_multiplier, active, categories(name, sort_order)";
 
 const PROFILE_CODES = ["fast", "standard", "slow"];
 const YELLOW = { type: "pattern" as const, pattern: "solid" as const, fgColor: { argb: "FFFFF8DC" } };
@@ -59,6 +59,7 @@ const SUB_COLUMNS: { header: string; key: string; width: number; edit?: boolean 
   { header: "Weight kg", key: "weight_kg", width: 10, edit: true },
   { header: "Market ceiling Rs", key: "market_ceiling", width: 14, edit: true },
   { header: "Market price Rs (sets Premium)", key: "market_price", width: 16, edit: true },
+  { header: "Affordable luxury × (blank = constant)", key: "affordable_luxury_multiplier", width: 14, edit: true },
   { header: "Active (yes/no)", key: "active", width: 10, edit: true },
   { header: "Landed (calc)", key: "landed", width: 12 },
   { header: "Premium (calc)", key: "premium", width: 12 },
@@ -142,6 +143,7 @@ export function buildPricingWorkbook(ctx: PricingCtx, subs: SheetSubRow[]): Exce
       profile_code: r.profile_code, value_index: Number(r.value_index), weight_kg: Number(r.weight_kg),
       market_ceiling: r.market_ceiling == null ? null : Number(r.market_ceiling),
       market_price: r.market_price == null ? null : Number(r.market_price),
+      affordable_luxury_multiplier: r.affordable_luxury_multiplier == null ? null : Number(r.affordable_luxury_multiplier),
       active: r.active ? "yes" : "no", landed, premium, effective_gp: gp,
     });
   }
@@ -399,12 +401,13 @@ export function parsePricingWorkbook(wb: ExcelJS.Workbook, ctx: PricingCtx, subs
             }
             case "standard_cost_pkr":
             case "heavy_cost_pkr":
+            case "affordable_luxury_multiplier":
             case "market_ceiling":
             case "market_price": {
               const n = num(text);
               if (n === "bad") { problems.push(`Sub-categories row ${rowNo} (${before.name}): "${text}" is not a number.`); break; }
               const was = before[c.key] == null ? null : Number(before[c.key]);
-              const label = c.key === "standard_cost_pkr" ? "Cost per piece" : c.key === "heavy_cost_pkr" ? "Heavy cost" : c.key === "market_ceiling" ? "Market ceiling" : "Market price";
+              const label = c.key === "standard_cost_pkr" ? "Cost per piece" : c.key === "heavy_cost_pkr" ? "Heavy cost" : c.key === "affordable_luxury_multiplier" ? "Affordable luxury ×" : c.key === "market_ceiling" ? "Market ceiling" : "Market price";
               if (n == null && was == null) break;
               if (n == null || was == null || !near(n, was)) { patch[c.key] = n; note(label, was, n); }
               break;

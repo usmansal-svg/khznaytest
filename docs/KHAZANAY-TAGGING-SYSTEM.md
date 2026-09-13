@@ -115,7 +115,7 @@ BNWT ×1.80 · Premium ×1.00 · Excellent ×0.85 · Very Good ×0.60 · **Rejec
 
 ### 4.5 Brand tiers
 
-**Affordable-luxury multiplier (13 Sep):** set on Pricing → Constants (group *Brands*), with the tier's share of intake; a brand marked Affordable luxury on the Brands page prices at that multiple of the regular price for the same garment. Ultra luxury stays priced by hand. The code default is 2.0 × and 5 %.
+**Affordable-luxury multiple (13 Sep):** per sub-category, in the last columns of Pricing → Categories (*AL ×* and the resulting *AL Premium*), applied to the Premium price; blank uses the constant on Pricing → Constants (group *Brands*, with the tier's share of intake). A brand marked Affordable luxury on the Brands page prices at that multiple. Ultra luxury stays priced by hand. Also in the Excel sheet.
 
 Regular high street ×1.00 · Affordable luxury ×2.00 · Ultra luxury → handed off to a senior to price. Tier is never judged by the tagger.
 

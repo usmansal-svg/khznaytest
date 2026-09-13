@@ -16,8 +16,8 @@ import { HeaderFilter } from "@/components/header-filter";
 
 type SettingsResponse = { settings: Settings; version: number; source: string; history: { version: number; note: string | null; created_at: string; by: string | null }[]; audits: { id: number; table: string; key: string; at: string; by: string; note: string | null; changes: { field: string; from: string; to: string }[] }[]; warning?: string };
 type Preview = { rows: { slug: string; name: string; profile: string; weight_kg: number; current: number; proposed: number; change_pct: number }[]; multiples: { profile: string; current: number; proposed: number }[] };
-type Est = { landed_cost: number; loaded_cost: number; bnwt: number; premium: number; excellent: number; very_good: number; gp_pct: number; effective_gp_pct: number };
-type SubRow = { slug: string; code: string; name: string; gender: string; category_slug: string; category: string; weight_kg: number; profile_code: string; value_index: number; season: "summer" | "winter" | "all"; market_ceiling: number | null; market_price: number | null; standard_cost_pkr: number | null; heavy_cost_pkr: number | null; active: boolean; estimate?: Est | null };
+type Est = { landed_cost: number; loaded_cost: number; bnwt: number; premium: number; excellent: number; very_good: number; gp_pct: number; effective_gp_pct: number; al_multiplier?: number; al_premium?: number };
+type SubRow = { slug: string; code: string; name: string; gender: string; category_slug: string; category: string; weight_kg: number; profile_code: string; value_index: number; season: "summer" | "winter" | "all"; market_ceiling: number | null; market_price: number | null; standard_cost_pkr: number | null; heavy_cost_pkr: number | null; affordable_luxury_multiplier: number | null; active: boolean; estimate?: Est | null };
 
 const rs = (n: number) => `Rs ${Math.round(n).toLocaleString("en-PK")}`;
 const n0 = (n: number) => Math.round(n).toLocaleString("en-PK");
@@ -390,6 +390,8 @@ function SubCategoryEditor() {
                 <th className="pb-2" title="Market price, Rs: sets the Premium price directly">Market</th>
                 <th className="pb-2 pl-3 text-right" title="Landed cost, Rs">Landed</th>
                 <th className="pb-2 pl-3 text-right" title="Loaded cost, Rs: landed with markdowns, grade mix, never-sells, rejects and bulk recovery spread onto the garment that sells at Premium. Premium ex tax = loaded ÷ (1 − target GP).">Loaded</th>
+                <th className="border-l pb-2 pl-3" title="Affordable-luxury multiple of the Premium price for this garment type; blank uses the constant on Pricing → Constants">AL ×</th>
+                <th className="pb-2 pl-3 pr-3 text-right" title="Premium price for an affordable-luxury brand, Rs">AL Premium</th>
                 <th className="pb-2" title="SKU code">Code</th>
               </tr>
             </thead>
@@ -434,6 +436,8 @@ function SubCategoryEditor() {
                     <td className="py-1 pr-2"><Input type="number" step="100" min="0" value={v.market_price ?? ""} onChange={(ev) => edit(r.slug, { market_price: ev.target.value === "" ? null : Number(ev.target.value) })} className={cn("h-7 w-20 text-xs", changed("market_price") && "border-amber-500")} placeholder="—" /></td>
                     <td className={cn(num, "pl-3", !previewing && "text-muted-foreground")}>{est ? n0(est.landed_cost) : "—"}</td>
                     <td className={cn(num, "pl-3", !previewing && "text-muted-foreground")}>{est ? n0(est.loaded_cost) : "—"}</td>
+                    <td className="border-l py-1 pl-3"><Input type="number" step="0.1" min="1" value={v.affordable_luxury_multiplier ?? ""} placeholder={est?.al_multiplier != null ? `${est.al_multiplier}` : "—"} onChange={(ev) => edit(r.slug, { affordable_luxury_multiplier: ev.target.value === "" ? null : Number(ev.target.value) })} className={cn("h-7 w-16 px-1 text-xs", changed("affordable_luxury_multiplier") && "border-amber-500", v.affordable_luxury_multiplier != null && "border-amber-500 font-semibold")} /></td>
+                    <td className={cn(num, "pl-3 pr-3 font-semibold")}>{est?.al_premium != null ? n0(est.al_premium) : "—"}</td>
                     <td className="py-1 font-mono text-[10px] text-muted-foreground">{r.code}</td>
                   </tr>
                 );

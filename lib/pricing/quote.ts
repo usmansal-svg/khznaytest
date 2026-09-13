@@ -9,6 +9,7 @@
  */
 
 import { REJECTED, type Adjustment, type CostBasis, type GradeCode } from "./constants";
+import { brandTiersFrom } from "./constants";
 import { computePrice, expectedRevenue } from "./engine";
 import type { BrandResolution, DbLot, DbSubCategory, PricingContext } from "./repo";
 
@@ -106,8 +107,9 @@ export function quote(input: QuoteInput, ctx: PricingContext): Quote {
     tier: brand.tier,
   };
   const adjustPct = input.adjustPct ?? { below: -15, standard: 0, above: 20 }[adjustment];
-  const result = computePrice({ ...baseInputs, adjustPct }, ctx.settings, ctx.refs);
-  const standard = computePrice({ ...baseInputs, adjustPct: 0 }, ctx.settings, ctx.refs);
+  const refs = subCategory.affordableLuxuryMultiplier ? { ...ctx.refs, brandTiers: brandTiersFrom({ ...ctx.settings, affordableLuxuryMultiplier: subCategory.affordableLuxuryMultiplier }) } : ctx.refs;
+  const result = computePrice({ ...baseInputs, adjustPct }, ctx.settings, refs);
+  const standard = computePrice({ ...baseInputs, adjustPct: 0 }, ctx.settings, refs);
 
   const rejected = grade === REJECTED;
   // A rare piece is priced by hand even when the brand is priceable — two or
