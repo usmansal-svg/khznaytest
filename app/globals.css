@@ -62,7 +62,23 @@
   * {
     @apply border-border;
   }
+  /* The page never scrolls sideways: wide tables scroll inside their own
+     container instead. Also stops the rubber-band drift on Safari. */
+  html {
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+    -webkit-text-size-adjust: 100%;
+  }
   body {
     @apply bg-background text-foreground;
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+    max-width: 100vw;
+  }
+  /* Fields under 16px make iOS Safari zoom in on focus. Touch screens only. */
+  @media (pointer: coarse) {
+    input, select, textarea {
+      font-size: max(16px, 1em);
+    }
   }
 }
