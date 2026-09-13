@@ -293,7 +293,8 @@ export function PhotosPage() {
             continue; // untouched earlier picture stays as it is
           }
           const source = w.blob ?? (await (await fetch(w.url)).blob());
-          const square = await squareForShopify(await applyAdjust(source, w.adjust), 2048, 1024 * 1024);
+          // The cover becomes the cut-out and the measurements picture, so it keeps 2048 px; labels and details are fine at 1600 px.
+          const square = await squareForShopify(await applyAdjust(source, w.adjust), w.isCover ? 2048 : 1600, w.isCover ? 1024 * 1024 : 450 * 1024);
           const ph = await upload(sku, square, "original");
           uploaded.push(ph.path);
           if (w.isCover) { cover = square; coverPath = ph.path; }
@@ -590,10 +591,11 @@ export function PhotosPage() {
             )}
             {mode === "shoot" && (
               <>
-                <Button type="button" size="lg" className="h-16 w-full text-lg" onClick={snap} disabled={!camOn || keptCount >= MAX_SHOTS}><Camera className="size-6" /> {keptCount >= MAX_SHOTS ? `${MAX_SHOTS} is the limit — untick one first` : `Take picture ${keptCount + 1}`}</Button>
+                {/* The phone's own camera app gives the fully processed picture (HDR, sharpening); the live view is a quicker, softer fallback. */}
+                <Button type="button" size="lg" className="h-16 w-full text-lg" onClick={() => fileRef.current?.click()} disabled={keptCount >= MAX_SHOTS}><Camera className="size-6" /> {keptCount >= MAX_SHOTS ? `${MAX_SHOTS} is the limit — untick one first` : `Take picture ${keptCount + 1}`}</Button>
                 <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={onNative} />
-                <button type="button" onClick={() => fileRef.current?.click()} className="text-xs text-muted-foreground underline">Or take one shot with the phone&apos;s own camera app (full resolution)</button>
-                {camInfo && <p className="text-[11px] text-muted-foreground">Camera {camInfo} · saved square at 2048 px for Shopify, under 1 MB</p>}
+                {camOn && keptCount < MAX_SHOTS && <button type="button" onClick={snap} className="text-xs text-muted-foreground underline">Quick shot from the live view instead</button>}
+                <p className="text-[11px] text-muted-foreground">Cover saved square at 2048 px under 1 MB; the other pictures at 1600 px under 450 KB.{camInfo ? ` Live view ${camInfo}.` : ""}</p>
                 {shots.length > 0 && <p className="text-xs text-muted-foreground">{retaking ? "Earlier pictures are marked; keep, adjust or discard any of them and add new ones. " : ""}Press and hold a picture, then drag it to change the order — picture 1 is the cover and the order is the order on Shopify. Tap a picture to review and adjust it.</p>}
                 {shots.length > 0 && (
                   <div className="grid grid-cols-3 gap-2 select-none">
