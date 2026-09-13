@@ -240,7 +240,6 @@ export function TagForm() {
   useEffect(() => { setSizeSeriesCode(null); setSizeOther(false); }, [sub, isKids]);
   const asksSleeve = Boolean(selectedSub?.asks_sleeve);
   useEffect(() => { setSleeve(selectedSub?.measure_type === "outer" ? "Full sleeve" : "Half sleeve"); }, [selectedSub?.slug, selectedSub?.measure_type]);
-  const isManager = ref?.tagger?.role === "manager" || ref?.tagger?.role === "founder";
   const selectedLot = ref?.lots.find((l) => String(l.id) === lotId) ?? null;
   const rejected = grade === "rejected";
 
@@ -407,7 +406,7 @@ export function TagForm() {
   if (loadError) return <p className="text-destructive">{loadError}</p>;
   if (!ref) return <p className="text-muted-foreground">Loading…</p>;
 
-  const chip = "h-11 px-4 text-sm md:h-8 md:px-3 md:text-xs";
+  const chip = "h-12 px-5 text-base md:h-11 md:px-4 md:text-sm";
   const isChild = !["men", "women", "unisex"].includes(wearer);
   const isGirl = /_girl$/.test(wearer);
   return (
@@ -435,62 +434,33 @@ export function TagForm() {
       <div className="space-y-6">
         {/* ---------------------------------------------------- session */}
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center justify-between text-base">
-              <span>Session</span>
-              <span className="text-xs font-normal text-muted-foreground">Lock what stays the same, then tag garment after garment</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Field label="Tagger" hint={ref.tagger ? `${ref.tagger.today + sessionSkus.length} of ${ref.tagger.target} today · ${Math.round(((ref.tagger.today + sessionSkus.length) / Math.max(1, ref.tagger.target)) * 100)}%` : undefined}>
-              {ref.tagger ? (
-                <div className="space-y-1">
-                  <Input value={ref.tagger.name} readOnly className="bg-muted" />
-                  <div className="h-1.5 rounded bg-muted"><div className={cn("h-1.5 rounded", ref.tagger.today + sessionSkus.length >= ref.tagger.target ? "bg-green-600" : "bg-foreground/70")} style={{ width: `${Math.min(100, ((ref.tagger.today + sessionSkus.length) / Math.max(1, ref.tagger.target)) * 100)}%` }} /></div>
+          <CardContent className="flex flex-wrap items-center gap-x-5 gap-y-3 py-3">
+            {ref.tagger ? (
+              <div className="flex min-w-[10rem] items-center gap-3" title={`${ref.tagger.today + sessionSkus.length} of ${ref.tagger.target} today`}>
+                <div className="relative size-11 shrink-0">
+                  <svg viewBox="0 0 40 40" className="size-11 -rotate-90"><circle cx="20" cy="20" r="16" fill="none" strokeWidth="4" className="stroke-muted" /><circle cx="20" cy="20" r="16" fill="none" strokeWidth="4" strokeLinecap="round" className={ref.tagger.today + sessionSkus.length >= ref.tagger.target ? "stroke-green-600" : "stroke-foreground"} strokeDasharray={`${Math.min(1, (ref.tagger.today + sessionSkus.length) / Math.max(1, ref.tagger.target)) * 100.5} 100.5`} /></svg>
+                  <span className="absolute inset-0 grid place-items-center text-[10px] font-bold tabular-nums">{Math.round(((ref.tagger.today + sessionSkus.length) / Math.max(1, ref.tagger.target)) * 100)}%</span>
                 </div>
-              ) : (
-                <p className="text-sm text-amber-600 dark:text-amber-400">
-                  Not signed in — <Link href="/login?next=/tag" className="underline">sign in with your PIN</Link> to save.
-                </p>
-              )}
-            </Field>
-
-            <Field label="Tagging for" hint={channelLocked ? "Locked — untick to change" : channel === "online" ? "Full details; photos are taken at the photography station after the tag is on" : "Short form: type, brand, size, condition, price, reference photo"}>
-              <div className="flex items-center gap-2">
-                <Button type="button" size="sm" variant={channel === "outlet" ? "default" : "outline"} disabled={channelLocked} onClick={() => setChannel("outlet")} className="h-11 md:h-8">Outlet</Button>
-                <Button type="button" size="sm" variant={channel === "online" ? "default" : "outline"} disabled={channelLocked} onClick={() => setChannel("online")} className="h-11 md:h-8">Online store</Button>
-                <label className="ml-1 flex items-center gap-1.5 text-xs"><Checkbox checked={channelLocked} onCheckedChange={(v) => setChannelLocked(v === true)} /> Lock</label>
+                <div className="leading-tight"><div className="font-semibold">{ref.tagger.name}</div><div className="text-xs text-muted-foreground tabular-nums">{ref.tagger.today + sessionSkus.length} of {ref.tagger.target} today</div></div>
               </div>
-            </Field>
-
-            <Field
-              label="Lot"
-              hint={
-                selectedLot
-                  ? `${selectedLot.tagged}${selectedLot.pieces ? ` of ${selectedLot.pieces}` : ""} tagged · records where this garment came from`
-                  : ref.lots.length
-                    ? undefined
-                    : "No open lots — record the lot in the commercial software first"
-              }
-            >
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <select className={cn(selectClass, "min-w-0 flex-1 basis-40")} value={lotId} disabled={lotLocked} onChange={(e) => setLotId(e.target.value)}>
-                  {ref.lots.length === 0 && <option value="">No open lots</option>}
-                  {ref.lots.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.code}{l.description ? ` · ${l.description}` : ""}
-                    </option>
-                  ))}
-                </select>
-                <label className="flex shrink-0 items-center gap-1.5 text-xs"><Checkbox checked={lotLocked} onCheckedChange={(v) => setLotLocked(v === true)} /> Lock</label>
-                {isManager && (
-                  <Button asChild type="button" variant="outline" size="sm" className="h-9 shrink-0">
-                    <Link href="/lots">Lots</Link>
-                  </Button>
-                )}
-              </div>
-            </Field>
-
+            ) : (
+              <p className="text-sm text-amber-600 dark:text-amber-400">Not signed in — <Link href="/login?next=/tag" className="underline">sign in with your PIN</Link> to save.</p>
+            )}
+            <div className="flex items-center gap-2">
+              <Button type="button" size="sm" variant={channel === "outlet" ? "default" : "outline"} disabled={channelLocked} onClick={() => setChannel("outlet")} className={chip}>Outlet</Button>
+              <Button type="button" size="sm" variant={channel === "online" ? "default" : "outline"} disabled={channelLocked} onClick={() => setChannel("online")} className={chip}>Online store</Button>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground"><Checkbox checked={channelLocked} onCheckedChange={(v) => setChannelLocked(v === true)} /> Lock</label>
+            </div>
+            <div className="flex min-w-0 flex-1 items-center gap-2" title={selectedLot ? `${selectedLot.tagged}${selectedLot.pieces ? ` of ${selectedLot.pieces}` : ""} tagged from this lot` : "Lots are recorded in the commercial software"}>
+              <span className="text-xs uppercase tracking-wide text-muted-foreground">Lot</span>
+              <select className={cn(selectClass, "h-11 min-w-0 flex-1 basis-40 md:h-11")} value={lotId} disabled={lotLocked} onChange={(e) => setLotId(e.target.value)}>
+                {ref.lots.length === 0 && <option value="">No open lots — record one in Commercials</option>}
+                {ref.lots.map((l) => (
+                  <option key={l.id} value={l.id}>{l.code}{l.description ? ` · ${l.description}` : ""}{l.pieces ? ` · ${l.tagged}/${l.pieces}` : ""}</option>
+                ))}
+              </select>
+              <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground"><Checkbox checked={lotLocked} onCheckedChange={(v) => setLotLocked(v === true)} /> Lock</label>
+            </div>
           </CardContent>
         </Card>
 
@@ -591,7 +561,7 @@ export function TagForm() {
                     {quickBrands.slice(0, moreBrands ? 20 : 10).map((b) => {
                       const on = brand.trim().toLowerCase() === b.name.toLowerCase();
                       return (
-                        <Button key={b.name} type="button" variant={on ? "default" : "outline"} title={b.name} aria-label={b.name} className={cn("h-9 px-2 md:h-8", b.logo_url ? "w-16 justify-center" : "text-sm md:text-xs")} onClick={() => { setBrand(b.name); requestAnimationFrame(() => sizeRef.current?.focus()); }}>
+                        <Button key={b.name} type="button" variant={on ? "default" : "outline"} title={b.name} aria-label={b.name} className={cn("h-11 px-3 md:h-10", b.logo_url ? "w-20 justify-center" : "text-sm")} onClick={() => { setBrand(b.name); requestAnimationFrame(() => sizeRef.current?.focus()); }}>
                           {b.logo_url ? (
                             <span className={cn("flex h-6 w-12 items-center justify-center overflow-hidden rounded bg-white", on && "ring-2 ring-primary-foreground/60")}>
                               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -650,9 +620,9 @@ export function TagForm() {
                 {!sizeOther ? (
                   <div className="flex flex-wrap gap-1.5">
                     {activeSeries.sizes.map((s) => (
-                      <Button key={s} type="button" size="sm" variant={size.trim().toLowerCase() === s.toLowerCase() ? "default" : "outline"} className="h-11 min-w-12 px-3 text-base md:h-8 md:min-w-10 md:px-2.5 md:text-sm" onClick={() => setSize(s)}>{s}</Button>
+                      <Button key={s} type="button" size="sm" variant={size.trim().toLowerCase() === s.toLowerCase() ? "default" : "outline"} className="h-12 min-w-14 px-4 text-base md:h-11 md:min-w-12 md:px-3.5 md:text-base" onClick={() => setSize(s)}>{s}</Button>
                     ))}
-                    <Button type="button" size="sm" variant="ghost" title={`Add a size to the ${activeSeries.label} row`} className="h-11 w-11 px-0 text-xl text-muted-foreground md:h-8 md:w-8 md:text-base" onClick={() => addSizeLabel(activeSeries.code)}>+</Button>
+                    <Button type="button" size="sm" variant="ghost" title={`Add a size to the ${activeSeries.label} row`} className="h-12 w-12 px-0 text-xl text-muted-foreground md:h-11 md:w-11 md:text-base" onClick={() => addSizeLabel(activeSeries.code)}>+</Button>
                   </div>
                 ) : (
                   <>
@@ -916,7 +886,7 @@ function ButtonGroup<T extends string>({ label, hint, options, value, onChange }
       <Label>{label}</Label>
       <div className="flex flex-wrap gap-2">
         {options.map((o) => (
-          <Button key={o.code} type="button" size="sm" variant={o.code === value ? "default" : "outline"} onClick={() => onChange(o.code)} className={cn("px-4 text-sm md:px-3 md:text-xs", o.sub ? "h-14 flex-col gap-0 md:h-12" : "h-11 md:h-8")}>
+          <Button key={o.code} type="button" size="sm" variant={o.code === value ? "default" : "outline"} onClick={() => onChange(o.code)} className={cn("px-5 text-base md:px-4 md:text-sm", o.sub ? "h-14 flex-col items-start gap-0 leading-tight" : "h-12 md:h-11")}>
             <span>{o.label}</span>
             {o.sub && <span className={cn("text-[11px] font-normal tabular-nums", o.code === value ? "opacity-80" : "text-muted-foreground")}>{o.sub}</span>}
           </Button>
