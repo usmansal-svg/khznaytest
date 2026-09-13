@@ -167,8 +167,8 @@ function TagLabelSmall({ item }: { item: TagItem }) {
       <div className="absolute flex flex-col" style={{ left: `${left}mm`, top: "1.4mm", bottom: "1.2mm", width: `${50.8 - left - box - 0.5}mm` }}>
         <div className="truncate text-[6pt] font-bold leading-tight">{rare ? "★ " : ""}{item.brand || "Unbranded"}</div>
         <div className="truncate text-[5.5pt] leading-tight text-neutral-700">{item.sub_category}</div>
-        <div className="mt-auto truncate text-[13pt] font-black leading-none"><span className="mr-[1mm] text-[6pt] font-bold uppercase tracking-wide text-neutral-600">Size</span>{item.size_label ?? "—"}</div>
-        <div className="mt-[1mm] whitespace-nowrap text-[13.5pt] font-black leading-none tabular-nums tracking-tight">{rs(item.list_price)}</div>
+        <div className="mt-auto truncate text-[9.5pt] font-black leading-none"><span className="mr-[1mm] text-[5.5pt] font-bold uppercase tracking-wide text-neutral-600">Size</span>{item.size_label ?? "—"}</div>
+        <div className="mt-[0.8mm] inline-block self-start whitespace-nowrap rounded-[0.8mm] border-[0.35mm] border-black px-[1.2mm] py-[0.6mm] text-[13pt] font-black leading-none tabular-nums tracking-tight">{rs(item.list_price)}</div>
         <div className="mt-[1mm] font-mono text-[5.5pt] font-semibold leading-none tracking-wide">{item.sku}</div>
       </div>
       <div className="absolute bg-white" style={{ right: 0, top: `${(25.4 - box) / 2}mm`, width: `${box}mm`, height: `${box}mm`, padding: `${quiet}mm` }}>
