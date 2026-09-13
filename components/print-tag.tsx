@@ -8,7 +8,7 @@ import { TAG_FORMATS, TagFaces, readTagFormat, saveTagFormat, tagCss, type TagFo
 export function PrintTag({ sku }: { sku: string }) {
   const [item, setItem] = useState<TagItem | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [format, setFormat] = useState<TagFormat>("label");
+  const [format, setFormat] = useState<TagFormat>("label2x1");
   useEffect(() => { setFormat(readTagFormat()); }, []);
 
   useEffect(() => {

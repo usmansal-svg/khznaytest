@@ -11,7 +11,7 @@ export function PrintBatch() {
   const skus = (params.get("skus") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   const [items, setItems] = useState<TagItem[] | null>(null);
   const [failed, setFailed] = useState<string[]>([]);
-  const [format, setFormat] = useState<TagFormat>("label");
+  const [format, setFormat] = useState<TagFormat>("label2x1");
   useEffect(() => { setFormat(readTagFormat()); }, []);
 
   useEffect(() => {

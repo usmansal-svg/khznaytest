@@ -30,44 +30,43 @@ export type TagItem = {
 
 const rs = (n: number) => `Rs ${Math.round(n).toLocaleString("en-PK")}`;
 
-/** Which paper the station has loaded: the 50 × 90 mm hang tag or a 2.5 × 1.5 in thermal label (Zywell ZY909 and the like). Per device. */
-export type TagFormat = "hang" | "label";
-export const TAG_FORMATS: { code: TagFormat; label: string; size: string }[] = [
-  { code: "label", label: "2.5 × 1.5 in label", size: "63.5 × 38.1 mm" },
-  { code: "hang", label: "50 × 90 mm hang tag", size: "50 × 90 mm" },
+/**
+ * Which paper the station has loaded. Thermal labels come in three sizes
+ * (2 × 1 in for now, 2.5 × 1.5 in, 3 × 2 in once the bigger rolls arrive)
+ * plus the 50 × 90 mm hang tag. Remembered per device.
+ */
+export type TagFormat = "label2x1" | "label" | "label3x2" | "hang";
+export const TAG_FORMATS: { code: TagFormat; label: string; size: string; w: number; h: number }[] = [
+  { code: "label2x1", label: "2 × 1 in label", size: "50.8 × 25.4 mm", w: 50.8, h: 25.4 },
+  { code: "label", label: "2.5 × 1.5 in label", size: "63.5 × 38.1 mm", w: 63.5, h: 38.1 },
+  { code: "label3x2", label: "3 × 2 in label", size: "76.2 × 50.8 mm", w: 76.2, h: 50.8 },
+  { code: "hang", label: "50 × 90 mm hang tag", size: "50 × 90 mm", w: 50, h: 90 },
 ];
+const isFormat = (v: unknown): v is TagFormat => TAG_FORMATS.some((f) => f.code === v);
 export function readTagFormat(): TagFormat {
-  try { const v = localStorage.getItem("khz_tag_format"); if (v === "hang" || v === "label") return v; } catch { /* fine */ }
-  return "label";
+  try { const v = localStorage.getItem("khz_tag_format"); if (isFormat(v)) return v; } catch { /* fine */ }
+  return "label2x1";
 }
 export function saveTagFormat(f: TagFormat) { try { localStorage.setItem("khz_tag_format", f); } catch { /* fine */ } }
 
 export function tagCss(format: TagFormat = "hang") {
-  if (format === "label") {
-    return `
-    @page { size: 63.5mm 38.1mm; margin: 0; }
-    @media print {
-      .no-print { display: none !important; }
-      .tag { box-shadow: none !important; margin: 0 !important; page-break-after: always; break-after: page; }
-      body { background: #fff; }
-    }
-    .tag { width: 63.5mm; height: 38.1mm; background: #fff; color: #000; position: relative; overflow: hidden; font-family: ui-sans-serif, system-ui, sans-serif; }
-  `;
-  }
+  const f = TAG_FORMATS.find((x) => x.code === format) ?? TAG_FORMATS[3];
   return `
-    @page { size: 50mm 90mm; margin: 0; }
+    @page { size: ${f.w}mm ${f.h}mm; margin: 0; }
     @media print {
       .no-print { display: none !important; }
       .tag { box-shadow: none !important; margin: 0 !important; page-break-after: always; break-after: page; }
       body { background: #fff; }
     }
-    .tag { width: 50mm; height: 90mm; background: #fff; color: #000; position: relative; overflow: hidden; font-family: ui-sans-serif, system-ui, sans-serif; }
+    .tag { width: ${f.w}mm; height: ${f.h}mm; background: #fff; color: #000; position: relative; overflow: hidden; font-family: ui-sans-serif, system-ui, sans-serif; }
   `;
 }
 
 export function TagFaces({ item, format = "hang" }: { item: TagItem; format?: TagFormat }) {
   const rare = Boolean(item.is_rare);
+  if (format === "label2x1") return <TagLabelSmall item={item} />;
   if (format === "label") return <TagLabel item={item} />;
+  if (format === "label3x2") return <TagLabelLarge item={item} />;
   return (
     <div className="tag shadow-lg">
       {/* hole */}
@@ -146,6 +145,70 @@ function TagLabel({ item }: { item: TagItem }) {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={`/api/tags/${encodeURIComponent(item.sku)}/barcode`} alt={item.sku} className="w-full" style={{ height: "8.5mm", objectFit: "contain" }} />
         <div className="text-center font-mono text-[6pt] font-semibold tracking-wide">{item.sku}</div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The 2 × 1 in (50.8 × 25.4 mm) label: brand and size on one line, the price,
+ * then the barcode with the SKU. No garment type, no colour-sticker space —
+ * there is no room. Nothing under 5.5 pt at 203 dpi.
+ */
+function TagLabelSmall({ item }: { item: TagItem }) {
+  const rare = Boolean(item.is_rare);
+  return (
+    <div className="tag shadow-lg">
+      <div className="px-[2mm] pt-[1.2mm]">
+        <div className="flex items-baseline justify-between gap-[2mm]">
+          <div className="truncate text-[8pt] font-black leading-tight">{rare ? "★ " : ""}{item.brand || "Unbranded"}</div>
+          <div className="shrink-0 text-[8pt] font-black leading-tight">{item.size_label ?? "—"}</div>
+        </div>
+        <div className="flex items-baseline justify-between gap-[2mm]">
+          <div className="truncate text-[5.5pt] leading-tight text-neutral-700">{item.sub_category}</div>
+          <div className="shrink-0 text-[11pt] font-black leading-none tabular-nums">{rs(item.list_price)}</div>
+        </div>
+      </div>
+      <div className="absolute bottom-[1mm] left-[2mm] right-[2mm]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={`/api/tags/${encodeURIComponent(item.sku)}/barcode`} alt={item.sku} className="w-full" style={{ height: "7mm", objectFit: "contain" }} />
+        <div className="text-center font-mono text-[5.5pt] font-semibold tracking-wide">{item.sku}</div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The 3 × 2 in (76.2 × 50.8 mm) label: the 2.5 × 1.5 layout with more air —
+ * bigger price and size, a taller barcode, and the colour-sticker corner.
+ */
+function TagLabelLarge({ item }: { item: TagItem }) {
+  const rare = Boolean(item.is_rare);
+  return (
+    <div className="tag shadow-lg">
+      {/* reserved, unmarked: the month's colour sticker goes in this corner */}
+      <div className="absolute right-[2.5mm] top-[2.5mm] size-[10mm]" aria-hidden />
+      <div className="px-[3mm] pt-[2.5mm]">
+        <div className="flex items-baseline justify-between pr-[11mm]">
+          <div className="truncate text-[12pt] font-black leading-tight">{item.brand || "Unbranded"}</div>
+          <div className="shrink-0 text-[7pt] font-black tracking-tight">Khazanay</div>
+        </div>
+        <div className="truncate text-[8pt] leading-tight text-neutral-700">{rare ? `★ RARE FIND · ${item.rare_tag_line || item.sub_category}` : item.sub_category}</div>
+        <div className="mt-[2.5mm] flex items-end justify-between">
+          <div>
+            <div className="text-[6pt] uppercase tracking-wide text-neutral-500">Size</div>
+            <div className="text-[20pt] font-black leading-none">{item.size_label ?? "—"}</div>
+          </div>
+          <div className="text-right">
+            <div className="text-[6pt] uppercase tracking-wide text-neutral-500">Price</div>
+            <div className="text-[22pt] font-black leading-none tabular-nums">{rs(item.list_price)}</div>
+          </div>
+        </div>
+      </div>
+      <div className="absolute bottom-[2mm] left-[3mm] right-[3mm]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={`/api/tags/${encodeURIComponent(item.sku)}/barcode`} alt={item.sku} className="w-full" style={{ height: "12mm", objectFit: "contain" }} />
+        <div className="text-center font-mono text-[7pt] font-semibold tracking-wide">{item.sku}</div>
       </div>
     </div>
   );
