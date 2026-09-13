@@ -28,6 +28,9 @@ export type Settings = {
   /** Lowest condition that may go to an outlet; below it a garment is saved as online stock */
   outletMinGrade: OutletGrade;
   /** "New in store" formula fallback: Premium shelf price × factor, per tier */
+  /** Affordable-luxury brands price at this multiple of the regular price; their share of intake feeds the blended uplift */
+  affordableLuxuryMultiplier: number;
+  affordableLuxuryShare: number;
   compareFactorRegular: number;
   compareFactorAffordable: number;
   compareFormulaEnabled: boolean;
@@ -77,6 +80,8 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultDailyTarget: 60,
   qcSampleRate: 0.1,
   outletMinGrade: "excellent",
+  affordableLuxuryMultiplier: 2.0,
+  affordableLuxuryShare: 0.05,
   compareFactorRegular: 3,
   compareFactorAffordable: 3.5,
   compareFormulaEnabled: true,
@@ -202,6 +207,11 @@ export const BRAND_TIERS: readonly BrandTierInfo[] = [
   { tier: "affordable_luxury", name: "Affordable luxury", multiplier: 2.0, share: 0.05, automatic: true },
   { tier: "ultra_luxury", name: "Ultra luxury", multiplier: null, share: 0, automatic: false },
 ];
+
+/** The tier table with the settings' affordable-luxury figures in place of the code defaults. */
+export function brandTiersFrom(settings: Pick<Settings, "affordableLuxuryMultiplier" | "affordableLuxuryShare">): BrandTierInfo[] {
+  return BRAND_TIERS.map((t) => t.tier === "affordable_luxury" ? { ...t, multiplier: settings.affordableLuxuryMultiplier, share: settings.affordableLuxuryShare } : t.tier === "regular" ? { ...t, share: 1 - settings.affordableLuxuryShare } : t);
+}
 
 export function brandTier(tier: BrandTier): BrandTierInfo {
   const found = BRAND_TIERS.find((b) => b.tier === tier);

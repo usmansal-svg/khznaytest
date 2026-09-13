@@ -87,6 +87,8 @@ const RANGES: Record<keyof Omit<Settings, "brandFeedbackEnabled" | "ladderDepths
   defaultProvisionalYield: [0.3, 1],
   defaultDailyTarget: [1, 1000],
   qcSampleRate: [0, 1],
+  affordableLuxuryMultiplier: [1, 20],
+  affordableLuxuryShare: [0, 0.9],
   compareFactorRegular: [1, 20],
   compareFactorAffordable: [1, 20],
 };

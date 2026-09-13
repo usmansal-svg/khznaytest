@@ -13,6 +13,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
   BRAND_TIERS,
+  brandTiersFrom,
   DEFAULT_BRAND_TIER,
   DEFAULT_SETTINGS,
   GRADES,
@@ -84,6 +85,8 @@ type SettingsRow = {
   min_price: number;
   brand_feedback_enabled: boolean;
   high_value_threshold: number;
+  affordable_luxury_multiplier?: number | string | null;
+  affordable_luxury_share?: number | string | null;
   default_provisional_yield?: number | string | null;
   ladder_depths?: (number | string)[] | null;
   default_daily_target?: number | null;
@@ -118,6 +121,8 @@ export function settingsFromRow(row: SettingsRow): Settings {
     defaultDailyTarget: num(row.default_daily_target, DEFAULT_SETTINGS.defaultDailyTarget),
     qcSampleRate: num(row.qc_sample_rate, DEFAULT_SETTINGS.qcSampleRate),
     outletMinGrade: (OUTLET_GRADES as string[]).includes(row.outlet_min_grade ?? "") ? (row.outlet_min_grade as OutletGrade) : DEFAULT_SETTINGS.outletMinGrade,
+    affordableLuxuryMultiplier: num(row.affordable_luxury_multiplier, DEFAULT_SETTINGS.affordableLuxuryMultiplier),
+    affordableLuxuryShare: num(row.affordable_luxury_share, DEFAULT_SETTINGS.affordableLuxuryShare),
     compareFactorRegular: num(row.compare_factor_regular, DEFAULT_SETTINGS.compareFactorRegular),
     compareFactorAffordable: num(row.compare_factor_affordable, DEFAULT_SETTINGS.compareFactorAffordable),
     compareFormulaEnabled: row.compare_formula_enabled ?? DEFAULT_SETTINGS.compareFormulaEnabled,
@@ -155,6 +160,8 @@ export function settingsToRow(s: Settings) {
     default_daily_target: s.defaultDailyTarget,
     qc_sample_rate: s.qcSampleRate,
     outlet_min_grade: s.outletMinGrade,
+    affordable_luxury_multiplier: s.affordableLuxuryMultiplier,
+    affordable_luxury_share: s.affordableLuxuryShare,
     compare_factor_regular: s.compareFactorRegular,
     compare_factor_affordable: s.compareFactorAffordable,
     compare_formula_enabled: s.compareFormulaEnabled,
@@ -277,10 +284,11 @@ async function readPricingContext(supabase: SupabaseClient): Promise<PricingCont
     active: Boolean(s.active),
   }));
 
+  const settings = settingsFromRow(settingsRes.data as SettingsRow);
   return {
-    settings: settingsFromRow(settingsRes.data as SettingsRow),
+    settings,
     settingsVersion: (settingsRes.data as SettingsRow).version,
-    refs: { grades, profiles, brandTiers: BRAND_TIERS },
+    refs: { grades, profiles, brandTiers: brandTiersFrom(settings) },
     subCategories,
     source: "database",
   };

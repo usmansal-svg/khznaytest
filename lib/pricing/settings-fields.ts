@@ -13,6 +13,8 @@ export const SETTINGS_FIELDS: { key: keyof Settings; label: string; unit?: strin
   { key: "targetGP", label: "Target gross profit", unit: "0–1 of ex-tax revenue", step: 0.01, group: "Margin", help: "The whole book aims here after markdowns, pulls and the grade mix." },
   { key: "rejectedShare", label: "Rejected at sorting", unit: "0–1", step: 0.01, group: "Margin", help: "Graded out before the floor." },
   { key: "bulkRecovery", label: "Bulk recovery", unit: "0–1 of cost", step: 0.01, group: "Margin", help: "What rejected and pulled stock fetches by weight." },
+  { key: "affordableLuxuryMultiplier", label: "Affordable luxury multiplier", unit: "× the regular price", step: 0.1, group: "Brands", help: "A brand marked Affordable luxury on the Brands page prices at this multiple of the regular price for the same garment. Ultra luxury is always priced by hand." },
+  { key: "affordableLuxuryShare", label: "Affordable luxury share of intake", unit: "0–1", step: 0.01, group: "Brands", help: "Roughly what share of garments are affordable-luxury brands; feeds the blended brand uplift in the loaded cost." },
   { key: "charmStep", label: "Rounding step", unit: "PKR", step: 1, group: "Rounding", help: "Prices land on a multiple of this, plus the ending." },
   { key: "charmEnd", label: "Price ending", unit: "PKR", step: 1, group: "Rounding", help: "Every price ends in this. 90 means 1,290 not 1,300." },
   { key: "minPrice", label: "Minimum price", unit: "PKR", step: 10, group: "Rounding", help: "Floor for any grade at any markdown." },
