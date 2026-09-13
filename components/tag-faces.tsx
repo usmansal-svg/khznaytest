@@ -30,7 +30,8 @@ export type TagItem = {
   compare?: { new_price: number; saving_pct: number; source: string; confirmed: boolean } | null;
 };
 
-const rs = (n: number) => `Rs ${Math.round(n).toLocaleString("en-PK")}`;
+// Written the Pakistani way on every tag: Rs. 1,990/-
+const rs = (n: number) => `Rs. ${Math.round(n).toLocaleString("en-PK")}/-`;
 
 /**
  * Which paper the station has loaded. Thermal labels come in three sizes
