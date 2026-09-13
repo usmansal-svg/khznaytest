@@ -135,11 +135,7 @@ export function TagForm() {
   const [outletOverride, setOutletOverride] = useState(false);
   const [confirmOverride, setConfirmOverride] = useState(false);
   const [sessionSkus, setSessionSkus] = useState<string[]>([]);
-  // Layout: "v2" (13 Sep — numbered steps, session folded, bigger taps) or "classic". Per device, so Usman can compare and revert on the spot.
-  const [layout, setLayout] = useState<"v2" | "classic">("v2");
-  const [sessionOpen, setSessionOpen] = useState(true);
-  useEffect(() => { try { const l = localStorage.getItem("khz_tag_layout"); if (l === "classic" || l === "v2") setLayout(l); } catch { /* fine */ } }, []);
-  const switchLayout = (l: "v2" | "classic") => { setLayout(l); try { localStorage.setItem("khz_tag_layout", l); } catch { /* fine */ } };
+
 
 
   const brandRef = useRef<HTMLInputElement>(null);
@@ -327,7 +323,6 @@ export function TagForm() {
     setSize("");
     setColour("");
     setGrade("premium");
-    setSessionOpen(false);
     setOutletOverride(false);
     setConfirmOverride(false);
     setMeasure({});
@@ -411,8 +406,7 @@ export function TagForm() {
   if (loadError) return <p className="text-destructive">{loadError}</p>;
   if (!ref) return <p className="text-muted-foreground">Loading…</p>;
 
-  const v2 = layout === "v2";
-  const chip = v2 ? "h-11 px-4 text-sm" : "h-11 px-4 text-sm md:h-8 md:px-3 md:text-xs";
+  const chip = "h-11 px-4 text-sm md:h-8 md:px-3 md:text-xs";
   return (
     <>
     {qcHold && (
@@ -433,31 +427,18 @@ export function TagForm() {
         void save();
       }}
       onKeyDown={onKeyDown}
-      className={cn("mx-auto grid max-w-7xl gap-6 lg:grid-cols-[minmax(0,1fr)_260px]", v2 && "tag-v2 max-lg:gap-3")}
+      className="mx-auto grid max-w-7xl gap-6 lg:grid-cols-[minmax(0,1fr)_260px]"
     >
-      <div className={cn("space-y-6", v2 && "max-lg:space-y-3")}>
+      <div className="space-y-6">
         {/* ---------------------------------------------------- session */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
-              <span className="flex flex-wrap items-center gap-2">
-                <span>Session</span>
-                {v2 && !sessionOpen && (
-                  <span className="flex flex-wrap items-center gap-1.5 text-sm font-normal">
-                    <span className="rounded-md bg-green-100 px-2 py-0.5 text-green-800 dark:bg-green-950 dark:text-green-300">{channel === "online" ? "Online store" : "Outlet"}</span>
-                    {selectedLot && <span className="rounded-md bg-green-100 px-2 py-0.5 text-green-800 dark:bg-green-950 dark:text-green-300">{selectedLot.code}</span>}
-                    {ref.tagger && <span className="text-xs text-muted-foreground">{ref.tagger.name} · {ref.tagger.today + sessionSkus.length} of {ref.tagger.target} today</span>}
-                    <button type="button" className="text-xs underline underline-offset-2" onClick={() => setSessionOpen(true)}>Change</button>
-                  </span>
-                )}
-              </span>
-              <span className="flex items-center gap-3 text-xs font-normal text-muted-foreground">
-                {v2 && sessionOpen && <button type="button" className="underline underline-offset-2" onClick={() => setSessionOpen(false)}>Done</button>}
-                <button type="button" className="rounded-full border px-2 py-0.5 hover:bg-muted" onClick={() => switchLayout(v2 ? "classic" : "v2")} title="Switch between the new layout and the old one">{v2 ? "Classic layout" : "New layout"}</button>
-              </span>
+            <CardTitle className="flex items-center justify-between text-base">
+              <span>Session</span>
+              <span className="text-xs font-normal text-muted-foreground">Lock what stays the same, then tag garment after garment</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className={cn("grid gap-4 sm:grid-cols-2 lg:grid-cols-3", v2 && !sessionOpen && "hidden")}>
+          <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Field label="Tagger" hint={ref.tagger ? `${ref.tagger.today + sessionSkus.length} of ${ref.tagger.target} today · ${Math.round(((ref.tagger.today + sessionSkus.length) / Math.max(1, ref.tagger.target)) * 100)}%` : undefined}>
               {ref.tagger ? (
                 <div className="space-y-1">
@@ -511,9 +492,9 @@ export function TagForm() {
         </Card>
 
         <Card>
-          <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-base">{v2 && <Step n={1} />}Garment</CardTitle></CardHeader>
+          <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-base">Garment</CardTitle></CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <ButtonGroup big={v2} label="Season" hint="Shows that season's catalogue; goes into the SKU and the Shopify tags" options={SEASON_OPTIONS} value={season} onChange={setSeason} />
+            <ButtonGroup label="Season" hint="Shows that season's catalogue; goes into the SKU and the Shopify tags" options={SEASON_OPTIONS} value={season} onChange={setSeason} />
             <Field label="Wearer">
               <select className={selectClass} value={wearer} onChange={(e) => setWearer(e.target.value as Wearer)}>
                 {WEARER_OPTIONS.map((w) => <option key={w} value={w}>{WEARER_LABELS[w]}</option>)}
@@ -553,15 +534,15 @@ export function TagForm() {
                 {subs.length === 0 && <p className="text-xs text-muted-foreground">Nothing under this category yet — add it under Pricing.</p>}
               </div>
             </div>
-            {asksSleeve && !outlet && <ButtonGroup big={v2} label="Sleeves" hint="Goes to Shopify as a filter tag; the same garment type covers every sleeve length" options={SLEEVE_TYPES.map((t) => ({ code: t, label: t }))} value={sleeve as (typeof SLEEVE_TYPES)[number]} onChange={(v) => setSleeve(v)} />}
-            {selectedSub?.has_heavy && <ButtonGroup big={v2} label="Weight" hint="This garment type has a heavy version: a heavy piece prices from its heavy cost. Same tag on the website." options={[{ code: "light", label: "Regular" }, { code: "heavy", label: "Heavy" }]} value={heavy ? "heavy" : "light"} onChange={(v) => setHeavy(v === "heavy")} />}
+            {asksSleeve && !outlet && <ButtonGroup label="Sleeves" hint="Goes to Shopify as a filter tag; the same garment type covers every sleeve length" options={SLEEVE_TYPES.map((t) => ({ code: t, label: t }))} value={sleeve as (typeof SLEEVE_TYPES)[number]} onChange={(v) => setSleeve(v)} />}
+            {selectedSub?.has_heavy && <ButtonGroup label="Weight" hint="This garment type has a heavy version: a heavy piece prices from its heavy cost. Same tag on the website." options={[{ code: "light", label: "Regular" }, { code: "heavy", label: "Heavy" }]} value={heavy ? "heavy" : "light"} onChange={(v) => setHeavy(v === "heavy")} />}
           </CardContent>
         </Card>
 
         {/* ---------------------------------------------------- garment */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">{v2 && <Step n={2} />}Brand &amp; size</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-base">Brand &amp; size</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
             <input ref={photoRef} type="file" accept="image/*" capture="environment" hidden onChange={onPhoto} />
@@ -672,10 +653,9 @@ export function TagForm() {
         </Card>
 
         <Card>
-          <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-base">{v2 && <Step n={3} />}Condition &amp; price</CardTitle></CardHeader>
+          <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-base">Condition &amp; price</CardTitle></CardHeader>
           <CardContent className="space-y-5">
             <ButtonGroup
-              big={v2}
               label="Condition"
               hint="Tags → BNWT · fabric used → Very Good · stain or repair → Excellent · else Premium. When in doubt, grade up."
               options={ref.grades.map((g) => ({ code: g.code, label: GRADE_LABELS[g.code] ?? g.name, sub: g.code === "rejected" ? "Rs 0" : channel === "outlet" && GRADE_RANK[g.code] < GRADE_RANK[ref.outlet_min_grade] ? "Not for outlets" : price?.grade_prices?.[g.code] != null && !needsManual ? pkr(price.grade_prices[g.code]) : undefined }))}
@@ -752,7 +732,7 @@ export function TagForm() {
       </div>
 
       {/* --------------------------------------------------------- price */}
-      <div className={cn("lg:sticky lg:top-6 lg:self-start", v2 ? "max-lg:grid max-lg:grid-cols-2 max-lg:gap-3 lg:space-y-4" : "space-y-4 max-lg:sticky max-lg:bottom-0 max-lg:z-10 max-lg:-mx-4 max-lg:border-t max-lg:bg-background max-lg:p-4")}>
+      <div className="lg:sticky lg:top-6 lg:self-start lg:space-y-4 max-lg:grid max-lg:grid-cols-2 max-lg:gap-3">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center justify-between text-sm">
@@ -767,7 +747,7 @@ export function TagForm() {
             ) : (
               <div>
                 <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Our price · incl. tax</div>
-                <div className={cn("font-bold tabular-nums", v2 ? "text-4xl" : "text-2xl")}>{listPrice ? pkr(listPrice) : "—"}</div>
+                <div className="text-2xl font-bold tabular-nums">{listPrice ? pkr(listPrice) : "—"}</div>
               </div>
             )}
 
@@ -776,7 +756,7 @@ export function TagForm() {
             )}
 
             {price && !price.restricted && price.markdowns?.length ? (
-              <dl className={cn("space-y-0.5 border-t pt-2 text-xs", v2 && "max-lg:hidden")}>
+              <dl className="space-y-0.5 border-t pt-2 text-xs max-lg:hidden">
                 {price.markdowns.map((m) => (
                   <div key={m.stage} className="flex justify-between">
                     <dt className="text-muted-foreground">{MARKDOWN_LABELS[m.stage] ?? m.stage}</dt>
@@ -787,7 +767,7 @@ export function TagForm() {
             ) : null}
 
             {price && !price.restricted && (
-              <dl className={cn("space-y-0.5 border-t pt-2 text-xs", v2 && "max-lg:hidden")}>
+              <dl className="space-y-0.5 border-t pt-2 text-xs max-lg:hidden">
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Landed cost</dt>
                   <dd className="tabular-nums">{pkr(price.landed_cost ?? 0)}</dd>
@@ -909,13 +889,13 @@ function Note({ tone, children }: { tone: "ok" | "warn" | "error"; children: Rea
   return <p className={cn("rounded-md border p-3 text-sm", cls)}>{children}</p>;
 }
 
-function ButtonGroup<T extends string>({ label, hint, options, value, onChange, big }: { label: string; hint?: string; options: { code: T; label: string; sub?: string }[]; value: T; onChange: (v: T) => void; big?: boolean }) {
+function ButtonGroup<T extends string>({ label, hint, options, value, onChange }: { label: string; hint?: string; options: { code: T; label: string; sub?: string }[]; value: T; onChange: (v: T) => void }) {
   return (
     <div className="grid min-w-0 content-start gap-1.5">
       <Label>{label}</Label>
       <div className="flex flex-wrap gap-2">
         {options.map((o) => (
-          <Button key={o.code} type="button" size="sm" variant={o.code === value ? "default" : "outline"} onClick={() => onChange(o.code)} className={cn(big ? "px-4 text-sm" : "px-4 text-sm md:px-3 md:text-xs", o.sub ? "h-14 flex-col gap-0 md:h-12" : "h-11 md:h-8")}>
+          <Button key={o.code} type="button" size="sm" variant={o.code === value ? "default" : "outline"} onClick={() => onChange(o.code)} className={cn("px-4 text-sm md:px-3 md:text-xs", o.sub ? "h-14 flex-col gap-0 md:h-12" : "h-11 md:h-8")}>
             <span>{o.label}</span>
             {o.sub && <span className={cn("text-[11px] font-normal tabular-nums", o.code === value ? "opacity-80" : "text-muted-foreground")}>{o.sub}</span>}
           </Button>
@@ -926,6 +906,3 @@ function ButtonGroup<T extends string>({ label, hint, options, value, onChange, 
   );
 }
 
-function Step({ n }: { n: number }) {
-  return <span className="inline-grid size-6 place-items-center rounded-md bg-foreground text-xs font-bold text-background">{n}</span>;
-}
