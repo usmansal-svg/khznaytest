@@ -16,7 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { useHoldDrag } from "@/lib/hold-drag";
-import { applyAdjust, cutoutOnWhite, NO_ADJUST, squareForShopify, type Adjust } from "@/lib/photos";
+import { applyAdjust, autoEnhance, cutoutOnWhite, NO_ADJUST, squareForShopify, type Adjust } from "@/lib/photos";
 import { MeasureEditor, type MeasureInfo } from "@/components/measure-editor";
 import { overlayKind, renderOverlay, silhouette, suggestLines, type Line } from "@/lib/measure-overlay";
 import type { MeasureType } from "@/lib/pricing/sub-categories";
@@ -88,6 +88,9 @@ export function PhotosPage() {
   );
   const [camInfo, setCamInfo] = useState<string | null>(null);
   const [autoCut, setAutoCut] = useState(true);
+  const [autoFix, setAutoFix] = useState(true);
+  useEffect(() => { try { if (localStorage.getItem("khz_autofix") === "off") setAutoFix(false); } catch { /* fine */ } }, []);
+  function setFix(v: boolean) { setAutoFix(v); try { localStorage.setItem("khz_autofix", v ? "on" : "off"); } catch { /* fine */ } }
   const [flash, setFlash] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -266,6 +269,7 @@ export function PhotosPage() {
     if (!kept.length) return;
     const sku = garment.sku;
     const wantCut = autoCut;
+    const wantFix = autoFix;
     const discarded = shots.filter((s) => !s.keep && s.existing).map((s) => s.existing!.path);
     const changed = kept.filter((s) => s.existing && (s.adjust.brightness !== 1 || s.adjust.contrast !== 1 || s.adjust.rotate !== 0));
     const fresh = kept.filter((s) => !s.existing);
@@ -292,7 +296,9 @@ export function PhotosPage() {
             if (w.isCover) { cover = await (await fetch(w.url)).blob(); coverPath = w.existing.path; }
             continue; // untouched earlier picture stays as it is
           }
-          const source = w.blob ?? (await (await fetch(w.url)).blob());
+          const raw = w.blob ?? (await (await fetch(w.url)).blob());
+          // Fresh shots get the automatic white balance and levels; pictures taken earlier are left as they were.
+          const source = wantFix && w.blob ? await autoEnhance(raw) : raw;
           // The cover becomes the cut-out and the measurements picture, so it keeps 2048 px; labels and details are fine at 1600 px.
           const square = await squareForShopify(await applyAdjust(source, w.adjust), w.isCover ? 2048 : 1600, w.isCover ? 1024 * 1024 : 450 * 1024);
           const ph = await upload(sku, square, "original");
@@ -626,6 +632,7 @@ export function PhotosPage() {
                   /* eslint-disable-next-line @next/next/no-img-element */
                   <img src={drag.ghost.url} alt="" className="pointer-events-none fixed z-50 rounded-md object-cover shadow-2xl ring-2 ring-primary" style={{ left: drag.ghost.x, top: drag.ghost.y, width: drag.ghost.w, height: drag.ghost.h }} />
                 )}
+                <label className="flex items-center gap-2 text-xs"><Checkbox checked={autoFix} onCheckedChange={(v) => setFix(v === true)} /> Auto-enhance new pictures (neutral whites, clean levels)</label>
                 <label className="flex items-center gap-2 text-xs"><Checkbox checked={autoCut} onCheckedChange={(v) => setAuto(v === true)} /> Remove the background from the cover picture (soft shadow on white)</label>
                 <Button type="button" className="h-14 w-full text-base" disabled={!kept.length} onClick={requestSave}><Check className="size-5" /> Save {kept.length || ""} picture{kept.length === 1 ? "" : "s"} &amp; next garment</Button>
                 <div className="grid grid-cols-2 gap-2">

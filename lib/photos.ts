@@ -142,3 +142,51 @@ export async function applyAdjust(file: Blob, a: Adjust): Promise<Blob> {
   }
   return new Promise((res) => c.toBlob((b) => res(b!), "image/jpeg", 0.95));
 }
+
+/**
+ * Auto-enhance for product shots on a white background: neutral white
+ * balance from the background, then a gentle levels stretch so the whites
+ * are white and the darks hold detail. Deterministic, no model, ~100 ms.
+ * Deliberately mild — it must never invent or hide anything on the garment.
+ */
+export async function autoEnhance(file: Blob, quality = 0.92): Promise<Blob> {
+  const bmp = await createImageBitmap(file);
+  const c = document.createElement("canvas");
+  c.width = bmp.width; c.height = bmp.height;
+  const ctx = c.getContext("2d", { willReadFrequently: true })!;
+  ctx.drawImage(bmp, 0, 0);
+  const img = ctx.getImageData(0, 0, c.width, c.height);
+  const d = img.data;
+  // Sample every 8th pixel for the statistics.
+  const hist = new Uint32Array(256);
+  let n = 0, br = 0, bg = 0, bb = 0, bn = 0;
+  for (let i = 0; i < d.length; i += 32) {
+    const r = d[i], g = d[i + 1], b = d[i + 2];
+    const y = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+    hist[y]++; n++;
+    if (y > 215) { br += r; bg += g; bb += b; bn++; } // the backdrop
+  }
+  // White balance: scale channels so the backdrop is neutral (capped so a coloured garment cannot fool it).
+  let sr = 1, sg = 1, sb = 1;
+  if (bn > n * 0.05) {
+    const m = (br + bg + bb) / (3 * bn);
+    const clamp = (v: number) => Math.min(1.12, Math.max(0.9, v));
+    sr = clamp(m / (br / bn)); sg = clamp(m / (bg / bn)); sb = clamp(m / (bb / bn));
+  }
+  // Levels: 0.3 % black point, 99.7 % white point, mild.
+  let acc = 0, lo = 0, hi = 255;
+  for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= n * 0.003) { lo = v; break; } }
+  acc = 0;
+  for (let v = 255; v >= 0; v--) { acc += hist[v]; if (acc >= n * 0.003) { hi = v; break; } }
+  lo = Math.min(lo, 40); hi = Math.max(hi, 200);
+  const gain = 255 / Math.max(1, hi - lo);
+  const lut = new Uint8ClampedArray(256);
+  for (let v = 0; v < 256; v++) lut[v] = Math.max(0, Math.min(255, (v - lo) * gain));
+  for (let i = 0; i < d.length; i += 4) {
+    d[i] = lut[Math.min(255, Math.round(d[i] * sr))];
+    d[i + 1] = lut[Math.min(255, Math.round(d[i + 1] * sg))];
+    d[i + 2] = lut[Math.min(255, Math.round(d[i + 2] * sb))];
+  }
+  ctx.putImageData(img, 0, 0);
+  return new Promise((res) => c.toBlob((b) => res(b!), "image/jpeg", quality));
+}
