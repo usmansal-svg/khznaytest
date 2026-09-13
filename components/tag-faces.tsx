@@ -147,8 +147,8 @@ function TagLabel({ item }: { item: TagItem }) {
 }
 
 /**
- * The 2 × 1 in (50.8 × 25.4 mm) label: an 18 mm QR code (the SKU, 7 printer
- * dots per module so tills and phones read it from a distance) on the right,
+ * The 2 × 1 in (50.8 × 25.4 mm) label: a 16 mm QR code (the SKU, 6 printer
+ * dots per module, a 3 mm quiet zone all round) on the right,
  * and on the left the size and price large with the brand and garment type
  * small above them and the SKU in clear text below. No 1D barcode: the
  * Henex H1200 at the till is a 2D scanner (checked 14 Sep 2026).
@@ -156,17 +156,22 @@ function TagLabel({ item }: { item: TagItem }) {
 function TagLabelSmall({ item }: { item: TagItem }) {
   const rare = Boolean(item.is_rare);
   const left = PRINT_OFFSET_MM + 1.5;
-  const qr = 21 * 7 * DOT_MM; // ≈ 18.4 mm
+  // 21 modules × 6 dots ≈ 15.8 mm, inside a white quiet zone of 4 modules
+  // (3 mm) on every side: without it phone cameras hunt for the code.
+  const mod = 6 * DOT_MM;
+  const qr = 21 * mod;
+  const quiet = 4 * mod;
+  const box = qr + 2 * quiet;
   return (
     <div className="tag shadow-lg">
-      <div className="absolute flex flex-col" style={{ left: `${left}mm`, top: "1.4mm", bottom: "1.2mm", width: `${50.8 - left - qr - 2.5 - 1}mm` }}>
+      <div className="absolute flex flex-col" style={{ left: `${left}mm`, top: "1.4mm", bottom: "1.2mm", width: `${50.8 - left - box - 0.5}mm` }}>
         <div className="truncate text-[6pt] font-bold leading-tight">{rare ? "★ " : ""}{item.brand || "Unbranded"}</div>
         <div className="truncate text-[5.5pt] leading-tight text-neutral-700">{item.sub_category}</div>
-        <div className="mt-auto truncate text-[13pt] font-black leading-none">{item.size_label ?? "—"}</div>
+        <div className="mt-auto truncate text-[13pt] font-black leading-none"><span className="mr-[1mm] text-[6pt] font-bold uppercase tracking-wide text-neutral-600">Size</span>{item.size_label ?? "—"}</div>
         <div className="mt-[1mm] whitespace-nowrap text-[13.5pt] font-black leading-none tabular-nums tracking-tight">{rs(item.list_price)}</div>
         <div className="mt-[1mm] font-mono text-[5.5pt] font-semibold leading-none tracking-wide">{item.sku}</div>
       </div>
-      <div className="absolute" style={{ right: "1mm", top: `${(25.4 - qr) / 2}mm`, width: `${qr}mm`, height: `${qr}mm` }}>
+      <div className="absolute bg-white" style={{ right: 0, top: `${(25.4 - box) / 2}mm`, width: `${box}mm`, height: `${box}mm`, padding: `${quiet}mm` }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={`/api/tags/${encodeURIComponent(item.sku)}/qr`} alt={item.sku} className="block" style={{ width: `${qr}mm`, height: `${qr}mm` }} />
       </div>
