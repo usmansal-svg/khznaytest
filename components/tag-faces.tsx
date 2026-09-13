@@ -30,7 +30,30 @@ export type TagItem = {
 
 const rs = (n: number) => `Rs ${Math.round(n).toLocaleString("en-PK")}`;
 
-export function tagCss() {
+/** Which paper the station has loaded: the 50 × 90 mm hang tag or a 2.5 × 1.5 in thermal label (Zywell ZY909 and the like). Per device. */
+export type TagFormat = "hang" | "label";
+export const TAG_FORMATS: { code: TagFormat; label: string; size: string }[] = [
+  { code: "label", label: "2.5 × 1.5 in label", size: "63.5 × 38.1 mm" },
+  { code: "hang", label: "50 × 90 mm hang tag", size: "50 × 90 mm" },
+];
+export function readTagFormat(): TagFormat {
+  try { const v = localStorage.getItem("khz_tag_format"); if (v === "hang" || v === "label") return v; } catch { /* fine */ }
+  return "label";
+}
+export function saveTagFormat(f: TagFormat) { try { localStorage.setItem("khz_tag_format", f); } catch { /* fine */ } }
+
+export function tagCss(format: TagFormat = "hang") {
+  if (format === "label") {
+    return `
+    @page { size: 63.5mm 38.1mm; margin: 0; }
+    @media print {
+      .no-print { display: none !important; }
+      .tag { box-shadow: none !important; margin: 0 !important; page-break-after: always; break-after: page; }
+      body { background: #fff; }
+    }
+    .tag { width: 63.5mm; height: 38.1mm; background: #fff; color: #000; position: relative; overflow: hidden; font-family: ui-sans-serif, system-ui, sans-serif; }
+  `;
+  }
   return `
     @page { size: 50mm 90mm; margin: 0; }
     @media print {
@@ -42,8 +65,9 @@ export function tagCss() {
   `;
 }
 
-export function TagFaces({ item }: { item: TagItem }) {
+export function TagFaces({ item, format = "hang" }: { item: TagItem; format?: TagFormat }) {
   const rare = Boolean(item.is_rare);
+  if (format === "label") return <TagLabel item={item} />;
   return (
     <div className="tag shadow-lg">
       {/* hole */}
@@ -84,6 +108,44 @@ export function TagFaces({ item }: { item: TagItem }) {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={`/api/tags/${encodeURIComponent(item.sku)}/barcode`} alt={item.sku} className="w-full" style={{ height: "13mm", objectFit: "contain" }} />
         <div className="text-center font-mono text-[7.5pt] font-semibold tracking-wide">{item.sku}</div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The 2.5 × 1.5 in (63.5 × 38.1 mm) thermal label, landscape. Everything the
+ * hang tag carries except the markdown-sticker space, which does not fit:
+ * brand, garment type, size, price, a blank corner for the colour sticker,
+ * barcode and SKU. Thermal heads print at 203 dpi, so nothing under 5.5 pt.
+ */
+function TagLabel({ item }: { item: TagItem }) {
+  const rare = Boolean(item.is_rare);
+  return (
+    <div className="tag shadow-lg">
+      {/* reserved, unmarked: the month's colour sticker goes in this corner */}
+      <div className="absolute right-[2mm] top-[2mm] size-[8mm]" aria-hidden />
+      <div className="px-[2.5mm] pt-[2mm]">
+        <div className="flex items-baseline justify-between pr-[9mm]">
+          <div className="truncate text-[9.5pt] font-black leading-tight">{item.brand || "Unbranded"}</div>
+          <div className="shrink-0 text-[6pt] font-black tracking-tight">Khazanay</div>
+        </div>
+        <div className="truncate text-[6.5pt] leading-tight text-neutral-700">{rare ? `★ RARE FIND · ${item.rare_tag_line || item.sub_category}` : item.sub_category}</div>
+        <div className="mt-[1.5mm] flex items-end justify-between">
+          <div>
+            <div className="text-[5.5pt] uppercase tracking-wide text-neutral-500">Size</div>
+            <div className="text-[15pt] font-black leading-none">{item.size_label ?? "—"}</div>
+          </div>
+          <div className="text-right">
+            <div className="text-[5.5pt] uppercase tracking-wide text-neutral-500">Price</div>
+            <div className="text-[17pt] font-black leading-none tabular-nums">{rs(item.list_price)}</div>
+          </div>
+        </div>
+      </div>
+      <div className="absolute bottom-[1.5mm] left-[2.5mm] right-[2.5mm]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={`/api/tags/${encodeURIComponent(item.sku)}/barcode`} alt={item.sku} className="w-full" style={{ height: "8.5mm", objectFit: "contain" }} />
+        <div className="text-center font-mono text-[6pt] font-semibold tracking-wide">{item.sku}</div>
       </div>
     </div>
   );

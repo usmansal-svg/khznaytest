@@ -223,7 +223,7 @@ Presets 7 / 30 / 90 days or a **custom date range**. Sections:
 
 ## 11. The printed tag
 
-50 × 90 mm, **single-sided**, one page per garment, printed from the tag form (AirPrint / label printer at 100% scale, no margins):
+Two papers, chosen per device on the print page (remembered): the **2.5 × 1.5 in thermal label** (63.5 × 38.1 mm, landscape — brand, garment type, size, price, a blank corner for the colour sticker, barcode and SKU; no markdown-sticker space, it does not fit; default since 13 Sep for the Zywell ZY909) and the **50 × 90 mm hang tag**. Both single-sided, one page per garment, printed at 100% scale with no margins. Hang tag:
 
 Khazanay wordmark · unmarked space top-right for the month's **colour sticker** · **brand** and garment type · **Size** large · **Price** 24-pt bold · unmarked 42 × 10 mm space for the **markdown sticker** · Code 128 **barcode** and **SKU**. No condition, cost, outlet, tax line, measurements or comparison price. A rare find prints a **★ Rare find** band with the reason above the price.
 
