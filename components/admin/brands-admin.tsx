@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 type Brand = { id: number; name: string; tier: string; active: boolean; source: string; added_at: string; added_by: string | null; quick_pick_order: number | null; logo_url: string | null };
 const TIERS = [
   { code: "regular", label: "High street", mult: "×1.00", note: "Standard price" },
-  { code: "affordable_luxury", label: "Affordable luxury", mult: "×2.00", note: "Roughly double" },
+  { code: "affordable_luxury", label: "Affordable luxury", mult: "×2.00", note: "Multiple set on Pricing → Constants" },
   { code: "ultra_luxury", label: "Ultra luxury", mult: "manual", note: "Set aside, priced by hand" },
 ];
 
@@ -24,7 +24,8 @@ export function BrandsAdmin() {
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
 
   const load = () => fetch("/api/admin/brands").then((r) => r.json()).then((j) => setBrands(j.brands ?? []));
-  useEffect(() => { void load(); }, []);
+  const [alMult, setAlMult] = useState<number | null>(null);
+  useEffect(() => { void load(); fetch("/api/admin/settings").then((r) => r.json()).then((j) => { if (typeof j.settings?.affordableLuxuryMultiplier === "number") setAlMult(j.settings.affordableLuxuryMultiplier); }).catch(() => {}); }, []);
 
   const shown = useMemo(() => (brands ?? []).filter((b) => b.active && b.name.toLowerCase().includes(q.toLowerCase())), [brands, q]);
   const fromTaggers = useMemo(() => (brands ?? []).filter((b) => b.source === "tagger"), [brands]);
@@ -172,7 +173,7 @@ export function BrandsAdmin() {
           return (
             <Card key={t.code}>
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">{t.label} <span className="font-normal text-muted-foreground">· {t.mult} · {list.length}</span></CardTitle>
+                <CardTitle className="text-base">{t.label} <span className="font-normal text-muted-foreground">· {t.code === "affordable_luxury" && alMult != null ? `×${alMult.toFixed(2)}` : t.mult} · {list.length}</span></CardTitle>
                 <p className="text-xs text-muted-foreground">{t.note}</p>
               </CardHeader>
               <CardContent>
