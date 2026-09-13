@@ -148,8 +148,8 @@ function TagLabel({ item }: { item: TagItem }) {
 }
 
 /**
- * The 2 × 1 in (50.8 × 25.4 mm) label: a 16 mm QR code (the SKU, 6 printer
- * dots per module, a 3 mm quiet zone all round) on the right,
+ * The 2 × 1 in (50.8 × 25.4 mm) label: a 13 mm QR code (the SKU, 5 printer
+ * dots per module, a 2.5 mm quiet zone all round) on the right,
  * and on the left the size and price large with the brand and garment type
  * small above them and the SKU in clear text below. No 1D barcode: the
  * Henex H1200 at the till is a 2D scanner (checked 14 Sep 2026).
@@ -157,19 +157,19 @@ function TagLabel({ item }: { item: TagItem }) {
 function TagLabelSmall({ item }: { item: TagItem }) {
   const rare = Boolean(item.is_rare);
   const left = PRINT_OFFSET_MM + 1.5;
-  // 21 modules × 6 dots ≈ 15.8 mm, inside a white quiet zone of 4 modules
-  // (3 mm) on every side: without it phone cameras hunt for the code.
-  const mod = 6 * DOT_MM;
+  // 21 modules × 5 dots ≈ 13 mm, inside a white quiet zone of 4 modules
+  // (2.5 mm) on every side: without it phone cameras hunt for the code.
+  const mod = 5 * DOT_MM;
   const qr = 21 * mod;
   const quiet = 4 * mod;
   const box = qr + 2 * quiet;
   return (
     <div className="tag shadow-lg">
-      <div className="absolute flex flex-col" style={{ left: `${left}mm`, top: "1.4mm", bottom: "1.2mm", width: `${50.8 - left - box - 0.5}mm` }}>
+      <div className="absolute flex flex-col" style={{ left: `${left}mm`, top: "1.4mm", bottom: "1.2mm", width: `${50.8 - left - box + quiet / 2}mm` }}>
         <div className="truncate text-[6pt] font-bold leading-tight">{rare ? "★ " : ""}{item.brand || "Unbranded"}</div>
         <div className="truncate text-[5.5pt] leading-tight text-neutral-700">{item.sub_category}</div>
         <div className="mt-auto truncate text-[9.5pt] font-black leading-none"><span className="mr-[1mm] text-[5.5pt] font-bold uppercase tracking-wide text-neutral-600">Size</span>{item.size_label ?? "—"}</div>
-        <div className="mt-[0.8mm] inline-block self-start whitespace-nowrap rounded-[0.8mm] border-[0.35mm] border-black px-[1.2mm] py-[0.6mm] text-[13pt] font-black leading-none tabular-nums tracking-tight">{rs(item.list_price)}</div>
+        <div className="mt-[0.8mm] inline-block self-start whitespace-nowrap rounded-[0.8mm] border-[0.35mm] border-black px-[1mm] py-[0.6mm] text-[11pt] font-black leading-none tabular-nums tracking-tight">{rs(item.list_price)}</div>
         <div className="mt-[1mm] font-mono text-[5.5pt] font-semibold leading-none tracking-wide">{item.sku}</div>
       </div>
       <div className="absolute bg-white" style={{ right: 0, top: `${(25.4 - box) / 2}mm`, width: `${box}mm`, height: `${box}mm`, padding: `${quiet}mm` }}>
