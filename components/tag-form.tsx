@@ -433,9 +433,9 @@ export function TagForm() {
         void save();
       }}
       onKeyDown={onKeyDown}
-      className="mx-auto grid max-w-7xl gap-6 lg:grid-cols-[minmax(0,1fr)_260px]"
+      className={cn("mx-auto grid max-w-7xl gap-6 lg:grid-cols-[minmax(0,1fr)_260px]", v2 && "tag-v2 max-lg:gap-3")}
     >
-      <div className="space-y-6">
+      <div className={cn("space-y-6", v2 && "max-lg:space-y-3")}>
         {/* ---------------------------------------------------- session */}
         <Card>
           <CardHeader className="pb-3">
@@ -566,7 +566,7 @@ export function TagForm() {
           <CardContent className="space-y-5">
             <input ref={photoRef} type="file" accept="image/*" capture="environment" hidden onChange={onPhoto} />
             {!outlet && (
-              <p className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">No photo here. Once the tag is printed the garment goes to the photography station, where its pictures are taken against the SKU (Photos in the menu).</p>
+              <p className="hint rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">No photo here. Once the tag is printed the garment goes to the photography station, where its pictures are taken against the SKU (Photos in the menu).</p>
             )}
 
             <div className="grid gap-4 sm:grid-cols-2">
@@ -752,7 +752,7 @@ export function TagForm() {
       </div>
 
       {/* --------------------------------------------------------- price */}
-      <div className="space-y-4 lg:sticky lg:top-6 lg:self-start max-lg:sticky max-lg:bottom-0 max-lg:z-10 max-lg:-mx-4 max-lg:border-t max-lg:bg-background max-lg:p-4">
+      <div className={cn("lg:sticky lg:top-6 lg:self-start", v2 ? "max-lg:grid max-lg:grid-cols-2 max-lg:gap-3 lg:space-y-4" : "space-y-4 max-lg:sticky max-lg:bottom-0 max-lg:z-10 max-lg:-mx-4 max-lg:border-t max-lg:bg-background max-lg:p-4")}>
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center justify-between text-sm">
@@ -776,7 +776,7 @@ export function TagForm() {
             )}
 
             {price && !price.restricted && price.markdowns?.length ? (
-              <dl className="space-y-0.5 border-t pt-2 text-xs">
+              <dl className={cn("space-y-0.5 border-t pt-2 text-xs", v2 && "max-lg:hidden")}>
                 {price.markdowns.map((m) => (
                   <div key={m.stage} className="flex justify-between">
                     <dt className="text-muted-foreground">{MARKDOWN_LABELS[m.stage] ?? m.stage}</dt>
@@ -787,7 +787,7 @@ export function TagForm() {
             ) : null}
 
             {price && !price.restricted && (
-              <dl className="space-y-0.5 border-t pt-2 text-xs">
+              <dl className={cn("space-y-0.5 border-t pt-2 text-xs", v2 && "max-lg:hidden")}>
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Landed cost</dt>
                   <dd className="tabular-nums">{pkr(price.landed_cost ?? 0)}</dd>
@@ -895,7 +895,7 @@ function Field({ label, hint, hintTone, small, children }: { label: string; hint
     <div className="grid min-w-0 content-start gap-1.5">
       <Label className={cn(small && "text-xs")}>{label}</Label>
       {children}
-      {hint && <p className={cn("text-xs", hintTone === "warn" ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")}>{hint}</p>}
+      {hint && <p className={cn("hint text-xs", hintTone === "warn" ? "hint-warn text-amber-600 dark:text-amber-400" : "text-muted-foreground")}>{hint}</p>}
     </div>
   );
 }
@@ -921,7 +921,7 @@ function ButtonGroup<T extends string>({ label, hint, options, value, onChange, 
           </Button>
         ))}
       </div>
-      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+      {hint && <p className="hint text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
 }
