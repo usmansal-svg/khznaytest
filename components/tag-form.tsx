@@ -495,11 +495,22 @@ export function TagForm() {
           <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-base">Garment</CardTitle></CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <ButtonGroup label="Season" hint="Shows that season's catalogue; goes into the SKU and the Shopify tags" options={SEASON_OPTIONS} value={season} onChange={setSeason} />
-            <Field label="Wearer">
-              <select className={selectClass} value={wearer} onChange={(e) => setWearer(e.target.value as Wearer)}>
-                {WEARER_OPTIONS.map((w) => <option key={w} value={w}>{WEARER_LABELS[w]}</option>)}
-              </select>
-            </Field>
+            <div className="grid min-w-0 content-start gap-1.5 sm:col-span-2 lg:col-span-1">
+              <Label>Wearer</Label>
+              <div className="flex flex-wrap items-center gap-2">
+                {(["men", "women", "unisex"] as Wearer[]).map((w) => (
+                  <Button key={w} type="button" size="sm" variant={wearer === w ? "default" : "outline"} onClick={() => setWearer(w)} className={chip}>{w === "unisex" ? "Unisex" : WEARER_LABELS[w]}</Button>
+                ))}
+                <select
+                  className={cn(selectClass, "h-11 w-auto md:h-8 md:text-xs", !["men", "women", "unisex"].includes(wearer) ? "border-foreground font-semibold" : "text-muted-foreground")}
+                  value={["men", "women", "unisex"].includes(wearer) ? "" : wearer}
+                  onChange={(e) => { if (e.target.value) setWearer(e.target.value as Wearer); }}
+                >
+                  <option value="">Children…</option>
+                  {WEARER_OPTIONS.filter((w) => !["men", "women", "unisex"].includes(w)).map((w) => <option key={w} value={w}>{WEARER_LABELS[w]}</option>)}
+                </select>
+              </div>
+            </div>
             <Field label="Find a garment type" hint="Shortcut — type a few letters, e.g. crop, jeans">
               <div className="relative">
                 <Input value={find} onChange={(e) => setFind(e.target.value)} placeholder="Search sub-categories…" autoComplete="off" onKeyDown={(e) => { if (e.key === "Enter" && hits[0]) { e.preventDefault(); e.stopPropagation(); pick(hits[0]); } }} />
