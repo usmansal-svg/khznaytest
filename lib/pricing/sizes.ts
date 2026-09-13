@@ -26,8 +26,11 @@ export function sizeSeriesFor(sub: { name: string; measure_type: string } | null
     if (isKids) return [{ code: "kids", label: "Age", sizes: kidsLabels }, LETTERS];
     if (!sub) return [LETTERS, WAIST];
     const name = sub.name.toLowerCase();
-    const isShirt = /button-down|dress shirt|formal shirt/.test(name) || (/\bshirt\b/.test(name) && !/t-shirt|tee|polo|sweat|sports/.test(name));
-    if (isShirt) return [COLLAR, LETTERS];
+    // Formal shirts are sold by collar; casual, denim, flannel and the like by letter, with collar one tap away.
+    const isFormalShirt = /button-down|dress shirt|formal shirt|tuxedo shirt/.test(name);
+    const isShirt = /\bshirt\b/.test(name) && !/t-shirt|tee|polo|sweat|sports|night|under/.test(name);
+    if (isFormalShirt) return [COLLAR, LETTERS];
+    if (isShirt) return [LETTERS, COLLAR];
     if (sub.measure_type === "bottom") return [WAIST, LETTERS];
     if (sub.measure_type === "dress") return [LETTERS, UK];
     return [LETTERS, WAIST];
