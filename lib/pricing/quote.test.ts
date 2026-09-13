@@ -116,7 +116,4 @@ describe("price quote", () => {
     assert.ok(r.warnings!.some((w) => /unknown brand/i.test(w)));
   });
 
-  it("flags high-value items for QC review", () => {
-    assert.ok(q("wmf-leather-jacket", { brand: "Zara", cost: 8000 }).warnings!.some((w) => /QC review/i.test(w)));
-  });
 });

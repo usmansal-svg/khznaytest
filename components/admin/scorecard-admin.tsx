@@ -37,6 +37,11 @@ export function ScorecardAdmin() {
   const [showTargets, setShowTargets] = useState(false);
   const loadPeople = useCallback(async () => { const r = await fetch("/api/admin/staff"); const j = await r.json(); if (r.ok) setPeople((j.staff as typeof people).filter((p) => p.active && ["tagger", "photographer", "qc_senior"].includes(p.role))); }, []);
   useEffect(() => { void loadPeople(); }, [loadPeople]);
+  async function saveDefault(v: number) {
+    const cur = await (await fetch("/api/admin/settings")).json();
+    const r = await fetch("/api/admin/settings", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ settings: { ...cur.settings, defaultDailyTarget: v }, note: `Default daily target ${v} (from the Scorecard)` }) });
+    const j = await r.json(); setMsg(r.ok ? `Default target is now ${v} garments a day.` : j.error); void load();
+  }
   async function saveTarget(id: number, v: number | null) {
     const r = await fetch("/api/admin/staff", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, daily_target: v }) });
     const j = await r.json(); setMsg(r.ok ? "Target saved." : j.error); void loadPeople(); void load();
@@ -51,7 +56,9 @@ export function ScorecardAdmin() {
       {msg && <p className="text-sm text-muted-foreground">{msg}</p>}
       <Card><CardContent className="pt-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div><span className="font-semibold">Daily targets</span> <span className="text-sm text-muted-foreground">· garments per day per person; blank means the default of {data?.default_target ?? "—"} from Pricing</span></div>
+          <div className="flex flex-wrap items-center gap-2"><span className="font-semibold">Daily targets</span> <span className="text-sm text-muted-foreground">· garments per day per person; blank means the default</span>
+            <label className="flex items-center gap-1.5 text-sm text-muted-foreground">Default<Input type="number" min="1" step="5" key={data?.default_target} defaultValue={data?.default_target ?? ""} onBlur={(e) => { const v = Number(e.target.value); if (v > 0 && v !== data?.default_target) void saveDefault(v); }} className="h-8 w-20" /></label>
+          </div>
           <Button size="sm" variant="outline" onClick={() => setShowTargets((v) => !v)}>{showTargets ? "Hide" : `Set targets (${people.length})`}</Button>
         </div>
         {showTargets && (

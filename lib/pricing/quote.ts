@@ -117,9 +117,7 @@ export function quote(input: QuoteInput, ctx: PricingContext): Quote {
   // (or by hand at the senior's price). Only an ultra-luxury brand blocks.
   const blockReason = rejected ? undefined : result.blockReason;
 
-  if (!blockReason && !rejected && result.price > ctx.settings.highValueThreshold) {
-    warnings.push(`Above Rs ${ctx.settings.highValueThreshold.toLocaleString()} — goes to the QC review queue.`);
-  }
+
   if (!blockReason && !rejected && subCategory.marketCeiling != null && result.price > subCategory.marketCeiling) {
     warnings.push(`Above the market ceiling of Rs ${subCategory.marketCeiling.toLocaleString()} for ${subCategory.name}.`);
   }

@@ -44,13 +44,13 @@ Managers add staff at **Admin → Staff** (name, role, home outlet, PIN, daily t
 | Print tag | `/items/[sku]/print` · `/print?skus=…` | tagger+ | One tag, or a whole session's tags in one print job |
 | Transfers | `/transfers` | QC senior+, outlet manager | Pack → dispatch → receive (scan-check) → reconcile (§7) |
 | QC | `/qc` | QC senior+ | Review held garments: approve or correct the tagging (§8) |
-| Scorecard | `/admin/scorecard` | manager+ | Daily targets per person, and the monthly KPIs for everyone: taggers, photographers, QC reviewers; finalise scores (§8.1) |
+| Scorecard | `/admin/scorecard` | manager+ | Daily targets per person and the default for everyone, and the monthly KPIs for everyone: taggers, photographers, QC reviewers; finalise scores (§8.1) |
 | Lots | `/lots` | manager+ | Read-only: lot number, description, quantity, tagged so far (§6). Purchasing lives in the commercial software |
 | Dashboard | `/dashboard` | manager+ | The founder's view (§10) |
 | Catalogue | `/admin/catalogue` | manager+ | The catalogue as a tree, gender → category → sub-category, each node showing the Shopify tag it produces (`Men`, `Men Shirts`, `Men Formal Shirt`); add, rename, delete, hand-set tag, season (summer / winter / all — decides which tag form offers it; moved here from Pricing 13 Sep), girls- or boys-only for child bands (delete only when nothing references it). New sub-categories copy cost, weight, profile and value index from a sibling. Added 12 Sep for the website menu; seeded the same day to the tree in `docs/SHOPIFY-CATALOGUE.md` (Men 13 categories, Women 17, Kids 8; the old Heavy/Light and Men/Women-prefixed names switched off or renamed) |
 | Pricing | `/admin/pricing` | manager+ | Numbers only since 13 Sep — categories and sub-categories are created on the Catalogue screen (one shared list; both screens edit the same tables). | Constants, markdown ladder, selling profiles, grades, sub-categories, history (§4) |
 | Brands | `/admin/brands` | manager+ | Quick-pick list for the tag form; three tier columns; new-from-tagger tray |
-| Settings | `/admin/settings` | manager+ | Tabs: **Staff** (names, roles, PINs, home outlet), **Outlets** (names, cities, add, switch off), **Shopify** (connection, outlet → Shopify location, order webhook), **System** (live connection checks; also public at `/health`). Daily targets moved to the Scorecard (12 Sep) |
+| Settings | `/admin/settings` | manager+ | Tabs: **Staff** (names, roles, PINs, home outlet), **Outlets** (names, cities, add, switch off), **Shopify** (connection, outlet → Shopify location, order webhook), **System** (live connection checks; also public at `/health`). Daily targets moved to the Scorecard (12 Sep); the default daily target too (13 Sep) |
 
 The public pricing demo at `/price` remains open and should be closed before real stock.
 
@@ -279,6 +279,8 @@ Until the separate POS exists, the outlets sell on **Shopify POS**, which can on
 ---
 
 ## 15. Decisions worth remembering
+
+- **High-value threshold retired (13 Sep):** no garment is sent to QC for being expensive; QC sampling is random plus manual set-aside. The constant is gone from Pricing and the Excel sheet.
 
 - **Markdowns round** (25/50/75 → 1,390 / 890 / 490 on a 1,790 shirt); the original spec's floor example was an error, corrected by spec v2.
 - **Standard cost per sub-category, not scale weight**, sets the shelf price (10 Sep). Weight-based pricing remains in the engine for lot P&L.
