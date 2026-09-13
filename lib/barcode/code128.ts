@@ -67,7 +67,14 @@ export type SvgOptions = {
   showText?: boolean;
   /** Font size for the text. Default 8. */
   fontSize?: number;
+  /** Let CSS stretch the bars to any box (preserveAspectRatio none), so a width set in printer dots stays exact. */
+  stretch?: boolean;
 };
+
+/** Modules across the whole symbol including both quiet zones: the width to give it, in printer dots, for crisp one-dot bars. */
+export function widthModules(text: string, quietZone = 10): number {
+  return modules(text).reduce((a, b) => a + b, 0) + quietZone * 2;
+}
 
 /**
  * A self-contained SVG. Bars are one path so the file stays tiny and prints
@@ -98,7 +105,7 @@ export function toSvg(text: string, options: SvgOptions = {}): string {
     : "";
 
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height + textHeight}" width="${width}" height="${height + textHeight}" shape-rendering="crispEdges">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height + textHeight}" width="${width}" height="${height + textHeight}" shape-rendering="crispEdges"${options.stretch ? ' preserveAspectRatio="none"' : ""}>` +
     `<rect width="${width}" height="${height + textHeight}" fill="#fff"/>` +
     `<path d="${rects.join("")}" fill="#000"/>` +
     label +

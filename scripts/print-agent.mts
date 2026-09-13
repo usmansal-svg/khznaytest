@@ -22,6 +22,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { TAG_FORMATS, TagFaces, tagCss, type TagFormat, type TagItem } from "../components/tag-faces";
 import { toSvg } from "../lib/barcode/code128";
+import { qrSvg } from "../lib/barcode/qr";
 import { loadRareReasons, rareTagLine } from "../lib/pricing/rare-reasons";
 
 const run = promisify(execFile);
@@ -52,10 +53,15 @@ async function loadItem(sku: string): Promise<TagItem> {
   };
 }
 
-function html(item: TagItem, format: TagFormat): string {
-  const svg = toSvg(item.sku, { moduleWidth: 1, height: 36, fontSize: 7 });
+async function html(item: TagItem, format: TagFormat): Promise<string> {
+  const uri = (svg: string) => `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+  const full = uri(toSvg(item.sku, { moduleWidth: 1, height: 36, fontSize: 7 }));
+  const bare = uri(toSvg(item.sku, { moduleWidth: 1, height: 36, showText: false, quietZone: 6, stretch: true }));
+  const qr = uri(await qrSvg(item.sku));
   const body = renderToStaticMarkup(createElement(TagFaces, { item, format }))
-    .replace(/src="\/api\/tags\/[^"]*\/barcode"/g, `src="data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}"`);
+    .replace(/src="\/api\/tags\/[^"]*\/barcode\?bare=1"/g, `src="${bare}"`)
+    .replace(/src="\/api\/tags\/[^"]*\/barcode"/g, `src="${full}"`)
+    .replace(/src="\/api\/tags\/[^"]*\/qr"/g, `src="${qr}"`);
   return `<!doctype html><html><head><meta charset="utf-8"><script src="${TAILWIND}"></script><style>${tagCss(format)} body{margin:0}</style></head><body>${body}</body></html>`;
 }
 
@@ -64,7 +70,7 @@ async function printJob(job: { id: number; sku: string; format: string; copies: 
   const paper = TAG_FORMATS.find((f) => f.code === format)!;
   const item = await loadItem(job.sku);
   const file = path.join(tmp, `${job.id}-${job.sku}`);
-  fs.writeFileSync(`${file}.html`, html(item, format));
+  fs.writeFileSync(`${file}.html`, await html(item, format));
   await run(CHROME, ["--headless=new", "--disable-gpu", "--no-pdf-header-footer", "--virtual-time-budget=4000", `--print-to-pdf=${file}.pdf`, `file://${file}.html`], { timeout: 30_000 });
   const media = `Custom.${Math.round((paper.w * 72) / 25.4)}x${Math.round((paper.h * 72) / 25.4)}`;
   await run("lp", ["-d", QUEUE, "-n", String(job.copies), "-o", `media=${media}`, "-t", `Tag ${job.sku}`, `${file}.pdf`], { timeout: 30_000 });

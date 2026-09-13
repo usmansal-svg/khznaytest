@@ -1,5 +1,8 @@
 "use client";
 
+import { widthModules } from "@/lib/barcode/code128";
+import { DOT_MM, PRINT_OFFSET_MM } from "@/lib/tag-formats";
+
 /**
  * The 50 × 90 mm hang tag — single-sided, one page per garment.
  *
@@ -145,15 +148,20 @@ function TagLabel({ item }: { item: TagItem }) {
 }
 
 /**
- * The 2 × 1 in (50.8 × 25.4 mm) label: brand and size on one line, the price,
- * then the barcode with the SKU. No garment type, no colour-sticker space —
- * there is no room. Nothing under 5.5 pt at 203 dpi.
+ * The 2 × 1 in (50.8 × 25.4 mm) label. Brand and size, garment type and
+ * price, then a one-dot-per-module Code 128 (the widest that fits a
+ * 16-character SKU on this label, crisp because its width is whole printer
+ * dots) beside a 10 mm QR code that phone cameras read easily. The SKU is
+ * printed once, under the bars. Nothing under 5.5 pt at 203 dpi.
  */
 function TagLabelSmall({ item }: { item: TagItem }) {
   const rare = Boolean(item.is_rare);
+  const left = PRINT_OFFSET_MM + 1.5;
+  const barW = widthModules(item.sku, 6) * DOT_MM; // ≈ 28 mm
+  const qr = 84 * DOT_MM; // 21 modules × 4 dots ≈ 10.5 mm
   return (
     <div className="tag shadow-lg">
-      <div className="px-[2mm] pt-[1.2mm]">
+      <div style={{ paddingLeft: `${left}mm`, paddingRight: "1.5mm", paddingTop: "1.2mm" }}>
         <div className="flex items-baseline justify-between gap-[2mm]">
           <div className="truncate text-[8pt] font-black leading-tight">{rare ? "★ " : ""}{item.brand || "Unbranded"}</div>
           <div className="shrink-0 text-[8pt] font-black leading-tight">{item.size_label ?? "—"}</div>
@@ -163,10 +171,14 @@ function TagLabelSmall({ item }: { item: TagItem }) {
           <div className="shrink-0 text-[11pt] font-black leading-none tabular-nums">{rs(item.list_price)}</div>
         </div>
       </div>
-      <div className="absolute bottom-[1mm] left-[2mm] right-[2mm]">
+      <div className="absolute" style={{ left: `${left}mm`, bottom: "3.4mm", width: `${barW}mm`, height: "9mm" }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={`/api/tags/${encodeURIComponent(item.sku)}/barcode`} alt={item.sku} className="w-full" style={{ height: "7mm", objectFit: "contain" }} />
-        <div className="text-center font-mono text-[5.5pt] font-semibold tracking-wide">{item.sku}</div>
+        <img src={`/api/tags/${encodeURIComponent(item.sku)}/barcode?bare=1`} alt={item.sku} className="block" style={{ width: `${barW}mm`, height: "9mm" }} />
+        <div className="text-center font-mono text-[5.5pt] font-semibold leading-tight tracking-wide">{item.sku}</div>
+      </div>
+      <div className="absolute" style={{ left: `${left + barW + 3}mm`, bottom: "1.5mm", width: `${qr}mm`, height: `${qr}mm` }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={`/api/tags/${encodeURIComponent(item.sku)}/qr`} alt="" className="block" style={{ width: `${qr}mm`, height: `${qr}mm` }} />
       </div>
     </div>
   );
