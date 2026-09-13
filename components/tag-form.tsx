@@ -565,7 +565,7 @@ export function TagForm() {
                           {b.logo_url ? (
                             <span className={cn("flex h-6 w-12 items-center justify-center overflow-hidden rounded bg-white", on && "ring-2 ring-primary-foreground/60")}>
                               {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={b.logo_url} alt={b.name} className="max-h-5 max-w-10 object-contain" />
+                              <img src={b.logo_url} alt={b.name} className="max-h-7 max-w-14 object-contain" />
                             </span>
                           ) : (
                             b.name
