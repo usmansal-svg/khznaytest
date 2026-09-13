@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Camera, Printer, RotateCcw, Save } from "lucide-react";
 import { downscale, uploadPhoto } from "@/lib/photos";
@@ -15,7 +15,7 @@ import { GRADE_RANK, type ColourTag, type GradeCode } from "@/lib/pricing/consta
 import { ADULT_SIZES, KIDS_SIZES } from "@/lib/pricing/kids-sizes";
 import { sizeSeriesFor } from "@/lib/pricing/sizes";
 import { rareTagLine } from "@/lib/pricing/rare-reasons";
-import { GENDER_LABELS, type Gender, type Season, type Wearer, WEARER_OPTIONS, WEARER_LABELS, WEARER_GENDERS, isChildWearer } from "@/lib/pricing/sku";
+import { GENDER_LABELS, type Gender, type Season, type Wearer, WEARER_LABELS, WEARER_GENDERS, isChildWearer } from "@/lib/pricing/sku";
 import { SLEEVE_TYPES, measurementFields, type MeasureType } from "@/lib/pricing/sub-categories";
 
 /* ---------------------------------------------------------------- types */
@@ -115,6 +115,7 @@ export function TagForm() {
   const [colour, setColour] = useState("");
   const [grade, setGrade] = useState<GradeCode>("premium");
   const [heavy, setHeavy] = useState(false);
+  const [kidsOpen, setKidsOpen] = useState(false);
   const [measure, setMeasure] = useState<Record<string, string>>({});
   const [sleeve, setSleeve] = useState<string>("Half sleeve");
   const [adjustPct, setAdjustPct] = useState(0);
@@ -407,6 +408,8 @@ export function TagForm() {
   if (!ref) return <p className="text-muted-foreground">Loading…</p>;
 
   const chip = "h-11 px-4 text-sm md:h-8 md:px-3 md:text-xs";
+  const isChild = !["men", "women", "unisex"].includes(wearer);
+  const isGirl = /_girl$/.test(wearer);
   return (
     <>
     {qcHold && (
@@ -501,15 +504,22 @@ export function TagForm() {
                 {(["men", "women", "unisex"] as Wearer[]).map((w) => (
                   <Button key={w} type="button" size="sm" variant={wearer === w ? "default" : "outline"} onClick={() => setWearer(w)} className={chip}>{w === "unisex" ? "Unisex" : WEARER_LABELS[w]}</Button>
                 ))}
-                <select
-                  className={cn(selectClass, "h-11 w-auto md:h-8 md:text-xs", !["men", "women", "unisex"].includes(wearer) ? "border-foreground font-semibold" : "text-muted-foreground")}
-                  value={["men", "women", "unisex"].includes(wearer) ? "" : wearer}
-                  onChange={(e) => { if (e.target.value) setWearer(e.target.value as Wearer); }}
-                >
-                  <option value="">Children…</option>
-                  {WEARER_OPTIONS.filter((w) => !["men", "women", "unisex"].includes(w)).map((w) => <option key={w} value={w}>{WEARER_LABELS[w]}</option>)}
-                </select>
+                <button type="button" onClick={() => setKidsOpen((o) => !o)} className={cn("inline-flex items-center gap-1 rounded-md border px-3 text-sm md:text-xs", chip.replace(/px-\S+/g, ""), isChild ? (isGirl ? "border-pink-500 bg-pink-50 font-semibold text-pink-800 dark:bg-pink-950 dark:text-pink-200" : "border-sky-500 bg-sky-50 font-semibold text-sky-800 dark:bg-sky-950 dark:text-sky-200") : "text-muted-foreground")}>
+                  {isChild ? `${isGirl ? "♀" : "♂"} ${WEARER_LABELS[wearer]}` : "Children…"}
+                </button>
               </div>
+              {kidsOpen && (
+                <div className="grid grid-cols-2 gap-2 rounded-lg border bg-background p-2 sm:max-w-md">
+                  <div className="text-center text-[11px] font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">♂ Boys</div>
+                  <div className="text-center text-[11px] font-semibold uppercase tracking-wide text-pink-700 dark:text-pink-300">♀ Girls</div>
+                  {([["teen_boy", "teen_girl"], ["kids_boy", "kids_girl"], ["toddler_boy", "toddler_girl"], ["infant_boy", "infant_girl"]] as [Wearer, Wearer][]).map(([b, g]) => (
+                    <Fragment key={b}>
+                      <Button type="button" size="sm" variant="outline" onClick={() => { setWearer(b); setKidsOpen(false); }} className={cn(chip, "justify-start border-sky-300 text-sky-900 hover:bg-sky-50 dark:border-sky-800 dark:text-sky-200 dark:hover:bg-sky-950", wearer === b && "bg-sky-600 text-white hover:bg-sky-600 dark:bg-sky-600 dark:text-white")}>♂ {WEARER_LABELS[b]}</Button>
+                      <Button type="button" size="sm" variant="outline" onClick={() => { setWearer(g); setKidsOpen(false); }} className={cn(chip, "justify-start border-pink-300 text-pink-900 hover:bg-pink-50 dark:border-pink-800 dark:text-pink-200", wearer === g && "bg-pink-600 text-white hover:bg-pink-600 dark:bg-pink-600 dark:text-white")}>♀ {WEARER_LABELS[g]}</Button>
+                    </Fragment>
+                  ))}
+                </div>
+              )}
             </div>
             <Field label="Find a garment type" hint="Shortcut — type a few letters, e.g. crop, jeans">
               <div className="relative">
