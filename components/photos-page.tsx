@@ -1,5 +1,11 @@
 "use client";
 
+/** The browser's Shape Detection API, not yet in TypeScript's DOM types. */
+type BarcodeDetectorCtor = {
+  new (options?: { formats: string[] }): { detect(source: HTMLVideoElement): Promise<{ rawValue: string }[]> };
+  getSupportedFormats(): Promise<string[]>;
+};
+
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, Check, ChevronLeft, ChevronRight, LogOut, RefreshCw, RotateCw, ScanLine, Search, Star, Trash2, UserRound, X } from "lucide-react";
@@ -132,13 +138,40 @@ export function PhotosPage() {
     try {
       await openCamera();
       setMode("scan");
-      const { BrowserMultiFormatReader } = await import("@zxing/browser");
-      const reader = new BrowserMultiFormatReader();
-      const controls = await reader.decodeFromVideoElement(videoRef.current!, (result) => {
-        const text = result?.getText()?.trim().toUpperCase();
-        if (text && /^KHZ-/.test(text)) { controls.stop(); scanStop.current = null; void pick(text); }
-      });
-      scanStop.current = () => controls.stop();
+      const video = videoRef.current!;
+      const found = (raw: string | undefined | null) => {
+        const text = raw?.trim().toUpperCase();
+        if (!text || !/^KHZ-/.test(text)) return false;
+        scanStop.current?.(); scanStop.current = null; void pick(text); return true;
+      };
+      // The browser's own detector (Safari 17+, Chrome) is fastest: it runs
+      // on the GPU and reads a QR at any angle. ZXing is the fallback, held
+      // to QR and Code 128 only and asked to look ten times a second — its
+      // default is twice a second across every format, which felt broken.
+      const Native = (window as unknown as { BarcodeDetector?: BarcodeDetectorCtor }).BarcodeDetector;
+      let supported: string[] = [];
+      try { supported = Native ? await Native.getSupportedFormats() : []; } catch { supported = []; }
+      if (Native && supported.includes("qr_code")) {
+        const det = new Native({ formats: ["qr_code", "code_128"].filter((f) => supported.includes(f)) });
+        let live = true;
+        scanStop.current = () => { live = false; };
+        const tick = async () => {
+          if (!live) return;
+          if (video.readyState >= 2) {
+            try { const codes = await det.detect(video); for (const c of codes) if (found(c.rawValue)) return; } catch { /* a frame can fail to decode; try the next */ }
+          }
+          setTimeout(tick, 80);
+        };
+        void tick();
+      } else {
+        const [{ BrowserMultiFormatReader }, { BarcodeFormat, DecodeHintType }] = await Promise.all([import("@zxing/browser"), import("@zxing/library")]);
+        const hints = new Map();
+        hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.QR_CODE, BarcodeFormat.CODE_128]);
+        hints.set(DecodeHintType.TRY_HARDER, true);
+        const reader = new BrowserMultiFormatReader(hints, { delayBetweenScanAttempts: 100, delayBetweenScanSuccess: 300 });
+        const controls = await reader.decodeFromVideoElement(video, (result) => { if (result && found(result.getText())) controls.stop(); });
+        scanStop.current = () => controls.stop();
+      }
     } catch (e) {
       setError(e instanceof Error ? `Camera: ${e.message}. On iPhone, allow the camera for this site (Settings → Safari → Camera).` : "Camera unavailable.");
       setMode("home");
@@ -493,8 +526,8 @@ export function PhotosPage() {
             {flash && <div className="absolute inset-0 bg-white/80" />}
             {mode === "scan" && (
               <>
-                <div className="pointer-events-none absolute inset-x-[12%] top-1/2 h-24 -translate-y-1/2 rounded-md border-2 border-white/80" />
-                <div className="absolute bottom-3 left-0 right-0 text-center text-sm font-medium text-white drop-shadow">Point at the barcode on the tag</div>
+                <div className="pointer-events-none absolute left-1/2 top-1/2 size-[55%] -translate-x-1/2 -translate-y-1/2 rounded-lg border-2 border-white/80" />
+                <div className="absolute bottom-3 left-0 right-0 text-center text-sm font-medium text-white drop-shadow">Point at the QR code on the tag</div>
               </>
             )}
             {mode === "shoot" && !camOn && (
