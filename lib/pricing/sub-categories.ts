@@ -19,10 +19,10 @@ import type { ProfileCode } from "./constants";
 export type MeasureType = "top" | "bottom" | "dress" | "outer" | "kids_top" | "kids_bottom";
 
 export const MEASUREMENT_FIELDS: Readonly<Record<MeasureType, readonly string[]>> = {
-  top: ["Chest", "Length", "Shoulder"],
-  bottom: ["Waist", "Length", "Inseam"],
+  top: ["Chest", "Length"],
+  bottom: ["Waist", "Length"],
   dress: ["Bust", "Waist", "Length"],
-  outer: ["Chest", "Length", "Shoulder"],
+  outer: ["Chest", "Length"],
   kids_top: ["Chest", "Length"],
   kids_bottom: ["Waist", "Length"],
 };
