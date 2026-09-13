@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -94,7 +94,7 @@ export function PricingAdmin() {
         <div>
           <h1 className="text-2xl font-bold">Pricing</h1>
           <p className="text-sm text-muted-foreground">
-            Settings version <span className="font-mono font-semibold">{loaded.version}</span> · source: {loaded.source}. Changing anything here reprices every new tag; items already tagged keep their version.
+            <span className="mr-2 rounded-full border px-2 py-0.5 font-mono text-xs">v{loaded.version}</span>Changes reprice every new tag; garments already tagged keep their version.
           </p>
         </div>
         <PricingSheetTools />
@@ -114,13 +114,12 @@ export function PricingAdmin() {
         <TabsContent value="constants" className="grid gap-6 lg:grid-cols-[1fr_420px]">
           <div className="space-y-4">
             <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-base">Markdown ladder</CardTitle></CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Markdown ladder</CardTitle></CardHeader>
               <CardContent className="grid gap-4 sm:grid-cols-3">
                 {(["Markdown 1 · 25% OFF sticker", "Markdown 2 · HALF PRICE sticker", "Final · LAST CHANCE sticker"] as const).map((label, i) => (
                   <div key={label} className="grid gap-1.5">
-                    <Label htmlFor={`md${i}`}>{label} <span className="font-normal text-muted-foreground">· % off</span></Label>
+                    <Label htmlFor={`md${i}`} className="text-xs text-muted-foreground" title={i === 0 ? "One colour back." : i === 1 ? "Two colours back." : "Three colours back; four is pulled."}>{label}</Label>
                     <Input id={`md${i}`} type="number" step="1" min="1" max="99" value={Math.round(draft.ladderDepths[i] * 100)} onChange={(e) => { const d = [...draft.ladderDepths] as [number, number, number]; d[i] = Number(e.target.value) / 100; setDraft({ ...draft, ladderDepths: d }); }} className={cn(draft.ladderDepths[i] !== loaded.settings.ladderDepths[i] && "border-amber-500")} />
-                    <p className="text-xs text-muted-foreground">{i === 0 ? "One colour back." : i === 1 ? "Two colours back." : "Three colours back; four is pulled."}</p>
                   </div>
                 ))}
                 <p className="text-xs text-muted-foreground sm:col-span-3">Depths feed the blended discount, so a change moves the multiple and every price — not just the stickers. Watch the preview.</p>
@@ -128,24 +127,27 @@ export function PricingAdmin() {
             </Card>
             {groups.map((g) => (
               <Card key={g}>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">{g}</CardTitle>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{g}</CardTitle>
                 </CardHeader>
-                <CardContent className="grid gap-4 sm:grid-cols-2">
+                <CardContent className="grid gap-x-6 gap-y-3 sm:grid-cols-2 xl:grid-cols-3">
                   {FIELDS.filter((f) => f.group === g).map((f) => (
-                    <div key={f.key} className="grid gap-1.5">
-                      <Label htmlFor={f.key}>
-                        {f.label} {f.unit && <span className="font-normal text-muted-foreground">· {f.unit}</span>}
+                    <div key={f.key} className="grid gap-1">
+                      <Label htmlFor={f.key} className="flex items-center gap-1.5 text-xs text-muted-foreground" title={f.help}>
+                        {f.label}
+                        <span className="grid size-4 place-items-center rounded-full border text-[10px] leading-none" aria-hidden>i</span>
                       </Label>
-                      <Input
-                        id={f.key}
-                        type="number"
-                        step={f.step}
-                        value={String(draft[f.key])}
-                        onChange={(e) => setDraft({ ...draft, [f.key]: Number(e.target.value) })}
-                        className={cn(draft[f.key] !== loaded.settings[f.key] && "border-amber-500")}
-                      />
-                      <p className="text-xs text-muted-foreground">{f.help}</p>
+                      <div className="relative">
+                        <Input
+                          id={f.key}
+                          type="number"
+                          step={f.step}
+                          value={String(draft[f.key])}
+                          onChange={(e) => setDraft({ ...draft, [f.key]: Number(e.target.value) })}
+                          className={cn("h-10 pr-24 text-base tabular-nums", draft[f.key] !== loaded.settings[f.key] && "border-amber-500 bg-amber-50 dark:bg-amber-950/40")}
+                        />
+                        {f.unit && <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground">{f.unit}</span>}
+                      </div>
                     </div>
                   ))}
                   {g === "Control" && (
@@ -346,7 +348,8 @@ function SubCategoryEditor() {
     (skip === "gender" || !filters.gender.size || filters.gender.has(r.gender)) &&
     (skip === "category" || !filters.category.size || filters.category.has(r.category)) &&
     (skip === "name" || !filters.name.size || filters.name.has(r.name));
-  const visible = rows.filter((r) => pass(r) && (showHidden || r.active));
+  const gOrder = (g: string) => GENDER_OPTIONS.findIndex((o) => o.code === g);
+  const visible = rows.filter((r) => pass(r) && (showHidden || r.active)).sort((a, b) => gOrder(a.gender) - gOrder(b.gender) || a.category.localeCompare(b.category) || a.name.localeCompare(b.name));
   const hiddenCount = rows.filter((r) => !r.active).length;
   // Each list offers the values still reachable under the other two filters, as Excel does.
   const genderValues = [...new Set(rows.filter((r) => pass(r, "gender")).map((r) => r.gender))].sort((a, b) => GENDER_OPTIONS.findIndex((g) => g.code === a) - GENDER_OPTIONS.findIndex((g) => g.code === b));
@@ -373,11 +376,9 @@ function SubCategoryEditor() {
         {filtering && <p className="mb-2 text-xs"><span className="text-muted-foreground">Showing {visible.length} of {rows.length} sub-categories.</span> <button type="button" className="ml-2 underline" onClick={() => setFilters({ gender: new Set(), category: new Set(), name: new Set(), season: new Set() })}>Clear filters</button></p>}
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="text-left text-[11px] uppercase text-muted-foreground">
+            <thead className="sticky top-0 z-10 bg-background text-left text-[11px] uppercase text-muted-foreground shadow-[0_1px_0_0_hsl(var(--border))]">
               <tr>
-                <th className="pb-2"><HeaderFilter label="Gender" values={genderValues} selected={filters.gender} onChange={(v) => setFilters((f) => ({ ...f, gender: v }))} format={(g) => GENDER_OPTIONS.find((o) => o.code === g)?.name ?? g} /></th>
-                <th className="pb-2"><HeaderFilter label="Category" values={categoryValues} selected={filters.category} onChange={(v) => setFilters((f) => ({ ...f, category: v }))} /></th>
-                <th className="pb-2"><HeaderFilter label="Sub-category" values={nameValues} selected={filters.name} onChange={(v) => setFilters((f) => ({ ...f, name: v }))} /></th>
+                <th className="pb-2"><span className="flex flex-wrap items-center gap-2"><HeaderFilter label="Gender" values={genderValues} selected={filters.gender} onChange={(v) => setFilters((f) => ({ ...f, gender: v }))} format={(g) => GENDER_OPTIONS.find((o) => o.code === g)?.name ?? g} /><HeaderFilter label="Category" values={categoryValues} selected={filters.category} onChange={(v) => setFilters((f) => ({ ...f, category: v }))} /><HeaderFilter label="Sub-category" values={nameValues} selected={filters.name} onChange={(v) => setFilters((f) => ({ ...f, name: v }))} /></span></th>
                 <th className="pb-2" title="Cost per piece, Rs, before sales tax">Cost</th>
                 <th className="pb-2" title="Tick the garments that also come heavy (winter wear bought by the kilo). The tag form asks Regular or Heavy for those only. Same website tag either way.">Heavy</th>
                 <th className="pb-2 pl-3 text-right" title="Real margin per garment bought: revenue after markdowns, grade mix, never-sells and rejects, plus bulk recovery, ex tax, against landed cost.">Eff. GP</th>
@@ -396,7 +397,9 @@ function SubCategoryEditor() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {visible.map((r) => {
+              {visible.map((r, idx) => {
+                const groupKey = `${r.gender}|${r.category}`;
+                const newGroup = idx === 0 || `${visible[idx - 1].gender}|${visible[idx - 1].category}` !== groupKey;
                 const e = edits[r.slug] ?? {};
                 const v = { ...r, ...e };
                 const changed = (k: keyof SubRow) => k in e;
@@ -405,10 +408,14 @@ function SubCategoryEditor() {
                 const previewing = Boolean(lv);
                 const num = cn("py-1 pr-2 text-right text-xs tabular-nums", previewing && "text-amber-700 dark:text-amber-400");
                 return (
-                  <tr key={r.slug} className={cn(!v.active && "opacity-50")}>
-                    <td className="py-1 pr-2 text-xs text-muted-foreground">{GENDER_OPTIONS.find((o) => o.code === r.gender)?.name ?? r.gender}</td>
-                    <td className="py-1 pr-2 text-xs">{r.category}</td>
-                    <td className="py-1 pr-2"><Input value={v.name} onChange={(ev) => edit(r.slug, { name: ev.target.value })} className={cn("h-7 w-32 text-xs", changed("name") && "border-amber-500")} /></td>
+                  <Fragment key={r.slug}>
+                  {newGroup && (
+                    <tr className="bg-muted/60">
+                      <td colSpan={14} className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{GENDER_OPTIONS.find((o) => o.code === r.gender)?.name ?? r.gender} <span className="mx-1 opacity-50">›</span> {r.category}</td>
+                    </tr>
+                  )}
+                  <tr className={cn("hover:bg-muted/30", !v.active && "opacity-50")}>
+                    <td className="py-1 pl-2 pr-2"><Input value={v.name} onChange={(ev) => edit(r.slug, { name: ev.target.value })} className={cn("h-7 w-32 text-xs", changed("name") && "border-amber-500")} /></td>
                     <td className="py-1 pr-2"><Input type="number" step="10" min="1" value={v.standard_cost_pkr ?? ""} placeholder="set me" onChange={(ev) => edit(r.slug, { standard_cost_pkr: ev.target.value === "" ? null : Number(ev.target.value) })} className={cn("h-7 w-20 text-xs", changed("standard_cost_pkr") && "border-amber-500", !v.standard_cost_pkr && "border-amber-500")} /></td>
                     <td className="py-1 pr-2">
                       {v.heavy_cost_pkr == null ? (
@@ -440,6 +447,7 @@ function SubCategoryEditor() {
                     <td className={cn(num, "pl-3 pr-3 font-semibold")}>{est?.al_premium != null ? n0(est.al_premium) : "—"}</td>
                     <td className="py-1 font-mono text-[10px] text-muted-foreground">{r.code}</td>
                   </tr>
+                  </Fragment>
                 );
               })}
             </tbody>
