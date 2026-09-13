@@ -11,7 +11,7 @@
 import { NextResponse } from "next/server";
 
 import { requireStaff } from "@/lib/auth/staff";
-import { TAG_FORMATS } from "@/components/tag-faces";
+import { isTagFormat } from "@/lib/tag-formats";
 
 export async function POST(request: Request) {
   const auth = await requireStaff();
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as { skus?: unknown; format?: unknown; copies?: unknown };
   const skus = Array.isArray(body.skus) ? body.skus.map((s) => String(s).trim().toUpperCase()).filter((s) => /^[A-Z0-9-]{3,32}$/.test(s)) : [];
   if (!skus.length) return NextResponse.json({ error: "No SKUs to print." }, { status: 400 });
-  const format = TAG_FORMATS.some((f) => f.code === body.format) ? String(body.format) : "label2x1";
+  const format = isTagFormat(body.format) ? String(body.format) : "label2x1";
   const copies = Math.min(20, Math.max(1, Math.round(Number(body.copies) || 1)));
   const { data: known, error: e1 } = await auth.db.from("items").select("sku").in("sku", skus);
   if (e1) return NextResponse.json({ error: e1.message }, { status: 500 });

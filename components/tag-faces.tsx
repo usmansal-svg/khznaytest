@@ -35,16 +35,10 @@ const rs = (n: number) => `Rs ${Math.round(n).toLocaleString("en-PK")}`;
  * (2 × 1 in for now, 2.5 × 1.5 in, 3 × 2 in once the bigger rolls arrive)
  * plus the 50 × 90 mm hang tag. Remembered per device.
  */
-export type TagFormat = "label2x1" | "label" | "label3x2" | "hang";
-export const TAG_FORMATS: { code: TagFormat; label: string; size: string; w: number; h: number }[] = [
-  { code: "label2x1", label: "2 × 1 in label", size: "50.8 × 25.4 mm", w: 50.8, h: 25.4 },
-  { code: "label", label: "2.5 × 1.5 in label", size: "63.5 × 38.1 mm", w: 63.5, h: 38.1 },
-  { code: "label3x2", label: "3 × 2 in label", size: "76.2 × 50.8 mm", w: 76.2, h: 50.8 },
-  { code: "hang", label: "50 × 90 mm hang tag", size: "50 × 90 mm", w: 50, h: 90 },
-];
-const isFormat = (v: unknown): v is TagFormat => TAG_FORMATS.some((f) => f.code === v);
+export { TAG_FORMATS, type TagFormat } from "@/lib/tag-formats";
+import { TAG_FORMATS, isTagFormat, type TagFormat } from "@/lib/tag-formats";
 export function readTagFormat(): TagFormat {
-  try { const v = localStorage.getItem("khz_tag_format"); if (isFormat(v)) return v; } catch { /* fine */ }
+  try { const v = localStorage.getItem("khz_tag_format"); if (isTagFormat(v)) return v; } catch { /* fine */ }
   return "label2x1";
 }
 export function saveTagFormat(f: TagFormat) { try { localStorage.setItem("khz_tag_format", f); } catch { /* fine */ } }
