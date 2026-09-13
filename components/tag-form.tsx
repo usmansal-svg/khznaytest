@@ -4,6 +4,8 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import Link from "next/link";
 import { Camera, Globe, Printer, RotateCcw, Save, Store } from "lucide-react";
 import { downscale, uploadPhoto } from "@/lib/photos";
+import { queuePrint, readPrintRoute, watchJobs } from "@/lib/print-route";
+import { readTagFormat } from "@/components/tag-faces";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -160,8 +162,17 @@ export function TagForm() {
 
   // Print without leaving the form: the tag page loads in a hidden frame
   // and prints itself (?auto=1). Works with AirPrint on the iPad.
+  const [printNote, setPrintNote] = useState<string | null>(null);
   function printTag(sku: string) {
-    setPrinting(sku);
+    setPrinting(sku); setPrintNote(null);
+    if (readPrintRoute() === "helper") {
+      queuePrint([sku], readTagFormat())
+        .then((jobs) => { setPrintNote("Queued for the label printer…"); return watchJobs(jobs.map((j) => j.id), (js) => { const j = js[0]; if (j?.status === "done") setPrintNote("Printed ✓"); else if (j?.status === "error") setPrintNote(`Print failed: ${j.error ?? "unknown error"}`); }); })
+        .then((jobs) => { if (jobs.length && !jobs.every((j) => j.status === "done" || j.status === "error")) setPrintNote("Still queued: is the helper on the Mac running?"); })
+        .catch((e: Error) => setPrintNote(e.message))
+        .finally(() => setPrinting(null));
+      return;
+    }
     if (printRef.current) printRef.current.src = `/items/${encodeURIComponent(sku)}/print?auto=1&embed=1&t=${Date.now()}`;
   }
 
@@ -800,7 +811,7 @@ export function TagForm() {
                 )}
                 <div className="grid grid-cols-2 gap-2">
                   <Button type="button" variant="outline" className="h-12" onClick={() => printTag(saved.sku)}>
-                    <Printer className="size-4" /> {printing === saved.sku ? "Printing…" : "Print tag"}
+                    <Printer className="size-4" /> {printing === saved.sku ? "Printing…" : "Print tag"}{printNote && <span className="ml-1 text-xs font-normal text-muted-foreground">{printNote}</span>}
                   </Button>
                   {channel === "online" ? (
                     <Button asChild type="button" variant="outline" className="h-12"><Link href={`/items/${saved.sku}`}>Photos & Shopify →</Link></Button>

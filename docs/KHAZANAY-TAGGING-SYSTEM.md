@@ -319,3 +319,13 @@ Until the separate POS exists, the outlets sell on **Shopify POS**, which can on
 ---
 
 *Last updated 10 September 2026, commit `b9ecbe7`.*
+
+## Label printing (14 Sep 2026)
+
+The label printer is a ZYWELL ZY909 (203 dpi thermal, shows on USB as "EML-400L LABEL"). iPads cannot drive it directly, and sharing it from the Mac over AirPrint hides label-sized paper, so tags print through a **queue**:
+
+1. "Print tag" on the tag form or a print page queues a row in `print_jobs` (`POST /api/print-jobs`). The print pages have a per-device **Printer** choice: *Label printer (via the Mac)*, the default, or *This device's print dialog* for AirPrint / a directly attached printer.
+2. The **helper** on the Mac beside the printer (`scripts/print-agent.mts`, installed as the launch agent `com.khazanay.print-agent` by `scripts/install-print-agent.sh`, log in `/tmp/khazanay-print-agent.log`) claims queued jobs every 2 s, renders the same TagFaces component into a PDF with headless Chrome at the chosen paper size, and prints it with `lp` to the CUPS queue `EML_400L_LABEL`.
+3. The screen polls the job and shows *Queued → Printed ✓* or the error. "Still queued" means the helper is not running or the Mac is asleep.
+
+Papers: 2 × 1 in (default for now), 2.5 × 1.5 in, 3 × 2 in, and the 50 × 90 mm hang tag (`components/tag-faces.tsx`). The Mac must stay awake with the printer plugged in; the helper uses `.env.local` for the database and needs Google Chrome.

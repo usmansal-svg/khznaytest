@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 
-import { TAG_FORMATS, TagFaces, readTagFormat, saveTagFormat, tagCss, type TagFormat, type TagItem } from "@/components/tag-faces";
+import { TAG_FORMATS, TagFaces, readTagFormat, tagCss, type TagFormat, type TagItem } from "@/components/tag-faces";
+import { PrintControls } from "@/components/print-controls";
 
 /** One garment's tag, with a Print button; auto-prints with ?auto=1. */
 export function PrintTag({ sku }: { sku: string }) {
@@ -28,13 +29,8 @@ export function PrintTag({ sku }: { sku: string }) {
     <div className="min-h-screen bg-neutral-200 print:bg-white">
       <style>{tagCss(format)}</style>
       {!embed && <div className="no-print flex items-center gap-3 p-4 text-sm">
-        <button onClick={() => window.print()} className="rounded-md bg-black px-4 py-2 font-semibold text-white">Print tag</button>
-        <label className="flex items-center gap-1.5 text-neutral-600">Paper
-          <select value={format} onChange={(e) => { const f = e.target.value as TagFormat; setFormat(f); saveTagFormat(f); }} className="rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm text-black">
-            {TAG_FORMATS.map((f) => <option key={f.code} value={f.code}>{f.label}</option>)}
-          </select>
-        </label>
-        <span className="text-neutral-600">{TAG_FORMATS.find((f) => f.code === format)?.size} · one page per tag · print at 100%, no margins</span>
+        <PrintControls skus={[item.sku]} format={format} setFormat={setFormat} />
+        <span className="text-neutral-600">{TAG_FORMATS.find((f) => f.code === format)?.size}</span>
         <a href={`/items/${item.sku}`} className="ml-auto text-neutral-600 underline">Garment</a>
       </div>}
       <div className="flex flex-wrap gap-6 p-4 print:gap-0 print:p-0"><TagFaces item={item} format={format} /></div>
