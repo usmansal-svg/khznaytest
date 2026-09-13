@@ -36,7 +36,7 @@ export async function GET() {
   // Who took the pictures is for supervisors and above; a photographer sees only their own name.
   const seesNames = ["qc_senior", "manager", "founder"].includes(gate.staff.role);
   const shape = (r: Row) => {
-    const originals = (r.photos ?? []).filter((p) => p.kind !== "cutout").length;
+    const originals = (r.photos ?? []).filter((p) => p.kind === "original").length;
     const cutouts = (r.photos ?? []).filter((p) => p.kind === "cutout").length;
     const who = (Array.isArray(r.photographer) ? r.photographer[0] : r.photographer)?.name ?? null;
     return {

@@ -97,7 +97,7 @@ export async function GET(request: Request) {
     const k = i.photographed_by ?? 0;
     const e = byPhotographer.get(k) ?? { days: new Set<string>(), shot: 0, complete: 0, pictures: 0, cutouts: 0 };
     const photos = (Array.isArray(i.photos) ? i.photos : []) as { kind?: string }[];
-    const originals = photos.filter((p) => p.kind !== "cutout").length, cutouts = photos.filter((p) => p.kind === "cutout").length;
+    const originals = photos.filter((p) => p.kind === "original").length, cutouts = photos.filter((p) => p.kind === "cutout").length;
     e.days.add(dayOf(i.photographed_at)); e.shot++; e.pictures += originals; e.cutouts += cutouts;
     if (cutouts > 0 && originals >= 2) e.complete++;
     byPhotographer.set(k, e);

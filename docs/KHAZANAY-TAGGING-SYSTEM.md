@@ -329,3 +329,7 @@ The label printer is a ZYWELL ZY909 (203 dpi thermal, shows on USB as "EML-400L 
 3. The screen polls the job and shows *Queued → Printed ✓* or the error. "Still queued" means the helper is not running or the Mac is asleep.
 
 Papers: 2 × 1 in (default for now), 2.5 × 1.5 in, 3 × 2 in, and the 50 × 90 mm hang tag (`components/tag-faces.tsx`). The Mac must stay awake with the printer plugged in; the helper uses `.env.local` for the database and needs Google Chrome.
+
+## Measurements picture (14 Sep 2026)
+
+After the cover photo's background is removed, the Photos station draws the tagger's measurements on the cut-out the way ThredUp does — a length line, a chest or bust line, a sleeve line for tops and outerwear; waist and length for bottoms; bust, waist and length for dresses — and uploads it as a photo of kind `measure`. Shopify receives it second, right after the cover (`lib/shopify/push-item.ts`). The numbers come from the tag form (inches, measured flat); only the placement is read from the picture's silhouette (`lib/measure-overlay.ts`). The photographer can nudge any line's end points from the garment list (**Lines** button) in `components/measure-editor.tsx`; the line positions are stored on the photo record and reused. Garments with no measurements get no picture.

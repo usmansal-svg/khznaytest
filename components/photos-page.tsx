@@ -8,7 +8,7 @@ type BarcodeDetectorCtor = {
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, Check, ChevronLeft, ChevronRight, LogOut, RefreshCw, RotateCw, ScanLine, Search, Star, Trash2, UserRound, X } from "lucide-react";
+import { Camera, Check, ChevronLeft, ChevronRight, LogOut, RefreshCw, RotateCw, Ruler, ScanLine, Search, Star, Trash2, UserRound, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { useHoldDrag } from "@/lib/hold-drag";
 import { applyAdjust, cutoutOnWhite, NO_ADJUST, squareForShopify, type Adjust } from "@/lib/photos";
+import { MeasureEditor, type MeasureInfo } from "@/components/measure-editor";
+import { overlayKind, renderOverlay, silhouette, suggestLines, type Line } from "@/lib/measure-overlay";
+import type { MeasureType } from "@/lib/pricing/sub-categories";
 import { cn } from "@/lib/utils";
 
 /**
@@ -36,9 +39,11 @@ import { cn } from "@/lib/utils";
 
 type Row = { sku: string; brand: string | null; size: string | null; grade: string; tagged_at: string; online_status: string | null; sub_category: string; photos: number; cutouts: number; photographed_at: string | null; photographer: string | null };
 type Me = { name: string; role: string; today: number; target: number; pct: number };
-type Garment = { sku: string; brand: string | null; sub_category: string; size_label: string | null; grade: string; channel: string; photos: number; cutoutPaths: string[] };
+type Garment = { sku: string; brand: string | null; sub_category: string; size_label: string | null; grade: string; channel: string; photos: number; cutoutPaths: string[]; measurePaths: string[]; measure: MeasureInfo | null };
 type Shot = { id: number; blob: Blob | null; url: string; keep: boolean; adjust: Adjust; existing?: { path: string } };
-type Job = { sku: string; total: number; done: number; cutout: "pending" | "working" | "done" | "skipped" | "failed"; error?: string; cutoutUrl?: string };
+type Job = { sku: string; total: number; done: number; cutout: "pending" | "working" | "done" | "skipped" | "failed"; error?: string; cutoutUrl?: string; measureUrl?: string };
+type Editing = { sku: string; cutoutUrl: string; info: MeasureInfo; lines: Line[] | null; replacePath: string | null };
+const measureInfo = (it: { measure_type?: MeasureType | null; measurements?: Record<string, unknown> | null; wearer?: string | null }): MeasureInfo | null => { const kind = overlayKind(it.measure_type); return kind ? { kind, measurements: it.measurements ?? {}, gender: it.wearer ?? null } : null; };
 const GRADE: Record<string, string> = { bnwt: "BNWT", premium: "Premium", excellent: "Excellent", very_good: "Very Good", rejected: "Rejected" };
 const MAX_SHOTS = 6;
 const cssFilter = (a: Adjust) => `brightness(${a.brightness}) contrast(${a.contrast})`;
@@ -57,6 +62,22 @@ export function PhotosPage() {
   const [reviewIdx, setReviewIdx] = useState(0);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [search, setSearch] = useState("");
+  const [editing, setEditing] = useState<Editing | null>(null);
+  /** Open the line editor for a garment that already has a cut-out. */
+  async function editLines(sku: string) {
+    setError(null);
+    const r = await fetch(`/api/items/${encodeURIComponent(sku)}`);
+    const j = await r.json();
+    if (!r.ok) { setError(j.error ?? `No garment ${sku}.`); return; }
+    const it = j.item ?? j;
+    const photos = (it.photos ?? []) as { path: string; url: string; kind: string; lines?: Line[] }[];
+    const cut = photos.filter((p) => p.kind === "cutout").at(-1);
+    const prev = photos.filter((p) => p.kind === "measure").at(-1);
+    const info = measureInfo(it);
+    if (!cut) { setError("No cut-out yet: shoot the garment first."); return; }
+    if (!info) { setError("This garment type has no measurements to draw."); return; }
+    setEditing({ sku, cutoutUrl: cut.url, info, lines: prev?.lines ?? null, replacePath: prev?.path ?? null });
+  }
   const [listFilter, setListFilter] = useState<"none" | "done" | "all">("all");
   const touchX = useRef<number | null>(null);
   // Press-and-hold drag to reorder the thumbnails; the ghost follows the thumb.
@@ -187,8 +208,8 @@ export function PhotosPage() {
     if (!r.ok) { setError(j.error ?? `No garment ${sku}.`); if (mode === "scan") await startScan(); return; }
     const it = j.item ?? j;
     const photos = (it.photos ?? []) as { path: string; url: string; kind: string }[];
-    const originals = photos.filter((p) => p.kind !== "cutout");
-    setGarment({ sku: it.sku, brand: it.brand ?? null, sub_category: it.sub_category ?? "", size_label: it.size_label, grade: it.grade ?? it.grade_code, channel: it.channel, photos: originals.length, cutoutPaths: photos.filter((p) => p.kind === "cutout").map((p) => p.path) });
+    const originals = photos.filter((p) => p.kind === "original");
+    setGarment({ sku: it.sku, brand: it.brand ?? null, sub_category: it.sub_category ?? "", size_label: it.size_label, grade: it.grade ?? it.grade_code, channel: it.channel, photos: originals.length, cutoutPaths: photos.filter((p) => p.kind === "cutout").map((p) => p.path), measurePaths: photos.filter((p) => p.kind === "measure").map((p) => p.path), measure: measureInfo(it) });
     discardShots();
     setRetaking(retake || originals.length > 0);
     // A reshoot starts from what is already there: every earlier picture can be kept, adjusted, discarded or joined by new ones.
@@ -221,10 +242,11 @@ export function PhotosPage() {
 
   /* ------------------------------------------------------- background save */
 
-  async function upload(sku: string, file: Blob, kind: "original" | "cutout", source?: string): Promise<{ url: string; path: string }> {
+  async function upload(sku: string, file: Blob, kind: "original" | "cutout" | "measure", source?: string, lines?: Line[]): Promise<{ url: string; path: string }> {
     const fd = new FormData();
-    fd.append("sku", sku); fd.append("kind", kind); fd.append("file", file, kind === "cutout" ? "cutout.jpg" : "photo.jpg");
+    fd.append("sku", sku); fd.append("kind", kind); fd.append("file", file, `${kind === "original" ? "photo" : kind}.jpg`);
     if (source) fd.append("source", source);
+    if (lines) fd.append("lines", JSON.stringify(lines));
     const res = await fetch("/api/photos", { method: "POST", body: fd });
     const j = await res.json();
     if (!res.ok) throw new Error(j.error ?? "Upload failed.");
@@ -252,6 +274,8 @@ export function PhotosPage() {
     setJobs((j) => [job, ...j.filter((x) => x.sku !== sku)].slice(0, 12));
     const coverShot = kept.find((s) => s.id === chosenCover) ?? kept[0];
     const oldCutouts = garment.cutoutPaths;
+    const oldMeasures = garment.measurePaths;
+    const measure = garment.measure;
     const work = kept.map((s) => ({ id: s.id, blob: s.blob, url: s.url, adjust: s.adjust, existing: s.existing, isCover: s.id === coverShot.id }));
     void (async () => {
       const update = (patch: Partial<Job>) => setJobs((j) => j.map((x) => (x.sku === sku ? { ...x, ...patch } : x)));
@@ -294,6 +318,16 @@ export function PhotosPage() {
           const small = shadowed.size > 1024 * 1024 ? await squareForShopify(shadowed, 2048, 1024 * 1024) : shadowed;
           const photo = await upload(sku, small, "cutout", coverPath);
           update({ cutout: "done", cutoutUrl: photo.url });
+          // The measurements picture: the tagger's numbers drawn on the cut-out, second on Shopify.
+          for (const path of oldMeasures) await del(path);
+          if (measure) {
+            const lines = suggestLines(await silhouette(small), measure.kind, measure.measurements, measure.gender);
+            if (lines.length) {
+              const drawn = await renderOverlay(small, lines, 2048);
+              const mp = await upload(sku, drawn, "measure", photo.path, lines);
+              update({ measureUrl: mp.url });
+            }
+          }
         } catch (e) { update({ cutout: "failed", error: e instanceof Error ? e.message : "Background removal failed." }); }
       }
       void load();
@@ -455,6 +489,7 @@ export function PhotosPage() {
     <div className="mx-auto max-w-3xl space-y-4">
       {Review}
       {Profile}
+      {editing && <MeasureEditor sku={editing.sku} cutoutUrl={editing.cutoutUrl} info={editing.info} initial={editing.lines} replacePath={editing.replacePath} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); void load(); }} />}
       {mode === "home" && Header}
       {jobs.some((j) => j.error) && <p className="text-sm text-destructive">{jobs.filter((j) => j.error).map((j) => `${j.sku}: ${j.error}`).join(" · ")}</p>}
       {error && <p className="text-sm text-destructive">{error}</p>}
@@ -504,6 +539,7 @@ export function PhotosPage() {
                               <div className="truncate">{r.brand ?? "—"} · {r.sub_category}{r.size ? ` · ${r.size}` : ""} · {GRADE[r.grade] ?? r.grade}</div>
                               {data.sees_names && r.photographer && <div className="text-xs text-muted-foreground">{r.photographer} · {when(r.photographed_at)}</div>}
                             </div>
+                            {!none && r.cutouts > 0 && <Button type="button" size="sm" variant="outline" className="h-9 shrink-0" title="Measurement lines" onClick={() => void editLines(r.sku)}><Ruler className="size-4" /> Lines</Button>}
                             {none
                               ? <Button type="button" size="sm" className="h-9 shrink-0" onClick={() => { void openCamera().catch(() => {}); void pick(r.sku); }}>Shoot</Button>
                               : <Button asChild type="button" size="sm" variant="outline" className="h-9 shrink-0"><Link href={`/photos/${encodeURIComponent(r.sku)}`}>Review</Link></Button>}

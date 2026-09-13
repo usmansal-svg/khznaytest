@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
  * once — the order is the Shopify order), and add more shots.
  */
 
-type Photo = { path: string; url: string; kind: "original" | "cutout"; bytes: number; taken_at: string; source?: string };
+type Photo = { path: string; url: string; kind: "original" | "cutout" | "measure"; bytes: number; taken_at: string; source?: string };
 type Item = { sku: string; brand: string | null; sub_category: string; category: string; size_label: string | null; grade_code: string; colour: string | null; channel: string; photos: Photo[] };
 const GRADE: Record<string, string> = { bnwt: "BNWT", premium: "Premium", excellent: "Excellent", very_good: "Very Good", rejected: "Rejected" };
 

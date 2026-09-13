@@ -1,5 +1,5 @@
 /**
- * POST /api/photos  multipart: sku, kind (original | cutout), file
+ * POST /api/photos  multipart: sku, kind (original | cutout | measure), file, source?, lines? (measure: JSON of the drawn lines)
  * DELETE /api/photos { sku, path }
  *
  * Stores garment photos in the public `garments` bucket and records them on
@@ -10,7 +10,7 @@ import { NextResponse } from "next/server";
 
 import { requireStaff } from "@/lib/auth/staff";
 
-type Photo = { path: string; url: string; kind: "original" | "cutout"; bytes: number; taken_at: string; by?: number; source?: string };
+type Photo = { path: string; url: string; kind: "original" | "cutout" | "measure"; bytes: number; taken_at: string; by?: number; source?: string; lines?: unknown };
 
 export async function POST(request: Request) {
   const gate = await requireStaff();
@@ -19,7 +19,10 @@ export async function POST(request: Request) {
 
   const form = await request.formData();
   const sku = String(form.get("sku") ?? "").trim().toUpperCase();
-  const kind = form.get("kind") === "cutout" ? "cutout" : "original";
+  const kindRaw = form.get("kind");
+  const kind = kindRaw === "cutout" ? "cutout" : kindRaw === "measure" ? "measure" : "original";
+  let lines: unknown;
+  if (kind === "measure") { try { lines = JSON.parse(String(form.get("lines") ?? "[]")); } catch { lines = []; } }
   const source = String(form.get("source") ?? "").trim() || undefined;
   const file = form.get("file");
   if (!sku || !(file instanceof File)) return NextResponse.json({ error: "sku and file are required." }, { status: 400 });
@@ -34,7 +37,7 @@ export async function POST(request: Request) {
   if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
 
   const { data: pub } = supabase.storage.from("garments").getPublicUrl(path);
-  const photo: Photo = { path, url: pub.publicUrl, kind, bytes: file.size, taken_at: new Date().toISOString(), by: gate.staff.id, ...(kind === "cutout" && source ? { source } : {}) };
+  const photo: Photo = { path, url: pub.publicUrl, kind, bytes: file.size, taken_at: new Date().toISOString(), by: gate.staff.id, ...(kind !== "original" && source ? { source } : {}), ...(kind === "measure" ? { lines } : {}) };
   const photos = [...((item.photos ?? []) as Photo[]), photo];
 
   // First original picture stamps the photographer and the time — the daily target counts garments, not shots.
@@ -64,8 +67,8 @@ export async function PATCH(request: Request) {
   if (!item) return NextResponse.json({ error: `No item with SKU ${sku}.` }, { status: 404 });
   const photos = (item.photos ?? []) as Photo[];
   const rank = new Map(body.order.map((p, i) => [p, i]));
-  const originals = photos.filter((p) => p.kind !== "cutout").sort((a, b) => (rank.get(a.path) ?? 1e9) - (rank.get(b.path) ?? 1e9));
-  const cutouts = photos.filter((p) => p.kind === "cutout");
+  const originals = photos.filter((p) => p.kind === "original").sort((a, b) => (rank.get(a.path) ?? 1e9) - (rank.get(b.path) ?? 1e9));
+  const cutouts = photos.filter((p) => p.kind !== "original");
   const { error } = await gate.db.from("items").update({ photos: [...originals, ...cutouts] }).eq("id", item.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ photos: [...originals, ...cutouts] });

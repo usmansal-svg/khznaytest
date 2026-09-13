@@ -70,6 +70,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ sku
       market_price: sub?.market_price ?? null,
       compare,
       measure_fields: sub ? MEASUREMENT_FIELDS[sub.measure_type] : [],
+      measure_type: sub?.measure_type ?? null,
       grade: data.grade_code,
       is_rare: data.is_rare,
       rare_triggers: (data as { rare_triggers?: string[] | null }).rare_triggers ?? null,

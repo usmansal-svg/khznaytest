@@ -14,7 +14,7 @@ import { loadRareReasons, rareWebParagraphs } from "@/lib/pricing/rare-reasons";
 import { createProduct, findProductBySku, setVisibility, shopifyConfig, ShopifyError, updateProduct, type Visibility } from "@/lib/shopify/client";
 import { shopifyTags, shopifyTitle } from "@/lib/shopify/tags";
 
-type Photo = { url: string; path: string; kind: "original" | "cutout"; source?: string; taken_at?: string };
+type Photo = { url: string; path: string; kind: "original" | "cutout" | "measure"; source?: string; taken_at?: string };
 const one = <T,>(v: unknown) => (Array.isArray(v) ? v[0] : v) as T | null | undefined;
 const SELECT = "id, sku, brand_text, brand_tier, grade_code, is_rare, rare_reasons, rare_note, season, wearer, size_label, colour, fabric, measurements, price, price_manual, status, channel, online_status, photos, description, shopify_product_id, shopify_visibility, weight_class, outlet_id, outlets!items_outlet_id_fkey(shopify_location_id), sub_categories(name, shopify_tag, categories(name, shopify_tag))";
 
@@ -35,10 +35,13 @@ export async function pushItem(db: SupabaseClient, sku: string, visibility: Visi
   const category = catRow?.name ?? "";
   const subCategory = sub?.name ?? "";
   const photos = (item.photos ?? []) as Photo[];
-  const originals = photos.filter((p) => p.kind !== "cutout");
+  const originals = photos.filter((p) => p.kind === "original");
   const cutouts = photos.filter((p) => p.kind === "cutout");
   const cutFor = (p: Photo) => cutouts.find((c) => c.source === p.path) ?? cutouts.find((c) => !c.source && (c.taken_at ?? "") > (p.taken_at ?? "") && !originals.some((o) => (o.taken_at ?? "") > (p.taken_at ?? "") && (o.taken_at ?? "") < (c.taken_at ?? "")));
-  const imageUrls = originals.length ? originals.map((p) => cutFor(p)?.url ?? p.url) : cutouts.map((c) => c.url);
+  const base = originals.length ? originals.map((p) => cutFor(p)?.url ?? p.url) : cutouts.map((c) => c.url);
+  // The measurements picture (lines on the cut-out) goes second, right after the cover.
+  const measure = photos.filter((p) => p.kind === "measure").at(-1);
+  const imageUrls = measure ? [base[0], measure.url, ...base.slice(1)].filter(Boolean) : base;
   const taggable = { wearer: item.wearer, season: item.season, category, sub_category: subCategory, brand: item.brand_text, brand_tier: item.brand_tier, grade: item.grade_code, size_label: item.size_label, colour: item.colour, fabric: item.fabric, is_rare: item.is_rare, category_tag: catRow?.shopify_tag ?? null, sub_tag: sub?.shopify_tag ?? null, heavy: item.weight_class === "heavy", sleeve: ((item.measurements ?? {}) as Record<string, unknown>).Sleeve as string | undefined ?? null };
   // A channel tag so the store's automated collections (feeds, "all products") can exclude outlet stock with one rule.
   const tags = [...shopifyTags(taggable), visibility === "pos" ? "POS only" : visibility === "draft" ? "Draft" : "Website"];

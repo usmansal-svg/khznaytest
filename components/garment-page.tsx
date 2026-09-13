@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
  * listing. Reached right after tagging and from the Items search.
  */
 
-type Photo = { path: string; url: string; kind: "original" | "cutout"; bytes: number; taken_at: string };
+type Photo = { path: string; url: string; kind: "original" | "cutout" | "measure"; bytes: number; taken_at: string };
 type Item = {
   sku: string; brand: string; category: string; sub_category: string; grade: string; size_label: string | null; colour: string | null;
   list_price: number; status: string; outlet: string | null; outlet_id: number | null; lot: string | null; weight_kg: number | null;
@@ -212,9 +212,9 @@ export function GarmentPage({ sku }: { sku: string }) {
                 {[...cutouts, ...originals].map((p) => (
                   <figure key={p.path} className="space-y-1">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={p.url} alt={p.kind} className={cn("aspect-square w-full rounded-md border object-cover", p.kind === "cutout" && "bg-white")} />
+                    <img src={p.url} alt={p.kind} className={cn("aspect-square w-full rounded-md border object-cover", p.kind !== "original" && "bg-white")} />
                     <figcaption className="flex items-center justify-between text-xs">
-                      <span className={cn(p.kind === "cutout" ? "font-semibold" : "text-muted-foreground")}>{p.kind === "cutout" ? "Cut-out" : "Original"}</span>
+                      <span className={cn(p.kind === "cutout" ? "font-semibold" : "text-muted-foreground")}>{p.kind === "cutout" ? "Cut-out" : p.kind === "measure" ? "Measurements" : "Original"}</span>
                       <span className="flex gap-1">
                         {p.kind === "original" && (
                           <button type="button" title="Remove background" disabled={cutting !== null || busy !== null} onClick={() => cutout(p)} className="rounded p-1 hover:bg-muted disabled:opacity-50">
