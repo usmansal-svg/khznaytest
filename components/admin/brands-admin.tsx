@@ -23,6 +23,16 @@ export function BrandsAdmin() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
 
+  const csvRef = useRef<HTMLInputElement>(null);
+  async function importCsv(csv: string) {
+    setBusy(true);
+    try {
+      const r = await fetch("/api/admin/brands?csv=1", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ csv }) });
+      const j = await r.json();
+      setMessage(r.ok ? { tone: "ok", text: `Imported ${j.upserted ?? j.count ?? ""} brands${j.rejected?.length ? ` · ${j.rejected.length} rows skipped: ${j.rejected.slice(0, 3).join("; ")}` : ""}.` } : { tone: "error", text: j.error ?? "Import failed." });
+      await load();
+    } catch { setMessage({ tone: "error", text: "Import failed." }); } finally { setBusy(false); }
+  }
   const load = () => fetch("/api/admin/brands").then((r) => r.json()).then((j) => setBrands(j.brands ?? []));
   const [alMult, setAlMult] = useState<number | null>(null);
   useEffect(() => { void load(); fetch("/api/admin/settings").then((r) => r.json()).then((j) => { if (typeof j.settings?.affordableLuxuryMultiplier === "number") setAlMult(j.settings.affordableLuxuryMultiplier); }).catch(() => {}); }, []);
@@ -198,7 +208,14 @@ export function BrandsAdmin() {
       </div>
 
       <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-base">Add a brand</CardTitle></CardHeader>
+        <CardHeader className="pb-3"><CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base"><span>Add a brand</span>
+          <span className="flex items-center gap-2 text-sm font-normal">
+            <Button asChild size="sm" variant="outline"><a href="/api/admin/brands?csv=1" download>Export CSV</a></Button>
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => csvRef.current?.click()}>Import CSV</Button>
+            <input ref={csvRef} type="file" accept=".csv,text/csv" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ""; if (!f) return; const csv = await f.text(); await importCsv(csv); }} />
+          </span></CardTitle>
+          <p className="text-xs text-muted-foreground">Bulk: export the list, add or change rows in Excel (columns Brand, Tier, Active — tier is High street / Affordable luxury / Ultra luxury), save as CSV and import. Existing brands are updated by name; new ones are added; nothing is deleted.</p>
+        </CardHeader>
         <CardContent className="flex flex-wrap items-end gap-3">
           <div className="grid gap-1.5"><Label htmlFor="bn">Name</Label><Input id="bn" value={name} onChange={(e) => setName(e.target.value)} className="w-56" /></div>
           <div className="grid gap-1.5"><Label htmlFor="bt">Tier</Label><select id="bt" value={tier} onChange={(e) => setTier(e.target.value)} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">{TIERS.map((t) => <option key={t.code} value={t.code}>{t.label}</option>)}</select></div>

@@ -1,0 +1,53 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dev",
+      "runtimeExecutable": "/Users/usmansaleem/.nvm/versions/node/v24.20.0/bin/node",
+      "runtimeArgs": [
+        "node_modules/next/dist/bin/next",
+        "dev"
+      ],
+      "port": 3000
+    },
+    {
+      "name": "prod",
+      "runtimeExecutable": "/Users/usmansaleem/.nvm/versions/node/v24.20.0/bin/node",
+      "runtimeArgs": [
+        "node_modules/next/dist/bin/next",
+        "start"
+      ],
+      "port": 3000
+    },
+    {
+      "name": "dev-3001",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": [
+        "-c",
+        "export PATH=\"$HOME/.nvm/versions/node/v24.20.0/bin:$PATH\"; export NEXT_DIST_DIR=.next-pos; exec node node_modules/next/dist/bin/next dev -p 3001"
+      ],
+      "port": 3001
+    },
+    {
+      "name": "pos",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": [
+        "-c",
+        "export PATH=\"$HOME/.nvm/versions/node/v24.20.0/bin:$PATH\"; cd \"$HOME/Claude/khazanay-pos\" && exec node node_modules/next/dist/bin/next dev -p 3200"
+      ],
+      "port": 3200
+    },
+    {
+      "name": "logos",
+      "runtimeExecutable": "/usr/bin/python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8123",
+        "--directory",
+        "/private/tmp/claude-501/-Users-usmansaleem-Claude-khazanaytest/de4bfc0c-eef4-43da-b055-7a300ec25436/scratchpad/logos"
+      ],
+      "port": 8123
+    }
+  ]
+}

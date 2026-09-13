@@ -1,5 +1,5 @@
 /**
- * GET  /api/admin/brands            — full list
+ * GET  /api/admin/brands            — full list; ?csv=1 downloads it as Brand,Tier,Active
  * POST /api/admin/brands            — { brands: [{ name, tier, active? }] } upsert by name
  * POST /api/admin/brands?csv=1      — { csv } lines of "Brand,Tier[,...]" (Khazanay_brand_tiers.csv)
  */
@@ -12,11 +12,16 @@ import { audit, requireManager } from "@/lib/admin/auth";
 const TIERS = ["regular", "affordable_luxury", "ultra_luxury"] as const;
 type Tier = (typeof TIERS)[number];
 
-export async function GET() {
+export async function GET(request: Request) {
   const supabase = await createClient();
   const { data, error } = await supabase.from("brands").select("id, name, tier, active, source, added_at, quick_pick_order, logo_url, staff:added_by(name)").order("name");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   const one = (v: unknown) => (Array.isArray(v) ? v[0] : v) as { name: string } | null | undefined;
+  if (new URL(request.url).searchParams.get("csv") === "1") {
+    const q = (s: string) => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
+    const lines = ["Brand,Tier,Active", ...(data ?? []).map((b) => `${q(b.name)},${b.tier},${b.active ? "yes" : "no"}`)];
+    return new Response(lines.join("\n"), { headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": `attachment; filename="khazanay-brands-${new Date().toISOString().slice(0, 10)}.csv"` } });
+  }
   return NextResponse.json({ brands: (data ?? []).map((b) => ({ id: b.id, name: b.name, tier: b.tier, active: b.active, source: b.source, added_at: b.added_at, quick_pick_order: b.quick_pick_order ?? null, logo_url: b.logo_url ?? null, added_by: one(b.staff)?.name ?? null })) });
 }
 
@@ -90,8 +95,8 @@ function parseCsv(csv: string) {
     .filter(Boolean)
     .filter((l, i) => !(i === 0 && /^brand\s*,/i.test(l)))
     .map((l) => {
-      const cells = l.split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
-      return { name: cells[0] ?? "", tier: cells[1] ?? "", active: true };
+      const cells = l.match(/("([^"]|"")*"|[^,]*)(,|$)/g)?.map((c) => c.replace(/,$/, "").trim().replace(/^"|"$/g, "").replace(/""/g, '"')) ?? l.split(",");
+      return { name: cells[0] ?? "", tier: cells[1] ?? "", active: !/^(no|false|0|off)$/i.test((cells[2] ?? "yes").trim()) };
     });
 }
 
