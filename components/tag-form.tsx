@@ -16,7 +16,6 @@ import { cn } from "@/lib/utils";
 import { GRADE_RANK, type ColourTag, type GradeCode } from "@/lib/pricing/constants";
 import { ADULT_SIZES, KIDS_SIZES } from "@/lib/pricing/kids-sizes";
 import { sizeSeriesFor } from "@/lib/pricing/sizes";
-import { rareTagLine } from "@/lib/pricing/rare-reasons";
 import { GENDER_LABELS, type Gender, type Season, type Wearer, WEARER_LABELS, WEARER_GENDERS, isChildWearer } from "@/lib/pricing/sku";
 import { SLEEVE_TYPES, measurementFields, type MeasureType } from "@/lib/pricing/sub-categories";
 
@@ -305,8 +304,6 @@ export function TagForm() {
   // rare find prices as normal or by hand at the senior's price.
   const needsManual = !rejected && (manualOn || blocked);
   const rareOk = !rareFind || rareWhy.length > 0;
-  const rareLine = rareFind ? rareTagLine(rareWhy, rareText, ref?.rare_reasons ?? []) : "";
-  const rareChosen = ref?.rare_reasons.find((r) => r.code === rareWhy[0]);
   const listPrice = rejected ? 0 : needsManual ? Number(manualPrice) || 0 : price?.price ?? 0;
   const standardPrice = price?.standard_price ?? null;
   const below = !rejected && !blocked && standardPrice != null && listPrice > 0 && listPrice < standardPrice;
@@ -595,25 +592,15 @@ export function TagForm() {
                 <div className={cn("grid min-w-0 content-start gap-2 rounded-md border p-3 sm:col-span-2", rareFind && "border-amber-500 bg-amber-50 dark:bg-amber-950/40")}>
                   <div className="flex flex-wrap items-center gap-3">
                     <Button type="button" variant={rareFind ? "default" : "outline"} className="h-10" onClick={() => setRareFind((r) => !r)}>★ Rare find{rareFind ? " · on" : ""}</Button>
-                    <span className="text-xs text-muted-foreground">{rareFind ? "Prints a Rare Find band on the tag with the reason, and tags it for the Shopify Rare Finds collection. If the QC head gave a price, set it by hand under Condition." : "Decided at grading — tap only if this piece came from the rare basket."}</span>
                   </div>
                   {rareFind && (
                     <>
                       <div className="flex flex-wrap gap-1.5">
                         {ref.rare_reasons.map((w) => (
-                          <Button key={w.code} type="button" size="sm" variant={rareWhy[0] === w.code ? "secondary" : "outline"} title={w.tag} className="h-9 px-3 text-sm md:h-7 md:px-2.5 md:text-xs" onClick={() => setRareWhy([w.code])}>{w.label}</Button>
+                          <Button key={w.code} type="button" size="sm" variant={rareWhy[0] === w.code ? "default" : "outline"} className="h-9 px-3 text-sm md:h-7 md:px-2.5 md:text-xs" onClick={() => setRareWhy([w.code])}>{w.label}</Button>
                         ))}
                       </div>
                       <Input value={rareText} onChange={(e) => setRareText(e.target.value)} maxLength={80} placeholder="Optional detail — e.g. 1990s Levi's 501, made in USA" />
-                      {rareChosen ? (
-                        <div className="grid gap-1 rounded-md border bg-background p-2 text-xs">
-                          <div><span className="text-muted-foreground">On the tag: </span><span className="font-medium">{rareLine}</span></div>
-                          <div><span className="text-muted-foreground">On Shopify: </span>{rareChosen.web}{rareText.trim() ? ` ${rareText.trim()}` : ""}</div>
-                          <div className="text-muted-foreground">Managers can reword these under Pricing → Rare finds.</div>
-                        </div>
-                      ) : (
-                        <p className="text-xs text-muted-foreground">Choose the one reason — its short line prints on the tag and its full text goes on the online listing.</p>
-                      )}
                     </>
                   )}
                 </div>
