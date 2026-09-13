@@ -97,31 +97,44 @@ export function suggestLines(sil: Silhouette, kind: "top" | "bottom" | "dress", 
   return lines;
 }
 
-const TEAL = "#0f766e";
+const INK = "#1c1917";
 
-/** Draws the lines on the square picture. `side` is the output size; `image` is the white cut-out. */
+/**
+ * Draws the lines on the square picture: dashed charcoal dimension lines with
+ * tailor's-tick ends and a black label, like a pattern drawing. `side` is
+ * the output size; `image` is the white cut-out.
+ */
 export function drawOverlay(ctx: CanvasRenderingContext2D, side: number, lines: Line[], opts: { handles?: boolean } = {}) {
   const s = side / 2048;
-  ctx.lineCap = "round"; ctx.lineJoin = "round";
+  ctx.lineCap = "butt"; ctx.lineJoin = "miter";
   for (const ln of lines) {
     const x1 = ln.x1 * side, y1 = ln.y1 * side, x2 = ln.x2 * side, y2 = ln.y2 * side;
-    ctx.strokeStyle = "#fff"; ctx.lineWidth = 14 * s; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-    ctx.strokeStyle = TEAL; ctx.lineWidth = 6 * s; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-    for (const [x, y] of [[x1, y1], [x2, y2]]) {
-      ctx.beginPath(); ctx.arc(x, y, (opts.handles ? 22 : 13) * s, 0, Math.PI * 2); ctx.fillStyle = "#fff"; ctx.fill(); ctx.strokeStyle = TEAL; ctx.lineWidth = 5 * s; ctx.stroke();
+    const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len, ny = dx / len; // perpendicular, for the end ticks
+    const tick = 26 * s;
+    // A white halo under everything keeps the marks legible on dark cloth.
+    for (const pass of [0, 1]) {
+      ctx.strokeStyle = pass ? INK : "rgba(255,255,255,0.9)";
+      ctx.lineWidth = (pass ? 5 : 13) * s;
+      ctx.setLineDash(pass ? [22 * s, 14 * s] : []);
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.lineWidth = (pass ? 6 : 14) * s;
+      for (const [x, y] of [[x1, y1], [x2, y2]]) { ctx.beginPath(); ctx.moveTo(x - nx * tick, y - ny * tick); ctx.lineTo(x + nx * tick, y + ny * tick); ctx.stroke(); }
     }
-    // Label: a white pill beside the line.
-    const text = `${ln.label}  ${ln.value}`;
-    ctx.font = `700 ${46 * s}px ui-sans-serif, system-ui, -apple-system, sans-serif`;
-    const tw = ctx.measureText(text).width, ph = 66 * s, pw = tw + 40 * s;
-    const vertical = Math.abs(x2 - x1) < Math.abs(y2 - y1);
+    if (opts.handles) for (const [x, y] of [[x1, y1], [x2, y2]]) { ctx.beginPath(); ctx.arc(x, y, 22 * s, 0, Math.PI * 2); ctx.fillStyle = "rgba(255,255,255,0.85)"; ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 4 * s; ctx.stroke(); }
+    // Label: black tag with white text, off to the side of the line.
+    const text = `${ln.label} ${ln.value}`;
+    ctx.font = `700 ${44 * s}px ui-sans-serif, system-ui, -apple-system, sans-serif`;
+    const tw = ctx.measureText(text).width, ph = 64 * s, pw = tw + 40 * s;
+    const vertical = Math.abs(dx) < Math.abs(dy);
     let px: number, py: number;
-    if (vertical) { px = Math.max(x1, x2) + 26 * s; py = (y1 + y2) / 2 - ph / 2; if (px + pw > side - 10 * s) px = Math.min(x1, x2) - pw - 26 * s; }
-    else if (ln.key === "sleeve") { px = (x1 + x2) / 2 - pw / 2; py = Math.min(y1, y2) - ph - 20 * s; }
-    else { px = (x1 + x2) / 2 - pw / 2; py = y1 - ph - 20 * s; }
+    if (vertical) { px = Math.max(x1, x2) + 34 * s; py = (y1 + y2) / 2 - ph / 2; if (px + pw > side - 10 * s) px = Math.min(x1, x2) - pw - 34 * s; }
+    else if (ln.key === "sleeve") { px = (x1 + x2) / 2 - pw / 2; py = Math.min(y1, y2) - ph - 34 * s; }
+    else { px = (x1 + x2) / 2 - pw / 2; py = y1 - ph - 34 * s; }
     px = Math.max(8 * s, Math.min(side - pw - 8 * s, px)); py = Math.max(8 * s, Math.min(side - ph - 8 * s, py));
-    ctx.beginPath(); ctx.roundRect(px, py, pw, ph, 14 * s); ctx.fillStyle = "rgba(255,255,255,0.96)"; ctx.fill(); ctx.strokeStyle = TEAL; ctx.lineWidth = 3 * s; ctx.stroke();
-    ctx.fillStyle = "#111"; ctx.textBaseline = "middle"; ctx.fillText(text, px + 20 * s, py + ph / 2 + 2 * s);
+    ctx.beginPath(); ctx.roundRect(px, py, pw, ph, 8 * s); ctx.fillStyle = INK; ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.textBaseline = "middle"; ctx.fillText(text, px + 20 * s, py + ph / 2 + 2 * s);
   }
 }
 
