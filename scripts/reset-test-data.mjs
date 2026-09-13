@@ -42,6 +42,7 @@ if (!dry) {
   let removed = 0;
   const { data: folders } = await db.storage.from("garments").list("", { limit: 1000 });
   for (const f of folders ?? []) {
+    if (f.name === "brand-logos") continue; // logos are not test data
     const { data: files } = await db.storage.from("garments").list(f.name, { limit: 1000 });
     const paths = (files ?? []).map((x) => `${f.name}/${x.name}`);
     if (paths.length) { const { error } = await db.storage.from("garments").remove(paths); if (error) console.log("photos ERR", f.name, error.message); else removed += paths.length; }
