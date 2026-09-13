@@ -209,9 +209,7 @@ export function TagForm() {
   const hits = useMemo(() => {
     const q = find.trim().toLowerCase();
     if (!q) return [];
-    const v2 = layout === "v2";
-  const chip = v2 ? "h-11 px-4 text-sm" : "h-11 px-4 text-sm md:h-8 md:px-3 md:text-xs";
-  return (ref?.sub_categories ?? []).filter((s) => catSlugs.has(s.category_slug) && inSeason(s) && s.name.toLowerCase().includes(q)).slice(0, 8);
+    return (ref?.sub_categories ?? []).filter((s) => catSlugs.has(s.category_slug) && inSeason(s) && s.name.toLowerCase().includes(q)).slice(0, 8);
   }, [find, ref, catSlugs, inSeason]);
   function pick(s: NonNullable<Reference["sub_categories"]>[number]) {
     setCategory(s.category_slug);
@@ -413,6 +411,8 @@ export function TagForm() {
   if (loadError) return <p className="text-destructive">{loadError}</p>;
   if (!ref) return <p className="text-muted-foreground">Loading…</p>;
 
+  const v2 = layout === "v2";
+  const chip = v2 ? "h-11 px-4 text-sm" : "h-11 px-4 text-sm md:h-8 md:px-3 md:text-xs";
   return (
     <>
     {qcHold && (
