@@ -2,11 +2,14 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Camera, ChevronLeft, ChevronRight, RotateCw, Scissors, SlidersHorizontal, Trash2, X } from "lucide-react";
+import { ArrowLeft, Camera, ChevronLeft, ChevronRight, RotateCw, Ruler, Scissors, SlidersHorizontal, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useHoldDrag } from "@/lib/hold-drag";
 import { applyAdjust, cutoutOnWhite, NO_ADJUST, squareForShopify, type Adjust } from "@/lib/photos";
+import { MeasureEditor, type MeasureInfo } from "@/components/measure-editor";
+import { overlayKind, type Line } from "@/lib/measure-overlay";
+import type { MeasureType } from "@/lib/pricing/sub-categories";
 import { cn } from "@/lib/utils";
 
 /**
@@ -15,8 +18,8 @@ import { cn } from "@/lib/utils";
  * once — the order is the Shopify order), and add more shots.
  */
 
-type Photo = { path: string; url: string; kind: "original" | "cutout" | "measure"; bytes: number; taken_at: string; source?: string };
-type Item = { sku: string; brand: string | null; sub_category: string; category: string; size_label: string | null; grade_code: string; colour: string | null; channel: string; photos: Photo[] };
+type Photo = { path: string; url: string; kind: "original" | "cutout" | "measure"; bytes: number; taken_at: string; source?: string; lines?: Line[] };
+type Item = { sku: string; brand: string | null; sub_category: string; category: string; size_label: string | null; grade_code: string; colour: string | null; channel: string; photos: Photo[]; measurements?: Record<string, unknown> | null; measure_type?: MeasureType | null; wearer?: string | null };
 const GRADE: Record<string, string> = { bnwt: "BNWT", premium: "Premium", excellent: "Excellent", very_good: "Very Good", rejected: "Rejected" };
 
 export function PhotoStation({ sku }: { sku: string }) {
@@ -24,6 +27,7 @@ export function PhotoStation({ sku }: { sku: string }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [editLines, setEditLines] = useState(false);
   const [view, setView] = useState<number | null>(null); // index into originals
   const [showOriginal, setShowOriginal] = useState(false);
   const [adjust, setAdjust] = useState<Adjust | null>(null); // open editor for the full-view picture
@@ -108,7 +112,7 @@ export function PhotoStation({ sku }: { sku: string }) {
     (from, to) => setItem((it) => {
       if (!it) return it;
       const originals = it.photos.filter((p) => p.kind === "original");
-      const cutouts = it.photos.filter((p) => p.kind === "cutout");
+      const cutouts = it.photos.filter((p) => p.kind !== "original");
       const a = originals.findIndex((p) => p.path === from);
       const b = originals.findIndex((p) => p.path === to);
       if (a < 0 || b < 0) return it;
@@ -123,6 +127,10 @@ export function PhotoStation({ sku }: { sku: string }) {
 
   const originals = item.photos.filter((p) => p.kind === "original");
   const cutouts = item.photos.filter((p) => p.kind === "cutout");
+  const measure = item.photos.filter((p) => p.kind === "measure").at(-1) ?? null;
+  const coverCut = originals.length ? cutouts.find((c) => c.source === originals[0].path) ?? cutouts.at(-1) ?? null : cutouts.at(-1) ?? null;
+  const mKind = overlayKind(item.measure_type);
+  const mInfo: MeasureInfo | null = mKind ? { kind: mKind, measurements: item.measurements ?? {}, gender: item.wearer ?? null } : null;
   // A cut-out belongs to the picture it was made from (older cut-outs, made before that was recorded, fall back to "the next one taken").
   const cutFor = (p: Photo) => cutouts.find((c) => c.source === p.path) ?? cutouts.find((c) => !c.source && c.taken_at > p.taken_at && !originals.some((o) => o.taken_at > p.taken_at && o.taken_at < c.taken_at));
   const shown = (p: Photo) => cutFor(p)?.url ?? p.url;
@@ -234,6 +242,26 @@ export function PhotoStation({ sku }: { sku: string }) {
         </>
       )}
 
+      {editLines && coverCut && mInfo && (
+        <MeasureEditor sku={item.sku} cutoutUrl={coverCut.url} info={mInfo} initial={measure?.lines ?? null} replacePath={measure?.path ?? null} onClose={() => setEditLines(false)} onSaved={() => { setEditLines(false); void load(); }} />
+      )}
+      {originals.length > 0 && (
+        <div className="rounded-md border p-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-sm font-semibold">Measurements picture</div>
+            {coverCut && mInfo && <Button type="button" size="sm" variant="outline" onClick={() => setEditLines(true)}><Ruler className="size-4" /> {measure ? "Adjust lines" : "Draw lines"}</Button>}
+          </div>
+          {measure ? (
+            <div className="mt-2 flex items-start gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={measure.url} alt="Measurements" className="w-40 rounded-md border bg-white" />
+              <p className="text-xs text-muted-foreground">Goes to Shopify right after the cover. The numbers are the tagger's; drag the line ends if a line sits in the wrong place.</p>
+            </div>
+          ) : (
+            <p className="mt-1 text-xs text-muted-foreground">{!coverCut ? "Remove the cover's background first." : !mInfo ? "This garment type has no measurements to draw." : Object.keys(item.measurements ?? {}).filter((k) => k !== "Sleeve").length ? "Not drawn yet — tap Draw lines." : "No measurements were tagged, so there is nothing to draw."}</p>
+          )}
+        </div>
+      )}
       <Button asChild size="lg" className="h-14 w-full text-base"><Link href={`/photos?sku=${encodeURIComponent(item.sku)}`}><Camera className="size-5" /> Add more pictures</Link></Button>
       <p className="text-center text-xs text-muted-foreground">Opens the camera with these pictures loaded, so you can add, adjust or replace and the cover gets its background removed there.</p>
     </div>
