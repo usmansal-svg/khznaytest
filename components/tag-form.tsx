@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Camera, Printer, RotateCcw, Save } from "lucide-react";
+import { Camera, Globe, Printer, RotateCcw, Save, Store } from "lucide-react";
 import { downscale, uploadPhoto } from "@/lib/photos";
 
 import { Button } from "@/components/ui/button";
@@ -447,8 +447,8 @@ export function TagForm() {
               <p className="text-sm text-amber-600 dark:text-amber-400">Not signed in — <Link href="/login?next=/tag" className="underline">sign in with your PIN</Link> to save.</p>
             )}
             <div className="flex items-center gap-2">
-              <Button type="button" size="sm" variant={channel === "outlet" ? "default" : "outline"} disabled={channelLocked} onClick={() => setChannel("outlet")} className={chip}>Outlet</Button>
-              <Button type="button" size="sm" variant={channel === "online" ? "default" : "outline"} disabled={channelLocked} onClick={() => setChannel("online")} className={chip}>Online store</Button>
+              <Button type="button" size="sm" variant={channel === "outlet" ? "default" : "outline"} disabled={channelLocked} onClick={() => setChannel("outlet")} className={cn(chip, "gap-2")}><Store className="size-5 md:size-4" /> Outlet</Button>
+              <Button type="button" size="sm" variant={channel === "online" ? "default" : "outline"} disabled={channelLocked} onClick={() => setChannel("online")} className={cn(chip, "gap-2")}><Globe className="size-5 md:size-4" /> Online store</Button>
               <label className="flex items-center gap-1.5 text-xs text-muted-foreground"><Checkbox checked={channelLocked} onCheckedChange={(v) => setChannelLocked(v === true)} /> Lock</label>
             </div>
             <div className="flex min-w-0 flex-1 items-center gap-2" title={selectedLot ? `${selectedLot.tagged}${selectedLot.pieces ? ` of ${selectedLot.pieces}` : ""} tagged from this lot` : "Lots are recorded in the commercial software"}>
