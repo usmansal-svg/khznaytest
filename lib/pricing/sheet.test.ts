@@ -84,7 +84,7 @@ describe("pricing workbook", () => {
       row.getCell(6).value = "Winter"; // season
       const row0 = find(ss, 1, subs[0].slug);
       row0.getCell(13).value = null; // clear the market price
-      row0.getCell(15).value = "no";
+      row0.getCell(16).value = "no"; // Active moved one column right when AL Premium was added
     });
     assert.deepEqual(r.problems, []);
     assert.ok(r.settings);

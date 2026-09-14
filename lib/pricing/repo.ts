@@ -55,6 +55,8 @@ export type DbSubCategory = {
   heavyCost: number | null;
   /** Affordable-luxury multiple for this garment type; null = the constant */
   affordableLuxuryMultiplier: number | null;
+  /** Hand-set Premium price for affordable-luxury brands on this garment type; null = multiple applies. */
+  alPremium: number | null;
   /** The sheet's "new in store" price for the sub-category, if set */
   marketPrice: number | null;
   active: boolean;
@@ -200,6 +202,7 @@ function defaultsContext(warning: string): PricingContext {
       standardCost: null,
       heavyCost: null,
       affordableLuxuryMultiplier: null,
+      alPremium: null,
       marketPrice: null,
       active: s.active,
     })),
@@ -240,7 +243,7 @@ async function readPricingContext(supabase: SupabaseClient): Promise<PricingCont
     supabase.from("profiles").select("code, name, pulled_share, vol_full, vol_promo, vol_md1, vol_md2, vol_md3"),
     supabase
       .from("sub_categories")
-      .select("slug, code, category_slug, gender, name, weight_kg, profile_code, value_index, measure_type, season, market_ceiling, market_price, per_piece_cost, per_piece_share, standard_cost_pkr, heavy_cost_pkr, affordable_luxury_multiplier, active"),
+      .select("slug, code, category_slug, gender, name, weight_kg, profile_code, value_index, measure_type, season, market_ceiling, market_price, per_piece_cost, per_piece_share, standard_cost_pkr, heavy_cost_pkr, affordable_luxury_multiplier, al_premium_pkr, active"),
   ]);
 
   const firstError = settingsRes.error ?? gradesRes.error ?? profilesRes.error ?? subsRes.error;
@@ -284,6 +287,7 @@ async function readPricingContext(supabase: SupabaseClient): Promise<PricingCont
     standardCost: s.standard_cost_pkr == null ? null : num(s.standard_cost_pkr),
     heavyCost: s.heavy_cost_pkr == null ? null : num(s.heavy_cost_pkr),
     affordableLuxuryMultiplier: s.affordable_luxury_multiplier == null ? null : num(s.affordable_luxury_multiplier),
+    alPremium: s.al_premium_pkr == null ? null : num(s.al_premium_pkr),
     marketPrice: s.market_price == null ? null : num(s.market_price),
     active: Boolean(s.active),
   }));

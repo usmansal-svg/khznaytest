@@ -107,9 +107,13 @@ export function quote(input: QuoteInput, ctx: PricingContext): Quote {
     tier: brand.tier,
   };
   const adjustPct = input.adjustPct ?? { below: -15, standard: 0, above: 20 }[adjustment];
-  const refs = subCategory.affordableLuxuryMultiplier ? { ...ctx.refs, brandTiers: brandTiersFrom({ ...ctx.settings, affordableLuxuryMultiplier: subCategory.affordableLuxuryMultiplier }) } : ctx.refs;
-  const result = computePrice({ ...baseInputs, adjustPct }, ctx.settings, refs);
-  const standard = computePrice({ ...baseInputs, adjustPct: 0 }, ctx.settings, refs);
+  // A hand-set AL Premium replaces the multiple for affordable-luxury brands: the price is the set figure, with the AL multiple neutralised.
+  const alFixed = brand.tier === "affordable_luxury" && subCategory.alPremium ? subCategory.alPremium : null;
+  const refs = alFixed ? { ...ctx.refs, brandTiers: brandTiersFrom({ ...ctx.settings, affordableLuxuryMultiplier: 1 }) }
+    : subCategory.affordableLuxuryMultiplier ? { ...ctx.refs, brandTiers: brandTiersFrom({ ...ctx.settings, affordableLuxuryMultiplier: subCategory.affordableLuxuryMultiplier }) } : ctx.refs;
+  const inputs = alFixed ? { ...baseInputs, premiumOverride: alFixed } : baseInputs;
+  const result = computePrice({ ...inputs, adjustPct }, ctx.settings, refs);
+  const standard = computePrice({ ...inputs, adjustPct: 0 }, ctx.settings, refs);
 
   const rejected = grade === REJECTED;
   // A rare piece is priced by hand even when the brand is priceable — two or
