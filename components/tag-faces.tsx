@@ -1,6 +1,7 @@
 "use client";
 
 import { DOT_MM, PRINT_OFFSET_MM } from "@/lib/tag-formats";
+import { cn } from "@/lib/utils";
 
 /**
  * The 50 × 90 mm hang tag — single-sided, one page per garment.
@@ -63,6 +64,7 @@ export function TagFaces({ item, format = "hang" }: { item: TagItem; format?: Ta
   const rare = Boolean(item.is_rare);
   if (format === "label2x1") return <TagLabelSmall item={item} />;
   if (format === "label225x15") return <TagLabelMedium item={item} />;
+  if (format === "label15x225") return <TagLabelPortrait item={item} />;
   if (format === "label") return <TagLabel item={item} />;
   if (format === "label3x2") return <TagLabelLarge item={item} />;
   return (
@@ -246,6 +248,34 @@ function TagLabelMedium({ item }: { item: TagItem }) {
       <div className="absolute bg-white" style={{ right: 0, top: `${(H - box) / 2 + 1.5}mm`, width: `${box}mm`, height: `${box}mm`, padding: `${quiet}mm` }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={`/api/tags/${encodeURIComponent(item.sku)}/qr`} alt={item.sku} className="block" style={{ width: `${qr}mm`, height: `${qr}mm` }} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The same sticker turned upright: 1.5 × 2.25 in (38.1 × 57.15 mm). Wordmark
+ * on top, brand and type, a 19 mm QR code in the middle, then size, the
+ * price in its box and the SKU. Rare find: the black band above the brand.
+ */
+function TagLabelPortrait({ item }: { item: TagItem }) {
+  const rare = Boolean(item.is_rare);
+  const mod = 7 * DOT_MM;
+  const qr = 21 * mod; // ≈ 18.4 mm
+  return (
+    <div className="tag shadow-lg">
+      <div className="absolute flex flex-col" style={{ left: "2mm", right: "2mm", top: "1.8mm", bottom: "1.6mm" }}>
+        <div className="text-center text-[6.5pt] font-black uppercase leading-none tracking-[0.14em]">Khazanay</div>
+        {rare && <div className="mt-[1.2mm] self-center rounded-[0.6mm] bg-black px-[1.4mm] py-[0.5mm] text-[6.5pt] font-black uppercase leading-none tracking-wide text-white">★ Rare find</div>}
+        <div className={cn("truncate text-center text-[8.5pt] font-bold leading-tight", rare ? "mt-[1mm]" : "mt-[1.6mm]")}>{item.brand || "Unbranded"}</div>
+        <div className="truncate text-center text-[6.5pt] leading-tight text-neutral-700">{rare && item.rare_tag_line ? item.rare_tag_line : item.sub_category}</div>
+        <div className="my-auto self-center bg-white" style={{ padding: `${3 * mod}mm` }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={`/api/tags/${encodeURIComponent(item.sku)}/qr`} alt={item.sku} className="block" style={{ width: `${qr}mm`, height: `${qr}mm` }} />
+        </div>
+        <div className="text-center text-[11pt] font-black leading-none"><span className="mr-[1mm] text-[6pt] font-bold uppercase tracking-wide text-neutral-600">Size</span>{item.size_label ?? "—"}</div>
+        <div className="mt-[1.2mm] self-center whitespace-nowrap rounded-[0.8mm] border-[0.4mm] border-black px-[1.6mm] py-[0.7mm] text-[13pt] font-black leading-none tabular-nums tracking-tight">{rs(item.list_price)}</div>
+        <div className="mt-[1.2mm] text-center font-mono text-[6pt] font-semibold leading-none tracking-wide">{item.sku}</div>
       </div>
     </div>
   );
