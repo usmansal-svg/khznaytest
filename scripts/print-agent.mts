@@ -32,7 +32,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import puppeteer, { type Browser } from "puppeteer-core";
 
 import { TAG_FORMATS, TagFaces, tagCss, type TagFormat, type TagItem } from "../components/tag-faces";
-import { zplLabel15x225, zplLabel225x15 } from "../lib/print/zpl";
+import { zplLabel15x225, zplLabel225x15, zplLabel50x50 } from "../lib/print/zpl";
 import { toSvg } from "../lib/barcode/code128";
 import { qrSvg } from "../lib/barcode/qr";
 import { loadRareReasons, rareTagLine } from "../lib/pricing/rare-reasons";
@@ -107,7 +107,7 @@ async function printJob(job: { id: number; sku: string; format: string; copies: 
   const file = path.join(tmp, `${job.id}-${job.sku}`);
   if (ZPL) {
     // The two Zebra papers have native drawings; other papers fall back to the PDF route on the same queue.
-    const zpl = format === "label225x15" ? zplLabel225x15 : format === "label15x225" ? zplLabel15x225 : null;
+    const zpl = format === "label225x15" ? zplLabel225x15 : format === "label15x225" ? zplLabel15x225 : format === "label50x50" ? zplLabel50x50 : null;
     if (zpl) {
       fs.writeFileSync(`${file}.zpl`, zpl(item, { thermalTransfer: THERMAL_TRANSFER, copies: job.copies }));
       if (DEVICE) fs.writeFileSync(DEVICE, fs.readFileSync(`${file}.zpl`));

@@ -65,6 +65,7 @@ export function TagFaces({ item, format = "hang" }: { item: TagItem; format?: Ta
   if (format === "label2x1") return <TagLabelSmall item={item} />;
   if (format === "label225x15") return <TagLabelMedium item={item} />;
   if (format === "label15x225") return <TagLabelPortrait item={item} />;
+  if (format === "label50x50") return <TagLabelSquare item={item} />;
   if (format === "label") return <TagLabel item={item} />;
   if (format === "label3x2") return <TagLabelLarge item={item} />;
   return (
@@ -296,6 +297,42 @@ function TagLabelPortrait({ item }: { item: TagItem }) {
       <div className="absolute whitespace-nowrap rounded-[1mm] border-[0.45mm] border-black px-[2mm] py-[0.9mm] text-[13pt] font-black leading-none tabular-nums tracking-tight" style={{ left: `${left}mm`, top: `${rows.price}mm` }}>{rs(item.list_price)}</div>
       {/* 33–57 mm on the right: empty for the round markdown sticker */}
       <div className="absolute font-mono text-[5.5pt] font-semibold leading-none tracking-[0.08em] text-neutral-700" style={{ left: `${left}mm`, top: `${rows.sku}mm` }}>{item.sku}</div>
+    </div>
+  );
+}
+
+/**
+ * The 5 × 5 cm square label: the portrait arrangement with more width —
+ * wordmark, brand and type top left, the QR top right, size and the boxed
+ * price on the left, the SKU bottom left, and the bottom-right corner
+ * (about 18 mm square) empty for the round markdown sticker.
+ */
+function TagLabelSquare({ item }: { item: TagItem }) {
+  const rare = Boolean(item.is_rare);
+  const mod = 6 * DOT_MM;
+  const qr = 21 * mod; // ≈ 15.8 mm
+  const quiet = 2 * mod;
+  const box = qr + 2 * quiet;
+  const left = 2.2, W = 50;
+  const textW = W - left - box - 0.3;
+  const rows = { mark: 2, brand: 5.6, type: 10.2, size: 21.5, price: 26.8, sku: 46.4 };
+  const typeLine = rare ? <><span className="text-[6pt] font-black uppercase tracking-wide text-black">★ Rare find</span>{item.rare_tag_line ? ` · ${item.rare_tag_line}` : ""}</> : item.sub_category;
+  return (
+    <div className="tag shadow-lg">
+      <div className="absolute truncate text-[7pt] font-black uppercase leading-none tracking-[0.18em]" style={{ left: `${left}mm`, top: `${rows.mark}mm`, width: `${textW}mm` }}>Khazanay</div>
+      <div className="absolute truncate text-[10pt] font-black leading-none tracking-tight" style={{ left: `${left}mm`, top: `${rows.brand}mm`, width: `${textW}mm` }}>{item.brand || "Unbranded"}</div>
+      <div className="absolute text-[7pt] leading-[1.15] text-neutral-600" style={{ left: `${left}mm`, top: `${rows.type}mm`, width: `${textW}mm`, maxHeight: "7mm", overflow: "hidden" }}>{typeLine}</div>
+      <div className="absolute bg-white" style={{ right: 0, top: "1.2mm", padding: `${quiet}mm` }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={`/api/tags/${encodeURIComponent(item.sku)}/qr`} alt={item.sku} className="block" style={{ width: `${qr}mm`, height: `${qr}mm` }} />
+      </div>
+      <div className="absolute flex items-baseline gap-[1.2mm] leading-none" style={{ left: `${left}mm`, top: `${rows.size}mm` }}>
+        <span className="text-[6pt] font-bold uppercase tracking-[0.14em] text-neutral-500">Size</span>
+        <span className="text-[13pt] font-black tracking-tight">{item.size_label ?? "—"}</span>
+      </div>
+      <div className="absolute whitespace-nowrap rounded-[1mm] border-[0.45mm] border-black px-[2mm] py-[1mm] text-[14pt] font-black leading-none tabular-nums tracking-tight" style={{ left: `${left}mm`, top: `${rows.price}mm` }}>{rs(item.list_price)}</div>
+      {/* bottom right, from about 30 mm down and 30 mm across: empty for the round markdown sticker */}
+      <div className="absolute font-mono text-[6pt] font-semibold leading-none tracking-[0.08em] text-neutral-700" style={{ left: `${left}mm`, top: `${rows.sku}mm` }}>{item.sku}</div>
     </div>
   );
 }

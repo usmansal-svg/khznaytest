@@ -70,3 +70,29 @@ export function zplLabel15x225(item: TagItem, opts: { thermalTransfer?: boolean;
     "^XZ",
   ].filter(Boolean).join("\n");
 }
+
+/** The 5 × 5 cm square label as ZPL. Mirrors TagLabelSquare in components/tag-faces.tsx. */
+export function zplLabel50x50(item: TagItem, opts: { thermalTransfer?: boolean; darkness?: number; copies?: number } = {}): string {
+  const W = dots(50), H = dots(50);
+  const left = dots(2.2);
+  const price = rs(item.list_price);
+  const qrMag = 6; // 21 × 6 dots ≈ 15.8 mm
+  const qrX = W - 21 * qrMag - dots(1.5), qrY = dots(1.5);
+  const textW = qrX - left - dots(1.5);
+  const priceW = Math.min(W - 2 * left, Math.round(price.length * 23 + 36));
+  const typeLine = item.is_rare ? `★ RARE FIND${item.rare_tag_line ? ` · ${item.rare_tag_line}` : ""}` : item.sub_category;
+  return [
+    "^XA", "^CI28", `^PW${W}`, `^LL${H}`, "^LH0,0", opts.thermalTransfer ? "^MTT" : "^MTD", opts.darkness != null ? `^MD${opts.darkness}` : "",
+    `^FO${left},${dots(2)}^A0N,22,24^FDKHAZANAY^FS`,
+    `^FO${left},${dots(5.6)}^A0N,34,34^FB${textW},1,0,L^FD${esc(cut(item.brand || "Unbranded", 18))}^FS`,
+    `^FO${left},${dots(10.2)}^A0N,22,22^FB${textW},2,0,L^FD${esc(cut(typeLine, 44))}^FS`,
+    `^FO${qrX},${qrY}^BQN,2,${qrMag}^FDQA,${esc(item.sku)}^FS`,
+    `^FO${left},${dots(21.5)}^A0N,20,20^FDSIZE^FS`,
+    `^FO${left + 56},${dots(21.5) - 16}^A0N,44,44^FD${esc(cut(item.size_label ?? "—", 10))}^FS`,
+    `^FO${left},${dots(26.8)}^GB${priceW},${dots(8)},3,B,2^FS`,
+    `^FO${left + 16},${dots(26.8) + 16}^A0N,46,46^FD${esc(price)}^FS`,
+    `^FO${left},${dots(46.4)}^A0N,20,20^FD${esc(item.sku)}^FS`,
+    opts.copies && opts.copies > 1 ? `^PQ${opts.copies}` : "",
+    "^XZ",
+  ].filter(Boolean).join("\n");
+}
