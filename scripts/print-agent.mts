@@ -32,7 +32,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import puppeteer, { type Browser } from "puppeteer-core";
 
 import { TAG_FORMATS, TagFaces, tagCss, type TagFormat, type TagItem } from "../components/tag-faces";
-import { zplLabel225x15 } from "../lib/print/zpl";
+import { zplLabel15x225, zplLabel225x15 } from "../lib/print/zpl";
 import { toSvg } from "../lib/barcode/code128";
 import { qrSvg } from "../lib/barcode/qr";
 import { loadRareReasons, rareTagLine } from "../lib/pricing/rare-reasons";
@@ -106,9 +106,10 @@ async function printJob(job: { id: number; sku: string; format: string; copies: 
   const item = await loadItem(job.sku);
   const file = path.join(tmp, `${job.id}-${job.sku}`);
   if (ZPL) {
-    // Only the 2.25 × 1.5 label has a ZPL drawing; other papers fall back to the PDF route on the same queue.
-    if (format === "label225x15") {
-      fs.writeFileSync(`${file}.zpl`, zplLabel225x15(item, { thermalTransfer: THERMAL_TRANSFER, copies: job.copies }));
+    // The two Zebra papers have native drawings; other papers fall back to the PDF route on the same queue.
+    const zpl = format === "label225x15" ? zplLabel225x15 : format === "label15x225" ? zplLabel15x225 : null;
+    if (zpl) {
+      fs.writeFileSync(`${file}.zpl`, zpl(item, { thermalTransfer: THERMAL_TRANSFER, copies: job.copies }));
       if (DEVICE) fs.writeFileSync(DEVICE, fs.readFileSync(`${file}.zpl`));
       else if (WIN) await run("cmd.exe", ["/c", "copy", "/b", `${file}.zpl`, SHARE], { timeout: 30_000, windowsHide: true });
       else await run("lp", ["-d", QUEUE, "-o", "raw", "-t", `Tag ${job.sku}`, `${file}.zpl`], { timeout: 30_000 });

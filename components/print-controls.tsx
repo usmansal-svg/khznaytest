@@ -32,7 +32,7 @@ export function PrintControls({ skus, format, setFormat }: { skus: string[]; for
       </label>
       {route === "helper" && printers.length > 0 && (
         <label className="flex items-center gap-1.5 text-neutral-600">Which
-          <select value={printer} onChange={(e) => { setPrinter(e.target.value); savePrinter(e.target.value); }} className="rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm text-black">
+          <select value={printer} onChange={(e) => { setPrinter(e.target.value); savePrinter(e.target.value); const p = printers.find((x) => x.name === e.target.value); if (p?.paper && TAG_FORMATS.some((f) => f.code === p.paper)) { setFormat(p.paper as TagFormat); saveTagFormat(p.paper as TagFormat); } }} className="rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm text-black">
             <option value="">Any printer</option>
             {printers.map((p) => <option key={p.name} value={p.name}>{p.name}{p.online ? "" : " (offline)"}</option>)}
           </select>

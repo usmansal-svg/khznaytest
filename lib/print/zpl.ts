@@ -39,3 +39,34 @@ export function zplLabel225x15(item: TagItem, opts: { thermalTransfer?: boolean;
     "^XZ",
   ].filter(Boolean).join("\n");
 }
+
+/**
+ * The portrait 1.5 × 2.25 in label (38.1 × 57.15 mm) as ZPL: wordmark, brand
+ * and type top left; the QR top right; size and the boxed price below; the
+ * SKU bottom left; the bottom-right corner empty for the round markdown
+ * sticker. Mirrors TagLabelPortrait in components/tag-faces.tsx.
+ */
+export function zplLabel15x225(item: TagItem, opts: { thermalTransfer?: boolean; darkness?: number; copies?: number } = {}): string {
+  const W = dots(38.1), H = dots(57.15);
+  const left = dots(2);
+  const price = rs(item.list_price);
+  const qrMag = 5; // 21 modules × 5 dots ≈ 13 mm
+  const qrX = W - 21 * qrMag - dots(1.5), qrY = dots(1.5);
+  const textW = qrX - left - dots(1.5);
+  const priceW = Math.min(W - 2 * left, Math.round(price.length * 21 + 34));
+  const typeLine = item.is_rare ? `★ RARE FIND${item.rare_tag_line ? ` · ${item.rare_tag_line}` : ""}` : item.sub_category;
+  return [
+    "^XA", "^CI28", `^PW${W}`, `^LL${H}`, "^LH0,0", opts.thermalTransfer ? "^MTT" : "^MTD", opts.darkness != null ? `^MD${opts.darkness}` : "",
+    `^FO${left},${dots(1.8)}^A0N,20,22^FDKHAZANAY^FS`,
+    `^FO${left},${dots(5.2)}^A0N,30,30^FB${textW},1,0,L^FD${esc(cut(item.brand || "Unbranded", 18))}^FS`,
+    `^FO${left},${dots(9.6)}^A0N,20,20^FB${textW},2,0,L^FD${esc(cut(typeLine, 40))}^FS`,
+    `^FO${qrX},${qrY}^BQN,2,${qrMag}^FDQA,${esc(item.sku)}^FS`,
+    `^FO${left},${dots(19.6)}^A0N,18,18^FDSIZE^FS`,
+    `^FO${left + 52},${dots(19.6) - 14}^A0N,40,40^FD${esc(cut(item.size_label ?? "—", 10))}^FS`,
+    `^FO${left},${dots(24.4)}^GB${priceW},${dots(7.6)},3,B,2^FS`,
+    `^FO${left + 16},${dots(24.4) + 16}^A0N,42,42^FD${esc(price)}^FS`,
+    `^FO${left},${dots(53.6)}^A0N,18,18^FD${esc(item.sku)}^FS`,
+    opts.copies && opts.copies > 1 ? `^PQ${opts.copies}` : "",
+    "^XZ",
+  ].filter(Boolean).join("\n");
+}
