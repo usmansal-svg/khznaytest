@@ -229,23 +229,29 @@ function TagLabelLarge({ item }: { item: TagItem }) {
 function TagLabelMedium({ item }: { item: TagItem }) {
   const rare = Boolean(item.is_rare);
   const W = 57.15, H = 38.1;
-  const left = 2;
   const mod = 6 * DOT_MM;
   const qr = 21 * mod;
   const quiet = 4 * mod;
   const box = qr + 2 * quiet;
+  const bandH = 4.6;
   return (
     <div className="tag shadow-lg">
-      <div className="absolute flex flex-col" style={{ left: `${left}mm`, top: "2mm", bottom: "1.8mm", width: `${W - left - box + quiet / 2}mm` }}>
-        {rare && <div className="mb-[0.8mm] inline-block self-start rounded-[0.6mm] bg-black px-[1.2mm] py-[0.5mm] text-[6.5pt] font-black uppercase leading-none tracking-wide text-white">★ Rare find</div>}
-        <div className="truncate text-[8pt] font-bold leading-tight">{item.brand || "Unbranded"}</div>
-        <div className="truncate text-[6.5pt] leading-tight text-neutral-700">{rare && item.rare_tag_line ? item.rare_tag_line : item.sub_category}</div>
-        <div className="mt-auto truncate text-[11pt] font-black leading-none"><span className="mr-[1mm] text-[6pt] font-bold uppercase tracking-wide text-neutral-600">Size</span>{item.size_label ?? "—"}</div>
-        <div className="mt-[1mm] inline-block self-start whitespace-nowrap rounded-[0.8mm] border-[0.4mm] border-black px-[1.2mm] py-[0.7mm] text-[13pt] font-black leading-none tabular-nums tracking-tight">{rs(item.list_price)}</div>
-        <div className="mt-[1.2mm] font-mono text-[6pt] font-semibold leading-none tracking-wide">{item.sku}</div>
+      {/* Header: the wordmark reversed out of a black band; a Rare find says so on the right of it */}
+      <div className={`absolute inset-x-0 top-0 flex h-[${bandH}mm] items-center justify-between bg-black px-[2.2mm] text-[6.5pt] font-black uppercase leading-none tracking-[0.2em] text-white`} style={{ height: `${bandH}mm` }}>
+        <span>Khazanay</span>
+        {rare && <span className="tracking-[0.1em]">★ Rare find</span>}
       </div>
-      <div className="absolute text-right text-[6.5pt] font-black uppercase tracking-[0.12em]" style={{ right: "2mm", top: "2.2mm" }}>Khazanay</div>
-      <div className="absolute bg-white" style={{ right: 0, top: `${(H - box) / 2 + 1.5}mm`, width: `${box}mm`, height: `${box}mm`, padding: `${quiet}mm` }}>
+      <div className="absolute flex flex-col" style={{ left: "2.2mm", top: `${bandH + 1.4}mm`, bottom: "1.6mm", width: `${W - 2.2 - box + quiet / 2}mm` }}>
+        <div className="truncate text-[8.5pt] font-black leading-tight tracking-tight">{item.brand || "Unbranded"}</div>
+        <div className="truncate text-[6.5pt] leading-tight text-neutral-600">{rare && item.rare_tag_line ? item.rare_tag_line : item.sub_category}</div>
+        <div className="mt-auto flex items-baseline gap-[1.2mm] leading-none">
+          <span className="text-[5.5pt] font-bold uppercase tracking-[0.14em] text-neutral-500">Size</span>
+          <span className="text-[11pt] font-black tracking-tight">{item.size_label ?? "—"}</span>
+        </div>
+        <div className="mt-[1.1mm] inline-block self-start whitespace-nowrap rounded-[1mm] border-[0.45mm] border-black px-[1.6mm] py-[0.8mm] text-[13pt] font-black leading-none tabular-nums tracking-tight">{rs(item.list_price)}</div>
+        <div className="mt-[1.2mm] font-mono text-[5.5pt] font-semibold leading-none tracking-[0.08em] text-neutral-700">{item.sku}</div>
+      </div>
+      <div className="absolute bg-white" style={{ right: 0, top: `${(H - box) / 2 + bandH / 2}mm`, width: `${box}mm`, height: `${box}mm`, padding: `${quiet}mm` }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={`/api/tags/${encodeURIComponent(item.sku)}/qr`} alt={item.sku} className="block" style={{ width: `${qr}mm`, height: `${qr}mm` }} />
       </div>
@@ -260,22 +266,26 @@ function TagLabelMedium({ item }: { item: TagItem }) {
  */
 function TagLabelPortrait({ item }: { item: TagItem }) {
   const rare = Boolean(item.is_rare);
-  const mod = 7 * DOT_MM;
-  const qr = 21 * mod; // ≈ 18.4 mm
+  const mod = 6 * DOT_MM;
+  const qr = 21 * mod; // ≈ 15.8 mm
   return (
     <div className="tag shadow-lg">
-      <div className="absolute flex flex-col" style={{ left: "2mm", right: "2mm", top: "1.8mm", bottom: "1.6mm" }}>
-        <div className="text-center text-[6.5pt] font-black uppercase leading-none tracking-[0.14em]">Khazanay</div>
-        {rare && <div className="mt-[1.2mm] self-center rounded-[0.6mm] bg-black px-[1.4mm] py-[0.5mm] text-[6.5pt] font-black uppercase leading-none tracking-wide text-white">★ Rare find</div>}
-        <div className={cn("truncate text-center text-[8.5pt] font-bold leading-tight", rare ? "mt-[1mm]" : "mt-[1.6mm]")}>{item.brand || "Unbranded"}</div>
-        <div className="truncate text-center text-[6.5pt] leading-tight text-neutral-700">{rare && item.rare_tag_line ? item.rare_tag_line : item.sub_category}</div>
-        <div className="my-auto self-center bg-white" style={{ padding: `${3 * mod}mm` }}>
+      {/* Header: the wordmark reversed out of a black band */}
+      <div className="absolute inset-x-0 top-0 flex h-[5.2mm] items-center justify-center bg-black text-[7pt] font-black uppercase leading-none tracking-[0.22em] text-white">Khazanay</div>
+      <div className="absolute flex flex-col" style={{ left: "2.2mm", right: "2.2mm", top: "6.6mm", bottom: "1.8mm" }}>
+        {rare && <div className="shrink-0 self-center rounded-full border-[0.35mm] border-black px-[1.6mm] py-[0.5mm] text-[6pt] font-black uppercase leading-none tracking-[0.12em]">★ Rare find</div>}
+        <div className={cn("shrink-0 truncate text-center text-[9pt] font-black leading-tight tracking-tight", rare ? "mt-[1mm]" : "mt-[0.4mm]")}>{item.brand || "Unbranded"}</div>
+        <div className="shrink-0 truncate text-center text-[6.5pt] leading-tight text-neutral-600">{rare && item.rare_tag_line ? item.rare_tag_line : item.sub_category}</div>
+        <div className="my-auto shrink-0 self-center bg-white" style={{ padding: `${3 * mod}mm` }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={`/api/tags/${encodeURIComponent(item.sku)}/qr`} alt={item.sku} className="block" style={{ width: `${qr}mm`, height: `${qr}mm` }} />
         </div>
-        <div className="text-center text-[11pt] font-black leading-none"><span className="mr-[1mm] text-[6pt] font-bold uppercase tracking-wide text-neutral-600">Size</span>{item.size_label ?? "—"}</div>
-        <div className="mt-[1.2mm] self-center whitespace-nowrap rounded-[0.8mm] border-[0.4mm] border-black px-[1.6mm] py-[0.7mm] text-[13pt] font-black leading-none tabular-nums tracking-tight">{rs(item.list_price)}</div>
-        <div className="mt-[1.2mm] text-center font-mono text-[6pt] font-semibold leading-none tracking-wide">{item.sku}</div>
+        <div className="flex items-baseline justify-center gap-[1.2mm] leading-none">
+          <span className="text-[5.5pt] font-bold uppercase tracking-[0.14em] text-neutral-500">Size</span>
+          <span className="text-[12pt] font-black tracking-tight">{item.size_label ?? "—"}</span>
+        </div>
+        <div className="mt-[1.4mm] self-center whitespace-nowrap rounded-[1mm] border-[0.45mm] border-black px-[2mm] py-[0.9mm] text-[13pt] font-black leading-none tabular-nums tracking-tight">{rs(item.list_price)}</div>
+        <div className="mt-[1.4mm] border-t-[0.25mm] border-neutral-300 pt-[0.9mm] text-center font-mono text-[5.5pt] font-semibold leading-none tracking-[0.08em] text-neutral-700">{item.sku}</div>
       </div>
     </div>
   );
