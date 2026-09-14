@@ -235,13 +235,15 @@ function TagLabelMedium({ item }: { item: TagItem }) {
   return (
     <div className="tag shadow-lg">
       <div className="absolute flex flex-col" style={{ left: `${left}mm`, top: "2mm", bottom: "1.8mm", width: `${W - left - box + quiet / 2}mm` }}>
-        <div className="truncate text-[8pt] font-bold leading-tight">{rare ? "★ " : ""}{item.brand || "Unbranded"}</div>
-        <div className="truncate text-[6.5pt] leading-tight text-neutral-700">{item.sub_category}</div>
+        {rare && <div className="mb-[0.8mm] inline-block self-start rounded-[0.6mm] bg-black px-[1.2mm] py-[0.5mm] text-[6.5pt] font-black uppercase leading-none tracking-wide text-white">★ Rare find</div>}
+        <div className="truncate text-[8pt] font-bold leading-tight">{item.brand || "Unbranded"}</div>
+        <div className="truncate text-[6.5pt] leading-tight text-neutral-700">{rare && item.rare_tag_line ? item.rare_tag_line : item.sub_category}</div>
         <div className="mt-auto truncate text-[11pt] font-black leading-none"><span className="mr-[1mm] text-[6pt] font-bold uppercase tracking-wide text-neutral-600">Size</span>{item.size_label ?? "—"}</div>
         <div className="mt-[1mm] inline-block self-start whitespace-nowrap rounded-[0.8mm] border-[0.4mm] border-black px-[1.2mm] py-[0.7mm] text-[13pt] font-black leading-none tabular-nums tracking-tight">{rs(item.list_price)}</div>
         <div className="mt-[1.2mm] font-mono text-[6pt] font-semibold leading-none tracking-wide">{item.sku}</div>
       </div>
-      <div className="absolute bg-white" style={{ right: 0, top: `${(H - box) / 2}mm`, width: `${box}mm`, height: `${box}mm`, padding: `${quiet}mm` }}>
+      <div className="absolute text-right text-[6.5pt] font-black uppercase tracking-[0.12em]" style={{ right: "2mm", top: "2.2mm" }}>Khazanay</div>
+      <div className="absolute bg-white" style={{ right: 0, top: `${(H - box) / 2 + 1.5}mm`, width: `${box}mm`, height: `${box}mm`, padding: `${quiet}mm` }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={`/api/tags/${encodeURIComponent(item.sku)}/qr`} alt={item.sku} className="block" style={{ width: `${qr}mm`, height: `${qr}mm` }} />
       </div>

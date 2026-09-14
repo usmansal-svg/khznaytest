@@ -20,18 +20,21 @@ export function zplLabel225x15(item: TagItem, opts: { thermalTransfer?: boolean;
   const price = rs(item.list_price);
   // The QR: model 2, magnification 6 → 21 modules × 6 dots ≈ 16 mm for a 16-character SKU, with a 3 mm quiet zone.
   const qrMag = 6, qrSide = 21 * qrMag + 2 * 4 * qrMag; // modules + quiet, in dots
-  const qrX = W - qrSide + 4 * qrMag - dots(1), qrY = Math.round((H - 21 * qrMag) / 2);
+  const qrX = W - qrSide + 4 * qrMag - dots(1), qrY = Math.round((H - 21 * qrMag) / 2) + dots(1.5);
   const priceW = Math.min(W - left - qrSide - dots(1), Math.round(price.length * 21 + 30));
   return [
     "^XA", "^CI28", `^PW${W}`, `^LL${H}`, "^LH0,0", opts.thermalTransfer ? "^MTT" : "^MTD", opts.darkness != null ? `^MD${opts.darkness}` : "",
-    `^FO${left},${dots(2)}^A0N,30,30^FB${W - left - qrSide},1,0,L^FD${esc(cut((item.is_rare ? "★ " : "") + (item.brand || "Unbranded"), 26))}^FS`,
-    `^FO${left},${dots(2) + 34}^A0N,22,22^FB${W - left - qrSide},1,0,L^FD${esc(cut(item.sub_category, 34))}^FS`,
+    // Rare find: a black band with white text above the brand; the reason replaces the garment type.
+    ...(item.is_rare ? [`^FO${left},${dots(1.5)}^GB${dots(22)},${dots(3.6)},${dots(3.6)},B,1^FS`, `^FO${left + 8},${dots(1.5) + 8}^A0N,20,20^FR^FDRARE FIND^FS`] : []),
+    `^FO${left},${item.is_rare ? dots(5.6) : dots(2)}^A0N,30,30^FB${W - left - qrSide},1,0,L^FD${esc(cut(item.brand || "Unbranded", 26))}^FS`,
+    `^FO${left},${(item.is_rare ? dots(5.6) : dots(2)) + 34}^A0N,22,22^FB${W - left - qrSide},1,0,L^FD${esc(cut(item.is_rare && item.rare_tag_line ? item.rare_tag_line : item.sub_category, 34))}^FS`,
     `^FO${left},${dots(17.5)}^A0N,18,18^FDSIZE^FS`,
     `^FO${left + 56},${dots(17.5) - 12}^A0N,38,38^FD${esc(cut(item.size_label ?? "—", 10))}^FS`,
     `^FO${left},${dots(23)}^GB${priceW},${dots(7.5)},3,B,2^FS`,
     `^FO${left + 14},${dots(23) + 14}^A0N,40,40^FD${esc(price)}^FS`,
     `^FO${left},${dots(32.2)}^A0N,20,20^FD${esc(item.sku)}^FS`,
     `^FO${qrX},${qrY}^BQN,2,${qrMag}^FDQA,${esc(item.sku)}^FS`,
+    `^FO${W - dots(2) - 150},${dots(2.2)}^A0N,20,20^FB150,1,0,R^FDKHAZANAY^FS`,
     opts.copies && opts.copies > 1 ? `^PQ${opts.copies}` : "",
     "^XZ",
   ].filter(Boolean).join("\n");
