@@ -46,13 +46,13 @@ export function CatalogueTree() {
   useEffect(() => { if (msg?.tone === "ok") { const t = setTimeout(() => setMsg(null), 6000); return () => clearTimeout(t); } }, [msg]);
 
   // A name that already exists for both seasons: the clash message comes with two buttons to split it.
-  const [dup, setDup] = useState<{ slug: string; name: string; category_slug: string } | null>(null);
+  const [dup, setDup] = useState<{ slug: string; name: string; category_slug: string; season: string; splittable: boolean } | null>(null);
   async function act(body: Record<string, unknown>, ok: string) {
     setBusy(true); setMsg(null);
     try {
       const r = await fetch("/api/admin/catalogue", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
       const j = await r.json();
-      if (!r.ok) { setDup(j.duplicate?.splittable && body.action === "add_sub" ? { ...j.duplicate, category_slug: String(body.category_slug), name: String(body.name) } : null); throw new Error(j.error ?? "Failed."); }
+      if (!r.ok) { setDup(j.duplicate && body.action === "add_sub" && !body.split_from && !body.season ? { ...j.duplicate, category_slug: String(body.category_slug), name: String(body.name) } : null); throw new Error(j.error ?? "Failed."); }
       setDup(null);
       setMsg({ tone: "ok", text: (j.hidden ? `${ok.replace(" deleted.", "")} has ${j.count} garment${j.count === 1 ? "" : "s"} tagged under it, so it was hidden rather than deleted. Tick “Show hidden” to restore it.` : ok) + (j.copied_from ? ` Cost Rs ${Math.round(j.cost)} copied from a sibling; tune it on Pricing → Categories.` : j.cost ? ` No sibling to copy from, so the cost is the typical Rs ${Math.round(j.cost)}; set it on Pricing → Categories.` : "") });
       await load();
@@ -151,9 +151,18 @@ export function CatalogueTree() {
                 <AddRow placeholder={`Add a sub-category to ${current.name}, e.g. Formal shirt`} busy={busy} autoFocusKey={current.slug} onAdd={async (name) => Boolean(await act({ action: "add_sub", category_slug: current.slug, name }, `${name} added to ${current.name}.`))} />
                 {dup && dup.category_slug === current.slug && (
                   <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-amber-500 bg-amber-50 p-2 text-xs dark:bg-amber-950/30">
-                    <span>Split “{dup.name}” by season:</span>
-                    <Button size="sm" variant="outline" className="h-7" disabled={busy} onClick={() => act({ action: "add_sub", category_slug: current.slug, name: dup.name, season: "winter", split_from: dup.slug }, `${dup.name} split: the existing one is now Summer, a Winter one was added.`)}>Existing → Summer, add Winter</Button>
-                    <Button size="sm" variant="outline" className="h-7" disabled={busy} onClick={() => act({ action: "add_sub", category_slug: current.slug, name: dup.name, season: "summer", split_from: dup.slug }, `${dup.name} split: the existing one is now Winter, a Summer one was added.`)}>Existing → Winter, add Summer</Button>
+                    {dup.splittable ? (
+                      <>
+                        <span>“{dup.name}” exists for both seasons. Split it:</span>
+                        <Button size="sm" variant="outline" className="h-7" disabled={busy} onClick={() => act({ action: "add_sub", category_slug: current.slug, name: dup.name, season: "winter", split_from: dup.slug }, `${dup.name} split: the existing one is now Summer, a Winter one was added.`)}>Existing → Summer, add Winter</Button>
+                        <Button size="sm" variant="outline" className="h-7" disabled={busy} onClick={() => act({ action: "add_sub", category_slug: current.slug, name: dup.name, season: "summer", split_from: dup.slug }, `${dup.name} split: the existing one is now Winter, a Summer one was added.`)}>Existing → Winter, add Summer</Button>
+                      </>
+                    ) : (
+                      <>
+                        <span>“{dup.name}” exists for {dup.season}.</span>
+                        <Button size="sm" variant="outline" className="h-7" disabled={busy} onClick={() => { const other = dup.season === "summer" ? "winter" : "summer"; void act({ action: "add_sub", category_slug: current.slug, name: dup.name, season: other }, `${dup.name} added for ${other}.`); }}>Add a {dup.season === "summer" ? "Winter" : "Summer"} one</Button>
+                      </>
+                    )}
                     <button type="button" className="text-muted-foreground underline" onClick={() => setDup(null)}>Cancel</button>
                   </div>
                 )}
