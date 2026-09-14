@@ -255,7 +255,7 @@ export function PhotoStation({ sku }: { sku: string }) {
             <div className="mt-2 flex items-start gap-3">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={measure.url} alt="Measurements" className="w-40 rounded-md border bg-white" />
-              <p className="text-xs text-muted-foreground">Goes to Shopify right after the cover. The numbers are the tagger's; drag the line ends if a line sits in the wrong place.</p>
+              <p className="text-xs text-muted-foreground">Goes to Shopify right after the cover. The numbers are the tagger&apos;s; drag the line ends if a line sits in the wrong place.</p>
             </div>
           ) : (
             <p className="mt-1 text-xs text-muted-foreground">{!coverCut ? "Remove the cover's background first." : !mInfo ? "This garment type has no measurements to draw." : Object.keys(item.measurements ?? {}).filter((k) => k !== "Sleeve").length ? "Not drawn yet — tap Draw lines." : "No measurements were tagged, so there is nothing to draw."}</p>
