@@ -24,7 +24,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Body must be JSON." }, { status: 400 });
   }
   const db = gate.db;
-  const { data: me } = await db.from("staff").select("id, name, role, outlet_id, pin_hash").eq("id", gate.staff.id).maybeSingle();
+  const { data: me } = await db.from("staff").select("id, name, role, outlet_id, pin_hash, permissions").eq("id", gate.staff.id).maybeSingle();
   if (!me) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   if (!verifyPin(String(body.current_pin ?? ""), me.pin_hash)) return NextResponse.json({ error: "Current PIN is wrong." }, { status: 401 });
 
@@ -50,7 +50,7 @@ export async function PATCH(request: Request) {
   const res = NextResponse.json({ ok: true, name: newName });
   const secret = sessionSecret();
   if (secret) {
-    const token = await signSession({ id: me.id, name: newName, role: me.role, outlet_id: me.outlet_id }, secret);
+    const token = await signSession({ id: me.id, name: newName, role: me.role, outlet_id: me.outlet_id, ...(Array.isArray(me.permissions) ? { perms: me.permissions } : {}) }, secret);
     res.cookies.set(SESSION_COOKIE, token, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: SESSION_HOURS * 3600 });
   }
   return res;

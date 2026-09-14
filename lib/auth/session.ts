@@ -15,6 +15,8 @@ export type StaffSession = {
   name: string;
   role: "tagger" | "qc_senior" | "manager" | "founder" | "photographer" | "cashier" | "outlet_manager";
   outlet_id: number | null;
+  /** Own screen permissions when set on the Staff screen; absent = the role's default. */
+  perms?: string[];
   exp: number; // unix seconds
 };
 

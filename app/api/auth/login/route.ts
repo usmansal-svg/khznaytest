@@ -41,7 +41,7 @@ export async function POST(request: Request) {
   if (a && a.until > Date.now()) return NextResponse.json({ error: "Too many wrong PINs — wait a minute." }, { status: 429 });
 
   const db = createServiceClient();
-  const { data: staff } = await db.from("staff").select("id, name, role, outlet_id, pin_hash, active").eq("id", id).maybeSingle();
+  const { data: staff } = await db.from("staff").select("id, name, role, outlet_id, pin_hash, active, permissions").eq("id", id).maybeSingle();
   if (!staff || !staff.active || !verifyPin(body.pin, staff.pin_hash)) {
     const n = (a?.n ?? 0) + 1;
     attempts.set(id, { n, until: n >= 5 ? Date.now() + 60_000 : 0 });
@@ -50,8 +50,8 @@ export async function POST(request: Request) {
   attempts.delete(id);
   await db.from("staff").update({ last_login: new Date().toISOString() }).eq("id", id);
 
-  const token = await signSession({ id: staff.id, name: staff.name, role: staff.role, outlet_id: staff.outlet_id }, secret);
-  const res = NextResponse.json({ staff: { id: staff.id, name: staff.name, role: staff.role, outlet_id: staff.outlet_id } });
+  const token = await signSession({ id: staff.id, name: staff.name, role: staff.role, outlet_id: staff.outlet_id, ...(Array.isArray(staff.permissions) ? { perms: staff.permissions } : {}) }, secret);
+  const res = NextResponse.json({ staff: { id: staff.id, name: staff.name, role: staff.role, outlet_id: staff.outlet_id, perms: Array.isArray(staff.permissions) ? staff.permissions : null } });
   res.cookies.set(SESSION_COOKIE, token, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: SESSION_HOURS * 3600 });
   return res;
 }

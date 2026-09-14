@@ -7,40 +7,23 @@ import { ArrowRightLeft, Award, Camera, ClipboardCheck, PanelLeftClose, PanelLef
 
 import { BrandLogo } from "@/components/brand-logo";
 import { ThemeSwitcher } from "@/components/theme-switcher";
+import { PERMISSIONS, homeFor, permissionsFor, type Permission } from "@/lib/auth/permissions";
 import { cn } from "@/lib/utils";
 
-type Role = "tagger" | "qc_senior" | "manager" | "founder" | "photographer" | "cashier" | "outlet_manager";
-type NavItem = { href: string; label: string; icon: LucideIcon; min?: Role };
-const RANK: Record<Role, number> = { tagger: 0, qc_senior: 1, manager: 2, founder: 3, photographer: 0, cashier: 0, outlet_manager: 1 };
-
-const WORK: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, min: "manager" },
-  { href: "/tag", label: "Tag item", icon: Tag },
-  { href: "/items", label: "Items", icon: Search },
-  { href: "/photos", label: "Photos", icon: Camera },
-  { href: "/transfers", label: "Transfers", icon: ArrowRightLeft, min: "qc_senior" },
-  { href: "/qc", label: "QC", icon: ClipboardCheck, min: "qc_senior" },
-  { href: "/lots", label: "Lots", icon: Package, min: "manager" },
-];
-
-const ADMIN: NavItem[] = [
-  { href: "/admin/catalogue", label: "Catalogue", icon: Network, min: "manager" },
-  { href: "/admin/pricing", label: "Pricing", icon: SlidersHorizontal, min: "manager" },
-  { href: "/admin/brands", label: "Brands", icon: Tags, min: "manager" },
-  { href: "/admin/scorecard", label: "Scorecard", icon: Award, min: "manager" },
-  { href: "/admin/settings", label: "Settings", icon: Settings, min: "manager" },
-];
+type NavItem = { href: string; label: string; icon: LucideIcon; key: Permission };
+const ICONS: Record<Permission, LucideIcon> = { dashboard: LayoutDashboard, tag: Tag, items: Search, photos: Camera, transfers: ArrowRightLeft, qc: ClipboardCheck, lots: Package, catalogue: Network, pricing: SlidersHorizontal, brands: Tags, scorecard: Award, settings: Settings };
+const NAV: NavItem[] = PERMISSIONS.map((p) => ({ href: p.paths[0], label: p.label, icon: ICONS[p.key], key: p.key }));
 
 /** `auth` is rendered by the server layout — AuthButton is a Server Component and must not be imported here. */
 export function AppShell({ auth, children }: { auth: React.ReactNode; children: React.ReactNode }) {
   const pathname = usePathname();
-  const [role, setRole] = useState<Role | null>(null);
+  const [perms, setPerms] = useState<Permission[] | null>(null);
   useEffect(() => {
     fetch("/api/auth/me")
       .then((r) => r.json())
       .then((j) => {
         const next = j.staff?.role ?? null;
-        setRole(next);
+        setPerms(next ? (Array.isArray(j.staff?.perms) ? j.staff.perms : permissionsFor(next, null)) : null);
         // A lapsed session (12 hours) used to leave the page up with a
         // tagger-sized menu. Send the person to sign in again instead.
         const isPublic = ["/price", "/pos", "/health", "/login"].some((p) => pathname.startsWith(p));
@@ -57,11 +40,11 @@ export function AppShell({ auth, children }: { auth: React.ReactNode; children: 
   function toggleNav() {
     setCollapsed((c) => { try { localStorage.setItem("khz_nav", c ? "open" : "closed"); } catch { /* fine */ } return !c; });
   }
-  const rank = role ? RANK[role] : 0;
-  const home = role === "photographer" ? "/photos" : role === "manager" || role === "founder" ? "/dashboard" : "/tag";
-  const can = (item: NavItem) => !item.min || rank >= RANK[item.min];
-  const work = role === "photographer" ? WORK.filter((i) => i.href === "/photos") : WORK.filter(can);
-  const admin = role === "photographer" ? [] : ADMIN.filter(can);
+  const mine = perms ?? [];
+  const home = homeFor(mine);
+  const allowed = NAV.filter((i) => mine.includes(i.key));
+  const work = allowed.filter((i) => PERMISSIONS.find((p) => p.key === i.key)?.group === "Work");
+  const admin = allowed.filter((i) => PERMISSIONS.find((p) => p.key === i.key)?.group === "Admin");
 
   return (
     <div className="flex min-h-screen bg-muted/40">
@@ -84,7 +67,7 @@ export function AppShell({ auth, children }: { auth: React.ReactNode; children: 
         <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b bg-background px-4 print:hidden md:hidden">
           <BrandLogo href={home} />
           <nav className="flex gap-3 overflow-x-auto text-sm">
-            {(role === "photographer" ? [] : [...work, ...admin]).map((item) => (
+            {[...work, ...admin].map((item) => (
               <Link
                 key={item.href}
                 href={item.href}

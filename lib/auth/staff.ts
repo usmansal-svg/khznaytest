@@ -11,8 +11,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient, serviceKey } from "@/lib/supabase/service";
 import { MANAGER_ROLES, SESSION_COOKIE, sessionSecret, verifySession, type StaffSession } from "./session";
+import { permissionsFor, type Permission } from "./permissions";
 
-export type Staff = { id: number; name: string; role: StaffSession["role"]; outlet_id: number | null };
+export type Staff = { id: number; name: string; role: StaffSession["role"]; outlet_id: number | null; perms: Permission[] };
 
 /** The signed-in staff member, or null. */
 export async function currentStaff(): Promise<Staff | null> {
@@ -20,7 +21,7 @@ export async function currentStaff(): Promise<Staff | null> {
   if (secret) {
     const token = (await cookies()).get(SESSION_COOKIE)?.value;
     const s = await verifySession(token, secret);
-    if (s) return { id: s.id, name: s.name, role: s.role, outlet_id: s.outlet_id };
+    if (s) return { id: s.id, name: s.name, role: s.role, outlet_id: s.outlet_id, perms: permissionsFor(s.role, s.perms ?? null) };
   }
   // Email login fallback
   const supabase = await createClient();
@@ -28,8 +29,8 @@ export async function currentStaff(): Promise<Staff | null> {
   if (!data.user) return null;
   const { data: row } = await supabase.rpc("ensure_staff");
   if (!row) return null;
-  const r = row as { id: number; name: string; role: StaffSession["role"]; outlet_id: number | null };
-  return { id: r.id, name: r.name, role: r.role, outlet_id: r.outlet_id };
+  const r = row as { id: number; name: string; role: StaffSession["role"]; outlet_id: number | null; permissions?: string[] | null };
+  return { id: r.id, name: r.name, role: r.role, outlet_id: r.outlet_id, perms: permissionsFor(r.role, r.permissions ?? null) };
 }
 
 /**
@@ -51,7 +52,9 @@ export async function requireStaff(): Promise<{ staff: Staff; db: SupabaseClient
 export async function requireManager(): Promise<{ staff: Staff; db: SupabaseClient } | { response: NextResponse }> {
   const r = await requireStaff();
   if ("response" in r) return r;
-  if (!MANAGER_ROLES.has(r.staff.role)) {
+  // Managers and the founder, or anyone given an admin screen on the Staff screen (the proxy gates each API path by screen).
+  const admin: Permission[] = ["dashboard", "lots", "catalogue", "pricing", "brands", "scorecard", "settings"];
+  if (!MANAGER_ROLES.has(r.staff.role) && !r.staff.perms.some((p) => admin.includes(p))) {
     return { response: NextResponse.json({ error: "Only managers and the founder can do this." }, { status: 403 }) };
   }
   return r;

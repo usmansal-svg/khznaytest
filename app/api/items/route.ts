@@ -92,7 +92,7 @@ export async function POST(request: Request) {
   // Shopify tags; with none given, the category's gender stands in.
   const wearer = (WEARERS.includes(body.wearer as Wearer) ? body.wearer : WEARERS.includes(subCategory.gender as Wearer) ? subCategory.gender : "unisex") as Wearer;
 
-  if (staff.role === "photographer") return NextResponse.json({ error: "Photographers take pictures; tagging is for taggers." }, { status: 403 });
+  if (!staff.perms.includes("tag")) return NextResponse.json({ error: "Your screens do not include Tag item." }, { status: 403 });
   const q = quote({ subCategory, brand, grade, adjustment, adjustPct, isRare: Boolean(body.is_rare), lot: null, weightKg: body.weight_kg ?? null, heavy: Boolean(body.heavy) }, ctx);
   if (q.error) return bad(q.error);
 

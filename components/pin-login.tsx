@@ -1,5 +1,7 @@
 "use client";
 
+import { homeFor, permissionsFor } from "@/lib/auth/permissions";
+
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Delete } from "lucide-react";
@@ -47,7 +49,7 @@ export function PinLogin() {
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "Sign-in failed.");
       const role = j.staff?.role as string | undefined;
-      const home = role === "manager" || role === "founder" ? "/dashboard" : role === "photographer" ? "/photos" : "/tag";
+      const home = homeFor(permissionsFor(role ?? "tagger", j.staff?.perms ?? null));
       router.replace(requested && requested !== "/" ? requested : home);
       router.refresh();
     } catch (e) {

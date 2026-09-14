@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PERMISSIONS, ROLE_DEFAULTS, type Permission, type Role } from "@/lib/auth/permissions";
 import { cn } from "@/lib/utils";
 
-type Staff = { id: number; name: string; role: string; outlet_id: number | null; outlet: string | null; active: boolean; has_pin: boolean; last_login: string | null; daily_target: number | null };
+type Staff = { id: number; name: string; role: string; outlet_id: number | null; outlet: string | null; active: boolean; has_pin: boolean; last_login: string | null; daily_target: number | null; permissions: string[] | null };
 type Outlet = { id: number; name: string };
 const ROLES = [
   { code: "tagger", label: "Tagger" },
@@ -30,6 +31,9 @@ export function StaffAdmin() {
   const [role, setRole] = useState("tagger");
   const [outletId, setOutletId] = useState("");
   const [pin, setPin] = useState("");
+  // Screens for the new person: null = the role's default set; a list = chosen by hand.
+  const [perms, setPerms] = useState<Permission[] | null>(null);
+  const [editing, setEditing] = useState<number | null>(null);
 
   async function load() {
     const res = await fetch("/api/admin/staff");
@@ -81,20 +85,27 @@ export function StaffAdmin() {
               <select id="so" value={outletId} onChange={(e) => setOutletId(e.target.value)} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"><option value="">—</option>{outlets.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select>
             </div>
             <div className="grid gap-1.5"><Label htmlFor="sp">PIN (4–6 digits)</Label><Input id="sp" inputMode="numeric" maxLength={6} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} /></div>
-            <Button className="w-full" disabled={busy || !name.trim() || pin.length < 4} onClick={() => call("POST", { name, role, outlet_id: outletId ? Number(outletId) : null, pin }, `${name} added.`).then((ok) => ok && (setName(""), setPin("")))}>Add</Button>
+            <PermissionPicker role={role} value={perms} onChange={setPerms} />
+            <Button className="w-full" disabled={busy || !name.trim() || pin.length < 4} onClick={() => call("POST", { name, role, outlet_id: outletId ? Number(outletId) : null, pin, permissions: perms }, `${name} added.`).then((ok) => ok && (setName(""), setPin(""), setPerms(null)))}>Add</Button>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-base">Everyone</CardTitle></CardHeader>
           <CardContent>
             <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase text-muted-foreground"><tr><th className="pb-2">Name</th><th className="pb-2">Role</th><th className="pb-2">Outlet</th><th className="pb-2">Last sign-in</th><th className="pb-2"></th></tr></thead>
+              <thead className="text-left text-xs uppercase text-muted-foreground"><tr><th className="pb-2">Name</th><th className="pb-2">Role</th><th className="pb-2">Screens</th><th className="pb-2">Outlet</th><th className="pb-2">Last sign-in</th><th className="pb-2"></th></tr></thead>
               <tbody className="divide-y">
                 {staff.map((s) => (
-                  <tr key={s.id} className={cn(!s.active && "opacity-50")}>
+                  <Fragment key={s.id}>
+                  <tr className={cn(!s.active && "opacity-50")}>
                     <td className="py-2">{s.name}{!s.has_pin && <span className="ml-2 text-xs text-amber-600 dark:text-amber-400">no PIN</span>}</td>
                     <td className="py-2">
                       <select value={s.role} disabled={busy} onChange={(e) => call("PATCH", { id: s.id, role: e.target.value }, "Role changed.")} className="h-8 rounded-md border border-input bg-transparent px-2 text-sm">{ROLES.map((r) => <option key={r.code} value={r.code}>{r.label}</option>)}</select>
+                    </td>
+                    <td className="py-2">
+                      <button type="button" onClick={() => setEditing(editing === s.id ? null : s.id)} className="text-left text-xs underline underline-offset-2">
+                        {s.permissions ? `${s.permissions.length} chosen` : "Role default"}
+                      </button>
                     </td>
                     <td className="py-2">
                       <select value={s.outlet_id ?? ""} disabled={busy} onChange={(e) => call("PATCH", { id: s.id, outlet_id: e.target.value ? Number(e.target.value) : null }, "Outlet changed.")} className="h-8 rounded-md border border-input bg-transparent px-2 text-sm"><option value="">—</option>{outlets.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select>
@@ -105,12 +116,48 @@ export function StaffAdmin() {
                       <Button size="sm" variant="ghost" disabled={busy} onClick={() => call("PATCH", { id: s.id, active: !s.active }, s.active ? "Deactivated." : "Reactivated.")}>{s.active ? "Deactivate" : "Reactivate"}</Button>
                     </td>
                   </tr>
+                  {editing === s.id && (
+                    <tr><td colSpan={6} className="pb-3">
+                      <PermissionPicker role={s.role} value={s.permissions as Permission[] | null} onChange={(v) => { void call("PATCH", { id: s.id, permissions: v }, `${s.name}'s screens saved. They apply at the next sign-in.`); }} />
+                    </td></tr>
+                  )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
           </CardContent>
         </Card>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Which screens a person may open. Starts on the role's default; ticking
+ * anything makes it their own list, "Role default" puts the default back.
+ */
+function PermissionPicker({ role, value, onChange }: { role: string; value: Permission[] | null; onChange: (v: Permission[] | null) => void }) {
+  const base = ROLE_DEFAULTS[role as Role] ?? [];
+  const current = value ?? base;
+  const toggle = (k: Permission) => onChange(current.includes(k) ? current.filter((x) => x !== k) : [...current, k]);
+  return (
+    <div className="grid gap-2 rounded-md border p-3">
+      <div className="flex items-center justify-between gap-2">
+        <Label>Screens {value ? <span className="font-normal text-muted-foreground">· chosen by hand</span> : <span className="font-normal text-muted-foreground">· the {ROLES.find((r) => r.code === role)?.label ?? role} default</span>}</Label>
+        {value && <button type="button" className="text-xs underline underline-offset-2" onClick={() => onChange(null)}>Role default</button>}
+      </div>
+      {(["Work", "Admin"] as const).map((group) => (
+        <div key={group} className="grid gap-1">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{group}</div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            {PERMISSIONS.filter((p) => p.group === group).map((p) => (
+              <label key={p.key} className="flex items-center gap-1.5 text-sm" title={p.hint}>
+                <input type="checkbox" checked={current.includes(p.key)} onChange={() => toggle(p.key)} /> {p.label}
+              </label>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

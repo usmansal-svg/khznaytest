@@ -39,6 +39,7 @@ export function ItemSearch() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [role, setRole] = useState<string | null>(null);
+  const [perms, setPerms] = useState<string[]>([]);
   const [filters, setFilters] = useState<Record<Key, Set<string>>>(empty());
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [from, setFrom] = useState("");
@@ -75,9 +76,9 @@ export function ItemSearch() {
     const today = new Date(Date.now() + 5 * 3600_000).toISOString().slice(0, 10);
     setFrom(today.slice(0, 8) + "01"); setTo(today);
     try { const n = Number(localStorage.getItem("khz_items_page_size")); if ([50, 100, 200].includes(n)) setPageSize(n); } catch { /* fine */ }
-    fetch("/api/auth/me").then((r) => r.json()).then((j) => setRole(j.staff?.role ?? null)).catch(() => {});
+    fetch("/api/auth/me").then((r) => r.json()).then((j) => { setRole(j.staff?.role ?? null); setPerms(Array.isArray(j.staff?.perms) ? j.staff.perms : []); }).catch(() => {});
   }, []);
-  const canExport = role === "manager" || role === "founder";
+  const canExport = role === "manager" || role === "founder" || perms.includes("dashboard") || perms.includes("pricing");
 
   useEffect(() => {
     if (!from || !to) return;
