@@ -17,6 +17,7 @@
  *   PRINTER_NAME    the name the iPads pick (default: the queue name)
  *   PRINT_PAPER     the paper loaded, for the pages to default to (label2x1 / label225x15 / …)
  *   PRINT_SHARE     Windows only: the shared printer to copy ZPL to (default \\localhost\<PRINT_QUEUE>)
+ *   PRINT_DEVICE    Linux / Raspberry Pi: the USB printer device to write ZPL to (e.g. /dev/usb/lp0); no CUPS needed
  * Windows: see scripts/print-agent-windows.md.
  */
 import { createClient } from "@supabase/supabase-js";
@@ -47,6 +48,8 @@ const NAME = process.env.PRINTER_NAME ?? QUEUE;
 // Windows: the printer is shared (Printer properties → Sharing) and raw ZPL is copied to the share, e.g. \\localhost\ZEBRA1.
 const WIN = process.platform === "win32";
 const SHARE = process.env.PRINT_SHARE ?? (WIN ? `\\\\localhost\\${QUEUE}` : "");
+// Linux (Raspberry Pi): write ZPL straight to the USB printer device, no CUPS needed, e.g. PRINT_DEVICE=/dev/usb/lp0.
+const DEVICE = process.env.PRINT_DEVICE ?? "";
 const PAPER = process.env.PRINT_PAPER ?? (ZPL ? "label225x15" : "label2x1");
 const CHROME = process.env.CHROME ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const AGENT = `${os.hostname()}:${process.pid}`;
@@ -106,13 +109,14 @@ async function printJob(job: { id: number; sku: string; format: string; copies: 
     // Only the 2.25 × 1.5 label has a ZPL drawing; other papers fall back to the PDF route on the same queue.
     if (format === "label225x15") {
       fs.writeFileSync(`${file}.zpl`, zplLabel225x15(item, { thermalTransfer: THERMAL_TRANSFER, copies: job.copies }));
-      if (WIN) await run("cmd.exe", ["/c", "copy", "/b", `${file}.zpl`, SHARE], { timeout: 30_000, windowsHide: true });
+      if (DEVICE) fs.writeFileSync(DEVICE, fs.readFileSync(`${file}.zpl`));
+      else if (WIN) await run("cmd.exe", ["/c", "copy", "/b", `${file}.zpl`, SHARE], { timeout: 30_000, windowsHide: true });
       else await run("lp", ["-d", QUEUE, "-o", "raw", "-t", `Tag ${job.sku}`, `${file}.zpl`], { timeout: 30_000 });
       fs.rmSync(`${file}.zpl`, { force: true });
       return;
     }
   }
-  if (WIN) throw new Error("On Windows this helper prints Zebra labels only (PRINT_MODE=zpl, paper 2.25 × 1.5). Use the Mac for the ZYWELL.");
+  if (WIN || DEVICE) throw new Error("This helper prints Zebra labels only here (PRINT_MODE=zpl, paper 2.25 × 1.5). The PDF route needs the Mac.");
   const page = await (await chrome()).newPage();
   try {
     await page.setContent(await html(item, format), { waitUntil: "load", timeout: 20_000 });
