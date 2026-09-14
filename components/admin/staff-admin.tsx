@@ -46,7 +46,7 @@ export function StaffAdmin() {
     fetch("/api/reference").then((r) => r.json()).then((j) => setOutlets(j.outlets ?? []));
   }, []);
 
-  async function call(method: "POST" | "PATCH", body: unknown, ok: string) {
+  async function call(method: "POST" | "PATCH" | "DELETE", body: unknown, ok: string) {
     setBusy(true);
     setMessage(null);
     try {
@@ -113,7 +113,8 @@ export function StaffAdmin() {
                     <td className="py-2 text-xs text-muted-foreground">{s.last_login ? new Date(s.last_login).toLocaleString("en-PK") : "never"}</td>
                     <td className="py-2 text-right">
                       <Button size="sm" variant="outline" disabled={busy} onClick={() => { const p = window.prompt(`New PIN for ${s.name} (4–6 digits):`); if (p && /^\d{4,6}$/.test(p)) void call("PATCH", { id: s.id, pin: p }, "PIN reset."); }}>Reset PIN</Button>{" "}
-                      <Button size="sm" variant="ghost" disabled={busy} onClick={() => call("PATCH", { id: s.id, active: !s.active }, s.active ? "Deactivated." : "Reactivated.")}>{s.active ? "Deactivate" : "Reactivate"}</Button>
+                      <Button size="sm" variant="ghost" disabled={busy} onClick={() => call("PATCH", { id: s.id, active: !s.active }, s.active ? "Deactivated." : "Reactivated.")}>{s.active ? "Deactivate" : "Reactivate"}</Button>{" "}
+                      <Button size="sm" variant="ghost" className="text-red-700 dark:text-red-400" disabled={busy} title="Only someone with no history can be deleted; otherwise deactivate" onClick={() => { if (window.confirm(`Delete ${s.name}? This cannot be undone.`)) void call("DELETE", { id: s.id }, `${s.name} deleted.`); }}>Delete</Button>
                     </td>
                   </tr>
                   {editing === s.id && (

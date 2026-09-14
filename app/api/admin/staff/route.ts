@@ -104,3 +104,31 @@ export async function PATCH(request: Request) {
   await gate.db.from("admin_audits").insert({ table_name: "staff", row_key: String(body.id), before, after: { ...before, ...visible, ...(body.pin ? { pin: "reset" } : {}) }, changed_by: gate.staff.id });
   return NextResponse.json({ staff: data });
 }
+
+/**
+ * DELETE /api/admin/staff { id } — removes a person who never tagged,
+ * photographed, sold or changed anything. Anyone with history cannot be
+ * deleted (their name is on garments and audits): deactivate them instead.
+ */
+export async function DELETE(request: Request) {
+  const gate = await requireManager();
+  if ("response" in gate) return gate.response;
+  let body: { id?: number };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Body must be JSON." }, { status: 400 });
+  }
+  if (!Number.isInteger(body.id)) return NextResponse.json({ error: "id is required." }, { status: 400 });
+  if (body.id === gate.staff.id) return NextResponse.json({ error: "You cannot delete yourself." }, { status: 400 });
+  const { data: who } = await gate.db.from("staff").select("id, name, role").eq("id", body.id).maybeSingle();
+  if (!who) return NextResponse.json({ error: "No such person." }, { status: 404 });
+  if (who.role === "founder" && gate.staff.role !== "founder") return NextResponse.json({ error: "Only the founder can delete a founder." }, { status: 403 });
+  const { error } = await gate.db.from("staff").delete().eq("id", body.id);
+  if (error) {
+    if (error.code === "23503") return NextResponse.json({ error: `${who.name} has history — garments, photos, sales or changes carry their name — so the record cannot be deleted. Deactivate them instead; they can no longer sign in.` }, { status: 409 });
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  await gate.db.from("admin_audits").insert({ table_name: "staff", row_key: String(body.id), before: who, after: null, changed_by: gate.staff.id, note: "deleted" });
+  return NextResponse.json({ ok: true });
+}
