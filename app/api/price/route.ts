@@ -9,6 +9,8 @@
 
 import { NextResponse } from "next/server";
 
+import { isBrandTier, tierLabel } from "@/lib/brands/tier";
+
 import { currentStaff, dbFor } from "@/lib/auth/staff";
 import { MANAGER_ROLES } from "@/lib/auth/session";
 import { type Adjustment, type GradeCode } from "@/lib/pricing/constants";
@@ -19,6 +21,8 @@ type Body = {
   sub_category_id?: string;
   grade?: string;
   brand_text?: string;
+  /** Tier chosen on the form for a brand that is not in the list yet (regular | affordable_luxury | ultra_luxury). */
+  new_brand_tier?: string;
   adjustment?: string;
   adjust_pct?: number;
   is_rare?: boolean;
@@ -51,6 +55,8 @@ export async function POST(request: Request) {
   const supabase = await dbFor(me);
   const ctx = await loadPricingContext(supabase);
   const brand = await resolveBrandDb(supabase, body.brand_text);
+  // A brand not yet in the list: the tagger picks its tier on the form and the quote follows it.
+  if (brand.is_new && isBrandTier(body.new_brand_tier)) { brand.tier = body.new_brand_tier; brand.warning = `New brand "${brand.name}" — will be added as ${tierLabel(brand.tier)} when you save.`; }
 
   const subCategory = ctx.subCategories.find((s) => s.slug === body.sub_category_id);
   if (!subCategory) return NextResponse.json({ error: `Unknown sub_category_id: ${body.sub_category_id ?? "(missing)"}` }, { status: 400 });

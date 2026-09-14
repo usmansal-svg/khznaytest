@@ -1,5 +1,6 @@
 "use client";
 
+import { tierCode } from "@/lib/brands/tier";
 import { DOT_MM, PRINT_OFFSET_MM } from "@/lib/tag-formats";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +17,8 @@ import { cn } from "@/lib/utils";
 export type TagItem = {
   sku: string;
   brand: string;
+  /** regular | affordable_luxury | ultra_luxury — printed as HS / AL / UL beside the SKU */
+  brand_tier?: string | null;
   category: string;
   sub_category: string;
   size_label: string | null;
@@ -107,7 +110,7 @@ export function TagFaces({ item, format = "hang" }: { item: TagItem; format?: Ta
       <div className="absolute bottom-[3mm] left-[4mm] right-[4mm]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={`/api/tags/${encodeURIComponent(item.sku)}/barcode`} alt={item.sku} className="w-full" style={{ height: "13mm", objectFit: "contain" }} />
-        <div className="text-center font-mono text-[7.5pt] font-semibold tracking-wide">{item.sku}</div>
+        <div className="text-center font-mono text-[7.5pt] font-semibold tracking-wide">{item.sku}<span className="ml-[1.2mm] opacity-70">{tierCode(item.brand_tier)}</span></div>
       </div>
     </div>
   );
@@ -145,7 +148,7 @@ function TagLabel({ item }: { item: TagItem }) {
       <div className="absolute bottom-[1.5mm] left-[2.5mm] right-[2.5mm]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={`/api/tags/${encodeURIComponent(item.sku)}/barcode`} alt={item.sku} className="w-full" style={{ height: "8.5mm", objectFit: "contain" }} />
-        <div className="text-center font-mono text-[6pt] font-semibold tracking-wide">{item.sku}</div>
+        <div className="text-center font-mono text-[6pt] font-semibold tracking-wide">{item.sku}<span className="ml-[1.2mm] opacity-70">{tierCode(item.brand_tier)}</span></div>
       </div>
     </div>
   );
@@ -174,7 +177,7 @@ function TagLabelSmall({ item }: { item: TagItem }) {
         <div className="truncate text-[5.5pt] leading-tight text-neutral-700">{item.sub_category}</div>
         <div className="mt-auto truncate text-[9.5pt] font-black leading-none"><span className="mr-[1mm] text-[5.5pt] font-bold uppercase tracking-wide text-neutral-600">Size</span>{item.size_label ?? "—"}</div>
         <div className="mt-[0.8mm] inline-block self-start whitespace-nowrap rounded-[0.8mm] border-[0.35mm] border-black px-[1mm] py-[0.6mm] text-[11pt] font-black leading-none tabular-nums tracking-tight">{rs(item.list_price)}</div>
-        <div className="mt-[1mm] font-mono text-[5.5pt] font-semibold leading-none tracking-wide">{item.sku}</div>
+        <div className="mt-[1mm] font-mono text-[5.5pt] font-semibold leading-none tracking-wide">{item.sku}<span className="ml-[1.2mm] opacity-70">{tierCode(item.brand_tier)}</span></div>
       </div>
       <div className="absolute bg-white" style={{ right: 0, top: `${(25.4 - box) / 2}mm`, width: `${box}mm`, height: `${box}mm`, padding: `${quiet}mm` }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -214,7 +217,7 @@ function TagLabelLarge({ item }: { item: TagItem }) {
       <div className="absolute bottom-[2mm] left-[3mm] right-[3mm]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={`/api/tags/${encodeURIComponent(item.sku)}/barcode`} alt={item.sku} className="w-full" style={{ height: "12mm", objectFit: "contain" }} />
-        <div className="text-center font-mono text-[7pt] font-semibold tracking-wide">{item.sku}</div>
+        <div className="text-center font-mono text-[7pt] font-semibold tracking-wide">{item.sku}<span className="ml-[1.2mm] opacity-70">{tierCode(item.brand_tier)}</span></div>
       </div>
     </div>
   );
@@ -250,7 +253,7 @@ function TagLabelMedium({ item }: { item: TagItem }) {
           <span className="text-[11pt] font-black tracking-tight">{item.size_label ?? "—"}</span>
         </div>
         <div className="mt-[1.1mm] inline-block self-start whitespace-nowrap rounded-[1mm] border-[0.45mm] border-black px-[1.6mm] py-[0.8mm] text-[13pt] font-black leading-none tabular-nums tracking-tight">{rs(item.list_price)}</div>
-        <div className="mt-[1.2mm] font-mono text-[5.5pt] font-semibold leading-none tracking-[0.08em] text-neutral-700">{item.sku}</div>
+        <div className="mt-[1.2mm] font-mono text-[5.5pt] font-semibold leading-none tracking-[0.08em] text-neutral-700">{item.sku}<span className="ml-[1.2mm] opacity-70">{tierCode(item.brand_tier)}</span></div>
       </div>
       {/* QR top right, under the band */}
       <div className="absolute bg-white" style={{ right: 0, top: `${bandH + 0.4}mm`, width: `${box}mm`, height: `${box}mm`, padding: `${quiet}mm` }}>
@@ -296,7 +299,7 @@ function TagLabelPortrait({ item }: { item: TagItem }) {
       </div>
       <div className="absolute whitespace-nowrap rounded-[1mm] border-[0.45mm] border-black px-[2mm] py-[0.9mm] text-[13pt] font-black leading-none tabular-nums tracking-tight" style={{ left: `${left}mm`, top: `${rows.price}mm` }}>{rs(item.list_price)}</div>
       {/* 33–57 mm on the right: empty for the round markdown sticker */}
-      <div className="absolute font-mono text-[5.5pt] font-semibold leading-none tracking-[0.08em] text-neutral-700" style={{ left: `${left}mm`, top: `${rows.sku}mm` }}>{item.sku}</div>
+      <div className="absolute font-mono text-[5.5pt] font-semibold leading-none tracking-[0.08em] text-neutral-700" style={{ left: `${left}mm`, top: `${rows.sku}mm` }}>{item.sku}<span className="ml-[1.2mm] opacity-70">{tierCode(item.brand_tier)}</span></div>
     </div>
   );
 }
@@ -332,7 +335,7 @@ function TagLabelSquare({ item }: { item: TagItem }) {
       </div>
       <div className="absolute whitespace-nowrap rounded-[1mm] border-[0.45mm] border-black px-[2mm] py-[1mm] text-[14pt] font-black leading-none tabular-nums tracking-tight" style={{ left: `${left}mm`, top: `${rows.price}mm` }}>{rs(item.list_price)}</div>
       {/* bottom right, from about 30 mm down and 30 mm across: empty for the round markdown sticker */}
-      <div className="absolute font-mono text-[6pt] font-semibold leading-none tracking-[0.08em] text-neutral-700" style={{ left: `${left}mm`, top: `${rows.sku}mm` }}>{item.sku}</div>
+      <div className="absolute font-mono text-[6pt] font-semibold leading-none tracking-[0.08em] text-neutral-700" style={{ left: `${left}mm`, top: `${rows.sku}mm` }}>{item.sku}<span className="ml-[1.2mm] opacity-70">{tierCode(item.brand_tier)}</span></div>
     </div>
   );
 }

@@ -5,6 +5,7 @@
  * itself, so nothing is rasterised and the label is out in under a second.
  */
 import type { TagItem } from "@/components/tag-faces";
+import { tierCode } from "@/lib/brands/tier";
 
 const DPI = 203;
 const dots = (mm: number) => Math.round((mm / 25.4) * DPI);
@@ -32,7 +33,7 @@ export function zplLabel225x15(item: TagItem, opts: { thermalTransfer?: boolean;
     `^FO${left + 56},${dots(17.5) - 12}^A0N,38,38^FD${esc(cut(item.size_label ?? "—", 10))}^FS`,
     `^FO${left},${dots(23)}^GB${priceW},${dots(7.5)},3,B,2^FS`,
     `^FO${left + 14},${dots(23) + 14}^A0N,40,40^FD${esc(price)}^FS`,
-    `^FO${left},${dots(32.2)}^A0N,20,20^FD${esc(item.sku)}^FS`,
+    `^FO${left},${dots(32.2)}^A0N,20,20^FD${esc(item.sku)}  ${tierCode(item.brand_tier)}^FS`,
     `^FO${qrX},${qrY}^BQN,2,${qrMag}^FDQA,${esc(item.sku)}^FS`,
     `^FO${W - dots(2) - 150},${dots(2.2)}^A0N,20,20^FB150,1,0,R^FDKHAZANAY^FS`,
     opts.copies && opts.copies > 1 ? `^PQ${opts.copies}` : "",
@@ -65,7 +66,7 @@ export function zplLabel15x225(item: TagItem, opts: { thermalTransfer?: boolean;
     `^FO${left + 52},${dots(19.6) - 14}^A0N,40,40^FD${esc(cut(item.size_label ?? "—", 10))}^FS`,
     `^FO${left},${dots(24.4)}^GB${priceW},${dots(7.6)},3,B,2^FS`,
     `^FO${left + 16},${dots(24.4) + 16}^A0N,42,42^FD${esc(price)}^FS`,
-    `^FO${left},${dots(53.6)}^A0N,18,18^FD${esc(item.sku)}^FS`,
+    `^FO${left},${dots(53.6)}^A0N,18,18^FD${esc(item.sku)}  ${tierCode(item.brand_tier)}^FS`,
     opts.copies && opts.copies > 1 ? `^PQ${opts.copies}` : "",
     "^XZ",
   ].filter(Boolean).join("\n");
@@ -93,7 +94,7 @@ export function zplLabel50x50(item: TagItem, opts: { thermalTransfer?: boolean; 
     `^FO${left + 56},${dots(22.5) - 16}^A0N,44,44^FD${esc(cut(item.size_label ?? "—", 10))}^FS`,
     `^FO${left},${dots(27.8)}^GB${priceW},${dots(8)},3,B,2^FS`,
     `^FO${left + 16},${dots(27.8) + 16}^A0N,46,46^FD${esc(price)}^FS`,
-    `^FO${left},${dots(45)}^A0N,20,20^FD${esc(item.sku)}^FS`,
+    `^FO${left},${dots(45)}^A0N,20,20^FD${esc(item.sku)}  ${tierCode(item.brand_tier)}^FS`,
     opts.copies && opts.copies > 1 ? `^PQ${opts.copies}` : "",
     "^XZ",
   ].filter(Boolean).join("\n");

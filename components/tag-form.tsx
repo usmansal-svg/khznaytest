@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { BRAND_TIER_INFO, tierCode, tierLabel, type BrandTierCode } from "@/lib/brands/tier";
 import { GRADE_RANK, type ColourTag, type GradeCode } from "@/lib/pricing/constants";
 import { ADULT_SIZES, KIDS_SIZES } from "@/lib/pricing/kids-sizes";
 import { sizeSeriesFor } from "@/lib/pricing/sizes";
@@ -108,6 +109,9 @@ export function TagForm() {
   // Cleared after save
   const [brand, setBrand] = useState("");
   const [brandHits, setBrandHits] = useState<{ name: string; tier: string }[]>([]);
+  // Tier the tagger picks for a brand that is not in the list yet; High street unless changed.
+  const [newBrandTier, setNewBrandTier] = useState<BrandTierCode>("regular");
+  useEffect(() => { setNewBrandTier("regular"); }, [brand]);
   const [moreBrands, setMoreBrands] = useState(false);
   const [size, setSize] = useState("");
   // Size buttons: the series is chosen by the garment (collar for shirts,
@@ -288,7 +292,7 @@ export function TagForm() {
           method: "POST",
           headers: { "content-type": "application/json" },
           signal: ctrl.signal,
-          body: JSON.stringify({ sub_category_id: sub, brand_text: brand, grade, adjust_pct: adjustPct, is_rare: rareFind, lot_id: lotId ? Number(lotId) : null, heavy: heavy && Boolean(selectedSub?.has_heavy) }),
+          body: JSON.stringify({ sub_category_id: sub, brand_text: brand, new_brand_tier: newBrandTier, grade, adjust_pct: adjustPct, is_rare: rareFind, lot_id: lotId ? Number(lotId) : null, heavy: heavy && Boolean(selectedSub?.has_heavy) }),
         });
         setPrice(await res.json());
       } catch (e) {
@@ -301,7 +305,7 @@ export function TagForm() {
       clearTimeout(t);
       ctrl.abort();
     };
-  }, [sub, brand, grade, adjustPct, lotId, rareFind, heavy, selectedSub?.has_heavy]);
+  }, [sub, brand, newBrandTier, grade, adjustPct, lotId, rareFind, heavy, selectedSub?.has_heavy]);
 
   const blocked = !rejected && Boolean(price?.block_reason);
   // No hand-off: an ultra-luxury brand (blocked) must be priced by hand; a
@@ -365,6 +369,7 @@ export function TagForm() {
         body: JSON.stringify({
           sub_category_id: sub,
           brand_text: brand,
+          new_brand_tier: newBrandTier,
           grade,
           adjust_pct: adjustPct,
           is_rare: rareFind,
@@ -568,15 +573,26 @@ export function TagForm() {
                 hint={
                   price?.brand && brand
                     ? price.brand.matched
-                      ? `${price.brand.corrected_from ? `Using ${price.brand.name} (you typed "${price.brand.corrected_from}")` : price.brand.name} — ${tierLabel(price.brand.tier)}`
-                      : `New brand — will be added as "${price.brand.name}" (Regular) when you save`
-                    : "Tier resolves automatically; misspellings are corrected"
+                      ? price.brand.corrected_from ? `Using ${price.brand.name} (you typed "${price.brand.corrected_from}")` : undefined
+                      : `New brand: "${price.brand.name}" will be added to the list when you save. Pick its tier below.`
+                    : "Tap a brand, or type one; misspellings are corrected"
                 }
                 hintTone={price?.brand && brand && (!price.brand.matched || price.brand.corrected_from) ? "warn" : undefined}
               >
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
                   <Input ref={brandRef} list="brands" value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Tap a brand below, or type a rarer one" autoComplete="off" autoFocus onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); sizeRef.current?.focus(); } }} />
+                  {price?.brand && brand && price.brand.matched && <TierBadge tier={price.brand.tier} />}
                 </div>
+                {price?.brand && brand && !price.brand.matched && (
+                  <div className="grid gap-1.5 rounded-md border border-amber-500 bg-amber-50 p-2 dark:bg-amber-950/30">
+                    <div className="text-xs font-medium">Which kind of brand is {price.brand.name}?</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {BRAND_TIER_INFO.map((t) => (
+                        <Button key={t.tier} type="button" size="sm" variant={newBrandTier === t.tier ? "default" : "outline"} title={t.hint} className="h-10 px-3 text-sm md:h-9" onClick={() => setNewBrandTier(t.tier)}>{t.label} <span className="ml-1 font-mono text-[10px] opacity-70">{t.code}</span></Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {quickBrands.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
                     {quickBrands.slice(0, moreBrands ? 20 : 10).map((b) => {
@@ -599,7 +615,7 @@ export function TagForm() {
                     )}
                   </div>
                 )}
-                <datalist id="brands">{brandHits.map((b) => <option key={b.name} value={b.name}>{tierLabel(b.tier)}</option>)}</datalist>
+                <datalist id="brands">{brandHits.map((b) => <option key={b.name} value={b.name}>{`${tierLabel(b.tier)} (${tierCode(b.tier)})`}</option>)}</datalist>
               </Field>
               {!rejected && (
                 <div className={cn("grid min-w-0 content-start gap-2 rounded-md border p-3 sm:col-span-2", rareFind && "border-amber-500 bg-amber-50 dark:bg-amber-950/40")}>
@@ -861,8 +877,10 @@ const selectClass =
 
 const COLOURS = ["Black", "White", "Grey", "Navy", "Blue", "Red", "Green", "Beige", "Brown", "Pink", "Yellow", "Orange", "Purple", "Multi"];
 
-function tierLabel(tier: string) {
-  return { regular: "Regular high street", affordable_luxury: "Affordable luxury", ultra_luxury: "Ultra luxury" }[tier] ?? tier;
+/** The brand's tier beside the brand box: HS grey, AL amber, UL black. */
+function TierBadge({ tier }: { tier: string }) {
+  const tone = tier === "ultra_luxury" ? "bg-black text-white border-black" : tier === "affordable_luxury" ? "bg-amber-100 text-amber-900 border-amber-400 dark:bg-amber-950/50 dark:text-amber-200" : "bg-muted text-muted-foreground";
+  return <span className={cn("inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border px-2 py-1 text-xs font-semibold", tone)} title={tierLabel(tier)}><span className="font-mono">{tierCode(tier)}</span><span className="hidden sm:inline font-normal">{tierLabel(tier)}</span></span>;
 }
 
 function kidsHint(size: string) {

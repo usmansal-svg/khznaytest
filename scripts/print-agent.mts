@@ -67,7 +67,7 @@ const log = (...a: unknown[]) => console.log(new Date().toISOString().slice(11, 
 
 async function loadItem(sku: string): Promise<TagItem> {
   const { data, error } = await db.from("items")
-    .select("sku, brand_text, size_label, price, price_manual, is_rare, rare_reasons, rare_note, status, measurements, outlets!items_outlet_id_fkey(name), sub_categories(name, categories(name))")
+    .select("sku, brand_text, brand_tier, size_label, price, price_manual, is_rare, rare_reasons, rare_note, status, measurements, outlets!items_outlet_id_fkey(name), sub_categories(name, categories(name))")
     .eq("sku", sku).maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) throw new Error(`No garment with SKU ${sku}`);
@@ -75,7 +75,7 @@ async function loadItem(sku: string): Promise<TagItem> {
   const sub = one<{ name: string; categories: unknown }>(data.sub_categories);
   const rareLine = data.is_rare ? rareTagLine(data.rare_reasons ?? [], data.rare_note, await loadRareReasons(db)) : null;
   return {
-    sku: data.sku, brand: data.brand_text ?? "Unbranded", category: one<{ name: string }>(sub?.categories)?.name ?? "", sub_category: sub?.name ?? "",
+    sku: data.sku, brand: data.brand_text ?? "Unbranded", brand_tier: data.brand_tier ?? null, category: one<{ name: string }>(sub?.categories)?.name ?? "", sub_category: sub?.name ?? "",
     size_label: data.size_label, measurements: data.measurements ?? {}, measure_fields: [], list_price: data.price_manual ?? data.price ?? 0,
     status: data.status, is_rare: data.is_rare, rare_note: data.rare_note, rare_tag_line: rareLine, outlet: one<{ name: string }>(data.outlets)?.name ?? null,
   };

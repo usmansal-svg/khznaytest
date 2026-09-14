@@ -10,6 +10,8 @@
 
 import { NextResponse } from "next/server";
 
+import { isBrandTier } from "@/lib/brands/tier";
+
 import { audit } from "@/lib/admin/auth";
 
 
@@ -24,6 +26,8 @@ import { SEASONS, WEARERS, buildSku, type Season, type Wearer } from "@/lib/pric
 type Body = {
   sub_category_id?: string;
   brand_text?: string;
+  /** Tier chosen on the form for a brand not yet in the list (regular | affordable_luxury | ultra_luxury). */
+  new_brand_tier?: string;
   grade?: string;
   adjustment?: string;
   adjust_pct?: number;
@@ -83,6 +87,7 @@ export async function POST(request: Request) {
   const ctx = await loadPricingContext(supabase);
   if (ctx.source === "defaults") return NextResponse.json({ error: "The pricing tables could not be read from the database, so this price cannot be trusted. Wait a moment and press Save again." }, { status: 503 });
   const [brand, lot] = await Promise.all([resolveBrandDb(supabase, body.brand_text), loadLot(supabase, Number(body.lot_id))]);
+  if (brand.is_new && isBrandTier(body.new_brand_tier)) { brand.tier = body.new_brand_tier; brand.warning = undefined; }
   if (!lot) return bad(`Unknown lot: ${body.lot_id}`);
   if (lot.status !== "open") return bad(`Lot ${lot.code} is ${lot.status} in the commercial software — pick an open lot.`);
 
@@ -119,16 +124,23 @@ export async function POST(request: Request) {
   const belowReason = body.below_reason?.trim() || null;
   if (below && !belowReason) return bad(`This is ${Math.round(((standardPrice - finalPrice) / standardPrice) * 100)}% below the pricing sheet (Rs ${standardPrice.toLocaleString()}). Give a reason — it is logged.`);
 
-  // A brand nobody has listed yet is added now, as Regular, marked as
-  // coming from a tagger so a manager can set its tier.
+  // A brand nobody has listed yet is added now with the tier the tagger
+  // chose on the form (High street when none), marked as coming from a
+  // tagger so a manager can review it on Brands.
+  // Never overwrite a row that already exists (a deactivated brand, or one the
+  // lookup missed): insert only when the name is free, else reuse the row as is.
   let brandId = brand.id;
   if (!brandId && brand.name) {
-    const { data: created, error: brandErr } = await supabase
+    const { data: created } = await supabase
       .from("brands")
-      .upsert({ name: brand.name, tier: "regular", active: true, source: "tagger", added_by: staff.id }, { onConflict: "name", ignoreDuplicates: false })
-      .select("id")
-      .single();
-    if (!brandErr && created) brandId = created.id;
+      .upsert({ name: brand.name, tier: brand.tier, active: true, source: "tagger", added_by: staff.id }, { onConflict: "name", ignoreDuplicates: true })
+      .select("id, tier")
+      .maybeSingle();
+    if (created) brandId = created.id;
+    else {
+      const { data: existing } = await supabase.from("brands").select("id, tier").eq("name", brand.name).maybeSingle();
+      if (existing) brandId = existing.id; // the item keeps the tier its price was quoted at; the brand row keeps the manager's
+    }
   }
 
   const { data: seq, error: seqError } = await supabase.rpc("next_sku_seq");
