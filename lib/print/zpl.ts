@@ -23,7 +23,7 @@ export function zplLabel225x15(item: TagItem, opts: { thermalTransfer?: boolean;
   const qrX = W - qrSide + 4 * qrMag - dots(1), qrY = Math.round((H - 21 * qrMag) / 2) + dots(1.5);
   const priceW = Math.min(W - left - qrSide - dots(1), Math.round(price.length * 21 + 30));
   return [
-    "^XA", "^CI28", `^PW${W}`, `^LL${H}`, "^LH0,0", opts.thermalTransfer ? "^MTT" : "^MTD", opts.darkness != null ? `^MD${opts.darkness}` : "",
+    "^XA", "^CI28", "^MNW", `^PW${W}`, `^LL${H}`, "^LH0,0", opts.thermalTransfer ? "^MTT" : "^MTD", opts.darkness != null ? `^MD${opts.darkness}` : "",
     // Rare find: a black band with white text above the brand; the reason replaces the garment type.
     ...(item.is_rare ? [`^FO${left},${dots(1.5)}^GB${dots(22)},${dots(3.6)},${dots(3.6)},B,1^FS`, `^FO${left + 8},${dots(1.5) + 8}^A0N,20,20^FR^FDRARE FIND^FS`] : []),
     `^FO${left},${item.is_rare ? dots(5.6) : dots(2)}^A0N,30,30^FB${W - left - qrSide},1,0,L^FD${esc(cut(item.brand || "Unbranded", 26))}^FS`,
@@ -56,7 +56,7 @@ export function zplLabel15x225(item: TagItem, opts: { thermalTransfer?: boolean;
   const priceW = Math.min(W - 2 * left, Math.round(price.length * 21 + 34));
   const typeLine = item.is_rare ? `★ RARE FIND${item.rare_tag_line ? ` · ${item.rare_tag_line}` : ""}` : item.sub_category;
   return [
-    "^XA", "^CI28", `^PW${W}`, `^LL${H}`, "^LH0,0", opts.thermalTransfer ? "^MTT" : "^MTD", opts.darkness != null ? `^MD${opts.darkness}` : "",
+    "^XA", "^CI28", "^MNW", `^PW${W}`, `^LL${H}`, "^LH0,0", opts.thermalTransfer ? "^MTT" : "^MTD", opts.darkness != null ? `^MD${opts.darkness}` : "",
     `^FO${left},${dots(1.8)}^A0N,20,22^FDKHAZANAY^FS`,
     `^FO${left},${dots(5.2)}^A0N,30,30^FB${textW},1,0,L^FD${esc(cut(item.brand || "Unbranded", 18))}^FS`,
     `^FO${left},${dots(9.6)}^A0N,20,20^FB${textW},2,0,L^FD${esc(cut(typeLine, 40))}^FS`,
@@ -82,7 +82,7 @@ export function zplLabel50x50(item: TagItem, opts: { thermalTransfer?: boolean; 
   const priceW = Math.min(W - 2 * left, Math.round(price.length * 23 + 36));
   const typeLine = item.is_rare ? `★ RARE FIND${item.rare_tag_line ? ` · ${item.rare_tag_line}` : ""}` : item.sub_category;
   return [
-    "^XA", "^CI28", `^PW${W}`, `^LL${H}`, "^LH0,0", opts.thermalTransfer ? "^MTT" : "^MTD", opts.darkness != null ? `^MD${opts.darkness}` : "",
+    "^XA", "^CI28", "^MNW", `^PW${W}`, `^LL${H}`, "^LH0,0", opts.thermalTransfer ? "^MTT" : "^MTD", opts.darkness != null ? `^MD${opts.darkness}` : "",
     `^FO${left},${dots(2)}^A0N,22,24^FDKHAZANAY^FS`,
     `^FO${left},${dots(5.6)}^A0N,34,34^FB${textW},1,0,L^FD${esc(cut(item.brand || "Unbranded", 18))}^FS`,
     `^FO${left},${dots(10.2)}^A0N,22,22^FB${textW},2,0,L^FD${esc(cut(typeLine, 44))}^FS`,
