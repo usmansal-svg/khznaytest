@@ -229,15 +229,15 @@ function TagLabelLarge({ item }: { item: TagItem }) {
 function TagLabelMedium({ item }: { item: TagItem }) {
   const rare = Boolean(item.is_rare);
   const W = 57.15, H = 38.1;
-  const mod = 6 * DOT_MM;
-  const qr = 21 * mod;
+  const mod = 5 * DOT_MM;
+  const qr = 21 * mod; // ≈ 13 mm
   const quiet = 4 * mod;
-  const box = qr + 2 * quiet;
+  const box = qr + 2 * quiet; // ≈ 18 mm
   const bandH = 4.6;
   return (
     <div className="tag shadow-lg">
       {/* Header: the wordmark reversed out of a black band; a Rare find says so on the right of it */}
-      <div className={`absolute inset-x-0 top-0 flex h-[${bandH}mm] items-center justify-between bg-black px-[2.2mm] text-[6.5pt] font-black uppercase leading-none tracking-[0.2em] text-white`} style={{ height: `${bandH}mm` }}>
+      <div className="absolute inset-x-0 top-0 flex items-center justify-between bg-black px-[2.2mm] text-[6.5pt] font-black uppercase leading-none tracking-[0.2em] text-white" style={{ height: `${bandH}mm` }}>
         <span>Khazanay</span>
         {rare && <span className="tracking-[0.1em]">★ Rare find</span>}
       </div>
@@ -251,10 +251,13 @@ function TagLabelMedium({ item }: { item: TagItem }) {
         <div className="mt-[1.1mm] inline-block self-start whitespace-nowrap rounded-[1mm] border-[0.45mm] border-black px-[1.6mm] py-[0.8mm] text-[13pt] font-black leading-none tabular-nums tracking-tight">{rs(item.list_price)}</div>
         <div className="mt-[1.2mm] font-mono text-[5.5pt] font-semibold leading-none tracking-[0.08em] text-neutral-700">{item.sku}</div>
       </div>
-      <div className="absolute bg-white" style={{ right: 0, top: `${(H - box) / 2 + bandH / 2}mm`, width: `${box}mm`, height: `${box}mm`, padding: `${quiet}mm` }}>
+      {/* QR top right, under the band */}
+      <div className="absolute bg-white" style={{ right: 0, top: `${bandH + 0.4}mm`, width: `${box}mm`, height: `${box}mm`, padding: `${quiet}mm` }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={`/api/tags/${encodeURIComponent(item.sku)}/qr`} alt={item.sku} className="block" style={{ width: `${qr}mm`, height: `${qr}mm` }} />
       </div>
+      {/* reserved, unmarked: the markdown sticker (up to 15 mm) goes here, bottom right */}
+      <div className="markdown-zone absolute" aria-hidden style={{ right: "1.6mm", bottom: "1.6mm", width: "15mm", height: `${H - bandH - 0.4 - box - 1.6 - 0.8}mm` }} />
     </div>
   );
 }
@@ -266,8 +269,10 @@ function TagLabelMedium({ item }: { item: TagItem }) {
  */
 function TagLabelPortrait({ item }: { item: TagItem }) {
   const rare = Boolean(item.is_rare);
-  const mod = 6 * DOT_MM;
-  const qr = 21 * mod; // ≈ 15.8 mm
+  const mod = 5 * DOT_MM;
+  const qr = 21 * mod; // ≈ 13 mm
+  const quiet = 3 * mod;
+  const box = qr + 2 * quiet; // ≈ 17 mm
   return (
     <div className="tag shadow-lg">
       {/* Header: the wordmark reversed out of a black band */}
@@ -276,9 +281,13 @@ function TagLabelPortrait({ item }: { item: TagItem }) {
         {rare && <div className="shrink-0 self-center rounded-full border-[0.35mm] border-black px-[1.6mm] py-[0.5mm] text-[6pt] font-black uppercase leading-none tracking-[0.12em]">★ Rare find</div>}
         <div className={cn("shrink-0 truncate text-center text-[9pt] font-black leading-tight tracking-tight", rare ? "mt-[1mm]" : "mt-[0.4mm]")}>{item.brand || "Unbranded"}</div>
         <div className="shrink-0 truncate text-center text-[6.5pt] leading-tight text-neutral-600">{rare && item.rare_tag_line ? item.rare_tag_line : item.sub_category}</div>
-        <div className="my-auto shrink-0 self-center bg-white" style={{ padding: `${3 * mod}mm` }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={`/api/tags/${encodeURIComponent(item.sku)}/qr`} alt={item.sku} className="block" style={{ width: `${qr}mm`, height: `${qr}mm` }} />
+        {/* Middle row: the QR on the left, the markdown sticker's space on the right (unmarked) */}
+        <div className="my-auto flex shrink-0 items-center justify-between">
+          <div className="bg-white" style={{ padding: `${quiet}mm`, marginLeft: `-${quiet - 0.4}mm` }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={`/api/tags/${encodeURIComponent(item.sku)}/qr`} alt={item.sku} className="block" style={{ width: `${qr}mm`, height: `${qr}mm` }} />
+          </div>
+          <div className="markdown-zone" aria-hidden style={{ width: "15mm", height: "15mm" }} />
         </div>
         <div className="flex items-baseline justify-center gap-[1.2mm] leading-none">
           <span className="text-[5.5pt] font-bold uppercase tracking-[0.14em] text-neutral-500">Size</span>
