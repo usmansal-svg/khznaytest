@@ -62,6 +62,7 @@ export function tagCss(format: TagFormat = "hang") {
 export function TagFaces({ item, format = "hang" }: { item: TagItem; format?: TagFormat }) {
   const rare = Boolean(item.is_rare);
   if (format === "label2x1") return <TagLabelSmall item={item} />;
+  if (format === "label225x15") return <TagLabelMedium item={item} />;
   if (format === "label") return <TagLabel item={item} />;
   if (format === "label3x2") return <TagLabelLarge item={item} />;
   return (
@@ -211,6 +212,38 @@ function TagLabelLarge({ item }: { item: TagItem }) {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={`/api/tags/${encodeURIComponent(item.sku)}/barcode`} alt={item.sku} className="w-full" style={{ height: "12mm", objectFit: "contain" }} />
         <div className="text-center font-mono text-[7pt] font-semibold tracking-wide">{item.sku}</div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The 2.25 × 1.5 in (57.15 × 38.1 mm) label for the Zebra ZD220t: the same
+ * arrangement as the 2 × 1 label with more air — a 19 mm QR code (6 dots
+ * per module, 3 mm quiet zone), the price in its box at 15 pt, the size
+ * above it, brand and garment type at the top, the SKU in clear text.
+ * No print offset: the Zebra's origin sits on the label edge.
+ */
+function TagLabelMedium({ item }: { item: TagItem }) {
+  const rare = Boolean(item.is_rare);
+  const W = 57.15, H = 38.1;
+  const left = 2;
+  const mod = 6 * DOT_MM;
+  const qr = 21 * mod;
+  const quiet = 4 * mod;
+  const box = qr + 2 * quiet;
+  return (
+    <div className="tag shadow-lg">
+      <div className="absolute flex flex-col" style={{ left: `${left}mm`, top: "2mm", bottom: "1.8mm", width: `${W - left - box + quiet / 2}mm` }}>
+        <div className="truncate text-[8pt] font-bold leading-tight">{rare ? "★ " : ""}{item.brand || "Unbranded"}</div>
+        <div className="truncate text-[6.5pt] leading-tight text-neutral-700">{item.sub_category}</div>
+        <div className="mt-auto truncate text-[11pt] font-black leading-none"><span className="mr-[1mm] text-[6pt] font-bold uppercase tracking-wide text-neutral-600">Size</span>{item.size_label ?? "—"}</div>
+        <div className="mt-[1mm] inline-block self-start whitespace-nowrap rounded-[0.8mm] border-[0.4mm] border-black px-[1.2mm] py-[0.7mm] text-[13pt] font-black leading-none tabular-nums tracking-tight">{rs(item.list_price)}</div>
+        <div className="mt-[1.2mm] font-mono text-[6pt] font-semibold leading-none tracking-wide">{item.sku}</div>
+      </div>
+      <div className="absolute bg-white" style={{ right: 0, top: `${(H - box) / 2}mm`, width: `${box}mm`, height: `${box}mm`, padding: `${quiet}mm` }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={`/api/tags/${encodeURIComponent(item.sku)}/qr`} alt={item.sku} className="block" style={{ width: `${qr}mm`, height: `${qr}mm` }} />
       </div>
     </div>
   );
