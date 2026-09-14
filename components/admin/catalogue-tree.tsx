@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
  * here; the numbers behind each sub-category stay on Pricing → Categories.
  */
 
-type Sub = { slug: string; code: string; name: string; active: boolean; cost: number | null; items: number; tag: string | null; auto_tag: string | null; custom: boolean; season: "summer" | "winter" | "all" };
+type Sub = { slug: string; code: string; name: string; active: boolean; for_wearer: "any" | "girls" | "boys"; cost: number | null; items: number; tag: string | null; auto_tag: string | null; custom: boolean; season: "summer" | "winter" | "all" };
 type Cat = { slug: string; name: string; active: boolean; tag: string; auto_tag: string; custom: boolean; for_wearer: "any" | "girls" | "boys"; subs: Sub[]; items: number };
 type Branch = { gender: string; categories: Cat[] };
 type Preview = { wearer: Wearer; season: "summer" | "winter"; cat: string; sub: string; brand: string; grade: string; size: string };
@@ -33,6 +33,9 @@ export function CatalogueTree() {
   const [selected, setSelected] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [showOff, setShowOff] = useState(false);
+  // Children's bands: look at the catalogue the way a boy's or a girl's tag form will see it.
+  const [viewAs, setViewAs] = useState<"both" | "boys" | "girls">("both");
+  const hiddenFor = viewAs === "boys" ? "girls" : viewAs === "girls" ? "boys" : "";
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [preview, setPreview] = useState<Preview>({ wearer: "men", season: "summer", cat: "", sub: "", brand: "Nike", grade: "premium", size: "L" });
@@ -63,7 +66,7 @@ export function CatalogueTree() {
   const branch = useMemo(() => tree?.find((b) => b.gender === gender) ?? { gender, categories: [] }, [tree, gender]);
   const q = query.trim().toLowerCase();
   const matches = (s: Sub) => !q || s.name.toLowerCase().includes(q) || (s.tag ?? "").toLowerCase().includes(q) || s.code.toLowerCase().includes(q);
-  const visibleCats = branch.categories.filter((c) => (showOff || c.active) && (!q || c.name.toLowerCase().includes(q) || c.subs.some(matches)));
+  const visibleCats = branch.categories.filter((c) => (showOff || c.active) && c.for_wearer !== hiddenFor && (!q || c.name.toLowerCase().includes(q) || c.subs.some(matches)));
   const current = branch.categories.find((c) => c.slug === selected) ?? visibleCats[0] ?? null;
   const live = (c: Cat) => c.subs.filter((s) => s.active).length;
   const totals = { cats: branch.categories.filter((c) => c.active).length, subs: branch.categories.reduce((n, c) => n + live(c), 0) };
@@ -95,11 +98,18 @@ export function CatalogueTree() {
           {query && <button type="button" onClick={() => setQuery("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground" aria-label="Clear search"><X className="size-4" /></button>}
         </div>
         <label className="flex items-center gap-1.5 text-xs text-muted-foreground"><input type="checkbox" checked={showOff} onChange={(e) => setShowOff(e.target.checked)} /> Show hidden</label>
+        {BAND_WEARERS[gender] && (
+          <span className="flex items-center gap-1 text-xs text-muted-foreground">View as
+            <span className="inline-flex overflow-hidden rounded-md border">
+              {(["both", "boys", "girls"] as const).map((v) => <button key={v} type="button" onClick={() => setViewAs(v)} className={cn("px-2 py-1 capitalize", viewAs === v ? "bg-foreground text-background" : "hover:bg-muted")}>{v === "both" ? "Both" : v === "boys" ? BAND_WEARERS[gender]![0] : BAND_WEARERS[gender]![1]}</button>)}
+            </span>
+          </span>
+        )}
       </div>
 
       {BAND_WEARERS[gender] && (
         <p className="rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-sm text-sky-900 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-200">
-          <b>Boys and girls share this catalogue.</b> The tagger picks the wearer on the tag form ({BAND_WEARERS[gender][0].replace(/s$/, "")} or {BAND_WEARERS[gender][1].replace(/s$/, "")}), and every garment then carries the band tag <span className="font-mono text-xs">{GENDER_TAG[gender]} …</span> <i>and</i> the boy or girl tag <span className="font-mono text-xs">{BAND_WEARERS[gender][0]} …</span> / <span className="font-mono text-xs">{BAND_WEARERS[gender][1]} …</span> at category and sub-category level, so the website can have {GENDER_TAG[gender]} → Boys → Hoodies and {GENDER_TAG[gender]} → Girls → Hoodies from the same row.
+          <b>Boys and girls share this catalogue.</b> Mark a category or a single sub-category <i>Girls</i> or <i>Boys</i> and the other sex's tag form will not offer it; use <i>View as</i> above to see each tag form. The tagger picks the wearer on the tag form ({BAND_WEARERS[gender][0].replace(/s$/, "")} or {BAND_WEARERS[gender][1].replace(/s$/, "")}), and every garment then carries the band tag <span className="font-mono text-xs">{GENDER_TAG[gender]} …</span> <i>and</i> the boy or girl tag <span className="font-mono text-xs">{BAND_WEARERS[gender][0]} …</span> / <span className="font-mono text-xs">{BAND_WEARERS[gender][1]} …</span> at category and sub-category level, so the website can have {GENDER_TAG[gender]} → Boys → Hoodies and {GENDER_TAG[gender]} → Girls → Hoodies from the same row.
         </p>
       )}
       <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
@@ -169,10 +179,11 @@ export function CatalogueTree() {
                 <p className="mt-1.5 text-[11px] text-muted-foreground">Press Enter to add. The tag will read “{current.tag.split(" ")[0]} …name…”. Cost, weight and profile are copied from a sibling. The season on each row decides whether the Summer or Winter tag form offers it; the same name may exist once for Summer and once for Winter when the garments differ.</p>
               </div>
               <ul className="divide-y px-2 pb-2 pt-2">
-                {current.subs.filter((s) => (showOff || s.active) && matches(s)).map((s) => (
+                {current.subs.filter((s) => (showOff || s.active) && matches(s) && s.for_wearer !== hiddenFor).map((s) => (
                   <li key={s.slug} className={cn("grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1 px-2 py-2 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_auto_auto_auto]", !s.active && "opacity-50")}>
                     <InlineName value={s.name} busy={busy} onSave={(name) => act({ action: "rename", kind: "sub", slug: s.slug, name }, `Renamed to ${name}. Garments tagged from now on carry the new tag.`)} />
                     <div className="col-span-2 flex flex-wrap items-center gap-2 sm:col-span-1"><TagEdit tag={s.tag ?? ""} auto={s.auto_tag ?? ""} custom={s.custom} busy={busy} onSave={(tag) => act({ action: "set_tag", kind: "sub", slug: s.slug, tag }, tag ? `Tag set to ${tag}.` : "Tag back to automatic.")} /><span className="text-[11px] text-muted-foreground">SKU {s.code}</span>{BAND_WEARERS[gender] && <span className="w-full font-mono text-[10px] text-muted-foreground sm:w-auto">+ {BAND_WEARERS[gender][0]} {(s.tag ?? "").replace(/^\S+\s/, "")} · {BAND_WEARERS[gender][1]} {(s.tag ?? "").replace(/^\S+\s/, "")}</span>}</div>
+                    {BAND_WEARERS[gender] && <select value={s.for_wearer} disabled={busy} onChange={(e) => act({ action: "set_for", kind: "sub", slug: s.slug, for_wearer: e.target.value }, `${s.name} is offered to ${e.target.value === "any" ? "boys and girls" : e.target.value}.`)} title="Offered to boys, girls, or both" className={cn("h-7 rounded-md border border-input bg-background px-1.5 text-xs", s.for_wearer !== "any" && "border-amber-500 text-amber-900 dark:text-amber-200")}><option value="any">Both</option><option value="girls">Girls</option><option value="boys">Boys</option></select>}
                     <select value={s.season} disabled={busy} onChange={(e) => act({ action: "set_season", kind: "sub", slug: s.slug, season: e.target.value }, `${s.name} shows in ${e.target.value === "all" ? "both seasons" : e.target.value}.`)} title="Which season's tag form offers this garment" className={cn("h-7 rounded-md border border-input bg-background px-1.5 text-xs", s.season === "winter" ? "text-sky-700 dark:text-sky-300" : s.season === "summer" ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground")}>
                       <option value="all">All year</option><option value="summer">Summer</option><option value="winter">Winter</option>
                     </select>

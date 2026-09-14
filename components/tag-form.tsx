@@ -30,6 +30,7 @@ type Reference = {
   categories: { slug: string; name: string; gender: Gender; sort_order: number; for_wearer?: "any" | "girls" | "boys" }[];
   sub_categories: {
     slug: string;
+    for_wearer?: "any" | "girls" | "boys";
     code: string;
     category_slug: string;
     gender: Gender;
@@ -207,7 +208,9 @@ export function TagForm() {
   useEffect(() => {
     if (cats.length && !cats.some((c) => c.slug === category)) setCategory(cats[0].slug);
   }, [cats, category]);
-  const subs = useMemo(() => (ref?.sub_categories ?? []).filter((s) => s.category_slug === category && inSeason(s)).sort((a, b) => a.name.localeCompare(b.name)), [ref, category, inSeason]);
+  // A sub-category marked girls-only is hidden from a boy's tag form, and the other way round (children's bands).
+  const notFor = /_boy$/.test(wearer) ? "girls" : /_girl$/.test(wearer) ? "boys" : "";
+  const subs = useMemo(() => (ref?.sub_categories ?? []).filter((s) => s.category_slug === category && inSeason(s) && (s.for_wearer ?? "any") !== notFor).sort((a, b) => a.name.localeCompare(b.name)), [ref, category, inSeason, notFor]);
   useEffect(() => {
     if (subs.length && !subs.some((s) => s.slug === sub)) setSub(subs[0].slug);
   }, [subs, sub]);

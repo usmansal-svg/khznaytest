@@ -83,6 +83,7 @@ export async function GET() {
       .filter((s) => s.active)
       .map((s) => ({
         slug: s.slug,
+        for_wearer: s.forWearer,
         code: s.code,
         category_slug: s.categorySlug,
         gender: s.gender,
