@@ -313,16 +313,16 @@ function TagLabelSquare({ item }: { item: TagItem }) {
   const qr = 21 * mod; // ≈ 15.8 mm
   const quiet = 2 * mod;
   const box = qr + 2 * quiet;
-  const left = 2.2, W = 50;
+  const left = 3.5, W = 50;
   const textW = W - left - box - 0.3;
-  const rows = { mark: 2, brand: 5.6, type: 10.2, size: 21.5, price: 26.8, sku: 46.4 };
+  const rows = { mark: 3, brand: 6.6, type: 11.2, size: 22.5, price: 27.8, sku: 45 };
   const typeLine = rare ? <><span className="text-[6pt] font-black uppercase tracking-wide text-black">★ Rare find</span>{item.rare_tag_line ? ` · ${item.rare_tag_line}` : ""}</> : item.sub_category;
   return (
     <div className="tag shadow-lg">
       <div className="absolute truncate text-[7pt] font-black uppercase leading-none tracking-[0.18em]" style={{ left: `${left}mm`, top: `${rows.mark}mm`, width: `${textW}mm` }}>Khazanay</div>
       <div className="absolute truncate text-[10pt] font-black leading-none tracking-tight" style={{ left: `${left}mm`, top: `${rows.brand}mm`, width: `${textW}mm` }}>{item.brand || "Unbranded"}</div>
       <div className="absolute text-[7pt] leading-[1.15] text-neutral-600" style={{ left: `${left}mm`, top: `${rows.type}mm`, width: `${textW}mm`, maxHeight: "7mm", overflow: "hidden" }}>{typeLine}</div>
-      <div className="absolute bg-white" style={{ right: 0, top: "1.2mm", padding: `${quiet}mm` }}>
+      <div className="absolute bg-white" style={{ right: `${3.5 - quiet}mm`, top: `${3 - quiet}mm`, padding: `${quiet}mm` }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={`/api/tags/${encodeURIComponent(item.sku)}/qr`} alt={item.sku} className="block" style={{ width: `${qr}mm`, height: `${qr}mm` }} />
       </div>
