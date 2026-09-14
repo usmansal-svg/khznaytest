@@ -271,31 +271,28 @@ function TagLabelPortrait({ item }: { item: TagItem }) {
   const rare = Boolean(item.is_rare);
   const mod = 5 * DOT_MM;
   const qr = 21 * mod; // ≈ 13 mm
-  const quiet = 3 * mod;
-  const box = qr + 2 * quiet; // ≈ 17 mm
+  const quiet = 2 * mod; // the white around it (the label itself is white too)
+  // Fixed rows from the top, in mm, so the empty band under the QR stays exactly 13 mm for the markdown sticker.
+  const rows = { mark: 1.8, brand: 5.2, type: 9.3, qr: 12.6, size: 41.6, price: 46.4, sku: 54.4 };
+  const line = (top: number, cls: string, text: string) => <div className={cn("absolute inset-x-[2mm] truncate text-center", cls)} style={{ top: `${top}mm` }}>{text}</div>;
   return (
     <div className="tag shadow-lg">
-      {/* Header: the wordmark reversed out of a black band */}
-      <div className="absolute inset-x-0 top-0 flex h-[5.2mm] items-center justify-center bg-black text-[7pt] font-black uppercase leading-none tracking-[0.22em] text-white">Khazanay</div>
-      <div className="absolute flex flex-col" style={{ left: "2.2mm", right: "2.2mm", top: "6.6mm", bottom: "1.8mm" }}>
-        {rare && <div className="shrink-0 self-center rounded-full border-[0.35mm] border-black px-[1.6mm] py-[0.5mm] text-[6pt] font-black uppercase leading-none tracking-[0.12em]">★ Rare find</div>}
-        <div className={cn("shrink-0 truncate text-center text-[9pt] font-black leading-tight tracking-tight", rare ? "mt-[1mm]" : "mt-[0.4mm]")}>{item.brand || "Unbranded"}</div>
-        <div className="shrink-0 truncate text-center text-[6.5pt] leading-tight text-neutral-600">{rare && item.rare_tag_line ? item.rare_tag_line : item.sub_category}</div>
-        {/* Middle row: the QR on the left, the markdown sticker's space on the right (unmarked) */}
-        <div className="my-auto flex shrink-0 items-center justify-between">
-          <div className="bg-white" style={{ padding: `${quiet}mm`, marginLeft: `-${quiet - 0.4}mm` }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={`/api/tags/${encodeURIComponent(item.sku)}/qr`} alt={item.sku} className="block" style={{ width: `${qr}mm`, height: `${qr}mm` }} />
-          </div>
-          <div className="markdown-zone" aria-hidden style={{ width: "15mm", height: "15mm" }} />
-        </div>
-        <div className="flex items-baseline justify-center gap-[1.2mm] leading-none">
-          <span className="text-[5.5pt] font-bold uppercase tracking-[0.14em] text-neutral-500">Size</span>
-          <span className="text-[12pt] font-black tracking-tight">{item.size_label ?? "—"}</span>
-        </div>
-        <div className="mt-[1.4mm] self-center whitespace-nowrap rounded-[1mm] border-[0.45mm] border-black px-[2mm] py-[0.9mm] text-[13pt] font-black leading-none tabular-nums tracking-tight">{rs(item.list_price)}</div>
-        <div className="mt-[1.4mm] border-t-[0.25mm] border-neutral-300 pt-[0.9mm] text-center font-mono text-[5.5pt] font-semibold leading-none tracking-[0.08em] text-neutral-700">{item.sku}</div>
+      {line(rows.mark, "text-[6.5pt] font-black uppercase leading-none tracking-[0.18em]", "Khazanay")}
+      {line(rows.brand, "text-[9pt] font-black leading-none tracking-tight", item.brand || "Unbranded")}
+      {rare
+        ? <div className="absolute inset-x-[1.5mm] truncate text-center text-[6pt] leading-none text-neutral-700" style={{ top: `${rows.type}mm` }}><span className="text-[5.5pt] font-black uppercase tracking-wide text-black">★ Rare find</span>{item.rare_tag_line ? ` · ${item.rare_tag_line}` : ""}</div>
+        : line(rows.type, "text-[6.5pt] leading-none text-neutral-600", item.sub_category)}
+      <div className="absolute left-1/2 -translate-x-1/2 bg-white" style={{ top: `${rows.qr}mm`, padding: `${quiet}mm` }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={`/api/tags/${encodeURIComponent(item.sku)}/qr`} alt={item.sku} className="block" style={{ width: `${qr}mm`, height: `${qr}mm` }} />
       </div>
+      {/* 28.3–41.3 mm: left empty for the markdown sticker */}
+      <div className="absolute inset-x-0 flex items-baseline justify-center gap-[1.2mm] leading-none" style={{ top: `${rows.size}mm` }}>
+        <span className="text-[5.5pt] font-bold uppercase tracking-[0.14em] text-neutral-500">Size</span>
+        <span className="text-[12pt] font-black tracking-tight">{item.size_label ?? "—"}</span>
+      </div>
+      <div className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap rounded-[1mm] border-[0.45mm] border-black px-[2mm] py-[0.9mm] text-[13pt] font-black leading-none tabular-nums tracking-tight" style={{ top: `${rows.price}mm` }}>{rs(item.list_price)}</div>
+      {line(rows.sku, "font-mono text-[5.5pt] font-semibold leading-none tracking-[0.08em] text-neutral-700", item.sku)}
     </div>
   );
 }
