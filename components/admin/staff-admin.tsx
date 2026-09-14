@@ -11,6 +11,8 @@ import { cn } from "@/lib/utils";
 
 type Staff = { id: number; name: string; role: string; outlet_id: number | null; outlet: string | null; active: boolean; has_pin: boolean; last_login: string | null; daily_target: number | null; permissions: string[] | null };
 type Outlet = { id: number; name: string };
+/** Cashiers and outlet managers sign into a till on the POS, which reads the outlet from this same staff record. Nobody else needs one. */
+const OUTLET_ROLES = new Set(["cashier", "outlet_manager"]);
 const ROLES = [
   { code: "tagger", label: "Tagger" },
   { code: "qc_senior", label: "QC senior" },
@@ -80,20 +82,22 @@ export function StaffAdmin() {
               <Label htmlFor="sr">Role</Label>
               <select id="sr" value={role} onChange={(e) => setRole(e.target.value)} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">{ROLES.map((r) => <option key={r.code} value={r.code}>{r.label}</option>)}</select>
             </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="so">Home outlet</Label>
-              <select id="so" value={outletId} onChange={(e) => setOutletId(e.target.value)} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"><option value="">—</option>{outlets.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select>
-            </div>
+            {OUTLET_ROLES.has(role) && (
+              <div className="grid gap-1.5">
+                <Label htmlFor="so">Outlet <span className="font-normal text-muted-foreground">· the till they sign into on the POS</span></Label>
+                <select id="so" value={outletId} onChange={(e) => setOutletId(e.target.value)} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"><option value="">—</option>{outlets.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select>
+              </div>
+            )}
             <div className="grid gap-1.5"><Label htmlFor="sp">PIN (4–6 digits)</Label><Input id="sp" inputMode="numeric" maxLength={6} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} /></div>
             <PermissionPicker role={role} value={perms} onChange={setPerms} />
-            <Button className="w-full" disabled={busy || !name.trim() || pin.length < 4} onClick={() => call("POST", { name, role, outlet_id: outletId ? Number(outletId) : null, pin, permissions: perms }, `${name} added.`).then((ok) => ok && (setName(""), setPin(""), setPerms(null)))}>Add</Button>
+            <Button className="w-full" disabled={busy || !name.trim() || pin.length < 4} onClick={() => call("POST", { name, role, outlet_id: OUTLET_ROLES.has(role) && outletId ? Number(outletId) : null, pin, permissions: perms }, `${name} added.`).then((ok) => ok && (setName(""), setPin(""), setPerms(null)))}>Add</Button>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-base">Everyone</CardTitle></CardHeader>
           <CardContent>
             <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase text-muted-foreground"><tr><th className="pb-2">Name</th><th className="pb-2">Role</th><th className="pb-2">Screens</th><th className="pb-2">Outlet</th><th className="pb-2">Last sign-in</th><th className="pb-2"></th></tr></thead>
+              <thead className="text-left text-xs uppercase text-muted-foreground"><tr><th className="pb-2">Name</th><th className="pb-2">Role</th><th className="pb-2">Screens</th><th className="pb-2">Outlet (POS)</th><th className="pb-2">Last sign-in</th><th className="pb-2"></th></tr></thead>
               <tbody className="divide-y">
                 {staff.map((s) => (
                   <Fragment key={s.id}>
@@ -108,7 +112,9 @@ export function StaffAdmin() {
                       </button>
                     </td>
                     <td className="py-2">
-                      <select value={s.outlet_id ?? ""} disabled={busy} onChange={(e) => call("PATCH", { id: s.id, outlet_id: e.target.value ? Number(e.target.value) : null }, "Outlet changed.")} className="h-8 rounded-md border border-input bg-transparent px-2 text-sm"><option value="">—</option>{outlets.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select>
+                      {OUTLET_ROLES.has(s.role)
+                        ? <select value={s.outlet_id ?? ""} disabled={busy} onChange={(e) => call("PATCH", { id: s.id, outlet_id: e.target.value ? Number(e.target.value) : null }, "Outlet changed.")} className="h-8 rounded-md border border-input bg-transparent px-2 text-sm"><option value="">—</option>{outlets.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select>
+                        : <span className="text-xs text-muted-foreground">—</span>}
                     </td>
                     <td className="py-2 text-xs text-muted-foreground">{s.last_login ? new Date(s.last_login).toLocaleString("en-PK") : "never"}</td>
                     <td className="py-2 text-right">
