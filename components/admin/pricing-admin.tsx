@@ -340,6 +340,10 @@ function SubCategoryEditor() {
   // Excel-style column filters on gender, category and sub-category.
   const [filters, setFilters] = useState<{ gender: Set<string>; category: Set<string>; name: Set<string>; season: Set<string> }>({ gender: new Set(), category: new Set(), name: new Set(), season: new Set() });
   const [showHidden, setShowHidden] = useState(false);
+  // The Heavy column only matters for a dozen winter garments, so it stays folded away unless asked for.
+  const [showHeavy, setShowHeavy] = useState(false);
+  useEffect(() => { try { setShowHeavy(localStorage.getItem("khz_pricing_heavy") === "on"); } catch { /* fine */ } }, []);
+  const toggleHeavy = (v: boolean) => { setShowHeavy(v); try { localStorage.setItem("khz_pricing_heavy", v ? "on" : "off"); } catch { /* fine */ } };
 
   if (!rows) return <p className="text-muted-foreground">Loading…</p>;
   const dirty = Object.keys(edits).length;
@@ -380,6 +384,7 @@ function SubCategoryEditor() {
           <span className="ml-auto flex flex-wrap items-center gap-3 text-muted-foreground">
             <span className="tabular-nums">{filtering ? `${visible.length} of ${rows.length}` : `${visible.length}`} sub-categories</span>
             {filtering && <button type="button" className="underline underline-offset-2" onClick={() => setFilters({ gender: new Set(), category: new Set(), name: new Set(), season: new Set() })}>Clear filters</button>}
+            <label className="flex items-center gap-1.5" title="Show the Heavy column: tick the garments that also come in a heavy version and set their heavy cost"><input type="checkbox" checked={showHeavy} onChange={(e) => toggleHeavy(e.target.checked)} /> Heavy column</label>
             {hiddenCount > 0 && <label className="flex items-center gap-1.5" title="Deleted from the Catalogue while garments still use them"><input type="checkbox" checked={showHidden} onChange={(e) => setShowHidden(e.target.checked)} /> Show {hiddenCount} hidden</label>}
           </span>
         </div>
@@ -389,7 +394,7 @@ function SubCategoryEditor() {
               <tr>
                 <th className="pb-2 pl-2">Sub-category</th>
                 <th className="pb-2" title="Cost per piece, Rs, before sales tax">Cost</th>
-                <th className="pb-2" title="Tick the garments that also come heavy (winter wear bought by the kilo). The tag form asks Regular or Heavy for those only. Same website tag either way.">Heavy</th>
+                {showHeavy && <th className="pb-2" title="Tick the garments that also come heavy (winter wear bought by the kilo). The tag form asks Regular or Heavy for those only. Same website tag either way.">Heavy</th>}
                 <th className="pb-2 pl-3 text-right" title="Real margin per garment bought: revenue after markdowns, grade mix, never-sells and rejects, plus bulk recovery, ex tax, against landed cost.">Eff. GP</th>
                 <th className="border-l pb-2 pl-3 text-right" title="Shelf price, Rs">BNWT</th>
                 <th className="bg-amber-50 pb-2 pl-3 pr-3 text-right font-bold text-amber-900 dark:bg-amber-950/60 dark:text-amber-200" title="Shelf price, Rs — the grade most stock sells at">Premium</th>
@@ -420,13 +425,13 @@ function SubCategoryEditor() {
                   <Fragment key={r.slug}>
                   {newGroup && (
                     <tr className="bg-muted/60">
-                      <td colSpan={14} className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{GENDER_OPTIONS.find((o) => o.code === r.gender)?.name ?? r.gender} <span className="mx-1 opacity-50">›</span> {r.category}</td>
+                      <td colSpan={showHeavy ? 15 : 14} className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{GENDER_OPTIONS.find((o) => o.code === r.gender)?.name ?? r.gender} <span className="mx-1 opacity-50">›</span> {r.category}</td>
                     </tr>
                   )}
                   <tr className={cn("hover:bg-muted/30", !v.active && "opacity-50")}>
                     <td className="py-1 pl-2 pr-2"><Input value={v.name} onChange={(ev) => edit(r.slug, { name: ev.target.value })} title={v.name} className={cn("h-7 w-48 min-w-48 text-xs", changed("name") && "border-amber-500")} /></td>
-                    <td className="py-1 pr-2"><Input type="number" step="10" min="1" value={v.standard_cost_pkr ?? ""} placeholder="set me" onChange={(ev) => edit(r.slug, { standard_cost_pkr: ev.target.value === "" ? null : Number(ev.target.value) })} className={cn("h-7 w-20 text-xs", changed("standard_cost_pkr") && "border-amber-500", !v.standard_cost_pkr && "border-amber-500")} /></td>
-                    <td className="py-1 pr-2">
+                    <td className="py-1 pr-2"><span className="flex items-center gap-1"><Input type="number" step="10" min="1" value={v.standard_cost_pkr ?? ""} placeholder="set me" onChange={(ev) => edit(r.slug, { standard_cost_pkr: ev.target.value === "" ? null : Number(ev.target.value) })} className={cn("h-7 w-20 text-xs", changed("standard_cost_pkr") && "border-amber-500", !v.standard_cost_pkr && "border-amber-500")} />{!showHeavy && v.heavy_cost_pkr != null && <span className="rounded border px-1 text-[10px] font-semibold text-muted-foreground" title={`Heavy version: Rs ${v.heavy_cost_pkr}. Tick “Heavy column” above to edit.`}>H</span>}</span></td>
+                    {showHeavy && <td className="py-1 pr-2">
                       {v.heavy_cost_pkr == null ? (
                         v.season === "summer" ? <span className="text-xs text-muted-foreground">—</span> : (
                           <input type="checkbox" checked={false} disabled={!v.standard_cost_pkr} title="Tick if this garment also comes in a heavy version. The heavy cost starts at 30% above the cost per piece; the tag form then asks Regular or Heavy for this garment only." onChange={() => edit(r.slug, { heavy_cost_pkr: Math.round((Number(v.standard_cost_pkr) * 1.3) / 10) * 10 })} />
@@ -437,7 +442,7 @@ function SubCategoryEditor() {
                           <Input type="number" step="10" min="1" value={v.heavy_cost_pkr} onChange={(ev) => edit(r.slug, { heavy_cost_pkr: ev.target.value === "" ? null : Number(ev.target.value) })} className={cn("h-7 w-20 text-xs", changed("heavy_cost_pkr") && "border-amber-500")} />
                         </span>
                       )}
-                    </td>
+                    </td>}
                     <td className={cn(num, "font-semibold", est && targetGp != null && (est.effective_gp_pct + 1e-9 < targetGp ? "text-red-600 dark:text-red-400" : "text-green-700 dark:text-green-400"))} title={est ? `${targetGp != null ? `Target ${(targetGp * 100).toFixed(0)}%. ` : ""}Full-price margin on this one garment: ${pct(est.gp_pct)}` : undefined}>{est ? pct(est.effective_gp_pct) : "—"}</td>
                     <td className={cn(num, "border-l pl-3")}>{est ? n0(est.bnwt) : "—"}</td>
                     <td className={cn(num, "bg-amber-50 pl-3 pr-3 text-sm font-bold text-amber-900 dark:bg-amber-950/60 dark:text-amber-200")}>{est ? n0(est.premium) : "—"}</td>
