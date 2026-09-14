@@ -12,6 +12,7 @@
  *   { action: "set_tag", kind, slug, tag }               hand-set Shopify tag; blank = automatic
  *   { action: "set_for", slug, for_wearer }              category offered to any | girls | boys (child bands)
  *   { action: "set_season", slug, season }               sub-category shown in summer | winter | all
+ *   add_sub also takes season (summer | winter | all) and split_from (slug): the existing both-seasons row keeps the other season
  *   { action: "toggle", kind, slug, active }
  *   { action: "delete", kind, slug }                     a sub-category with garments is hidden instead of deleted; a category must be empty
  */
@@ -30,13 +31,24 @@ const GENDER_LABEL: Record<string, string> = { men: "Men", women: "Women", teena
 /** "Formal shirt", "formal-shirt" and "Formal Shirts" are the same sub-category. */
 const sameName = (a: string, b: string) => a.toLowerCase().replace(/[^a-z0-9]/g, "").replace(/s$/, "") === b.toLowerCase().replace(/[^a-z0-9]/g, "").replace(/s$/, "");
 
-/** A sub-category name may exist once per gender: the tag would be identical and the tag form ambiguous. */
-async function duplicateSub(db: Awaited<ReturnType<typeof requireManager>> extends infer G ? (G extends { db: infer D } ? D : never) : never, gender: string, name: string, exceptSlug?: string) {
-  const { data: subs } = await db.from("sub_categories").select("slug, name, category_slug, active, categories(name)").eq("gender", gender);
-  const hit = (subs ?? []).find((s) => s.slug !== exceptSlug && sameName(s.name, name));
+/**
+ * A sub-category name may exist once per gender per season: the Summer tag
+ * form and the Winter tag form each see one "Midi dress". A row marked
+ * "all" seasons takes both slots. The clash message offers the split.
+ */
+const seasonsClash = (a: string, b: string) => a === "all" || b === "all" || a === b;
+type DupHit = { message: string; slug: string; name: string; season: string; splittable: boolean };
+async function duplicateSub(db: Awaited<ReturnType<typeof requireManager>> extends infer G ? (G extends { db: infer D } ? D : never) : never, gender: string, name: string, season: string, exceptSlug?: string): Promise<DupHit | null> {
+  const { data: subs } = await db.from("sub_categories").select("slug, name, season, category_slug, active, categories(name)").eq("gender", gender);
+  const hit = (subs ?? []).find((s) => s.slug !== exceptSlug && sameName(s.name, name) && seasonsClash(String(s.season ?? "all"), season));
   if (!hit) return null;
   const cat = (Array.isArray(hit.categories) ? hit.categories[0] : hit.categories) as { name: string } | null;
-  return `“${hit.name}” already exists under ${GENDER_LABEL[gender] ?? gender} › ${cat?.name ?? hit.category_slug}${hit.active ? "" : " (hidden)"}. A name can appear only once per gender — delete it there first, or pick a different name.`;
+  const where = `${GENDER_LABEL[gender] ?? gender} › ${cat?.name ?? hit.category_slug}${hit.active ? "" : " (hidden)"}`;
+  const hitSeason = String(hit.season ?? "all");
+  const message = hitSeason === "all"
+    ? `“${hit.name}” already exists under ${where} for both seasons. To sell a different summer and winter version, split it: the existing one becomes Summer and a Winter one is added (or the other way round).`
+    : `“${hit.name}” already exists under ${where} for ${hitSeason}. A name can appear once per gender per season — add it for the other season, or pick a different name.`;
+  return { message, slug: hit.slug, name: hit.name, season: hitSeason, splittable: hitSeason === "all" };
 }
 
 export async function GET() {
@@ -62,7 +74,7 @@ export async function GET() {
   return NextResponse.json({ tree });
 }
 
-type Body = { action?: string; gender?: string; name?: string; category_slug?: string; kind?: "category" | "sub"; slug?: string; active?: boolean; tag?: string | null; for_wearer?: string; season?: string };
+type Body = { action?: string; gender?: string; name?: string; category_slug?: string; kind?: "category" | "sub"; slug?: string; active?: boolean; tag?: string | null; for_wearer?: string; season?: string; split_from?: string };
 
 export async function POST(request: Request) {
   const gate = await requireManager();
@@ -92,10 +104,20 @@ export async function POST(request: Request) {
     const { data: cat } = await db.from("categories").select("slug, name, gender").eq("slug", body.category_slug ?? "").not("gender", "is", null).maybeSingle();
     if (!cat) return bad("Pick a category.");
     const gender = cat.gender as string;
-    const dup = await duplicateSub(db, gender, name);
-    if (dup) return bad(dup);
+    const wantSeason = ["summer", "winter", "all"].includes(String(body.season)) ? String(body.season) : "all";
+    // Split: the existing both-seasons row keeps the other season, and this one takes wantSeason.
+    let splitFrom: { slug: string; season: string } | null = null;
+    if (body.split_from && (wantSeason === "summer" || wantSeason === "winter")) {
+      const { data: ex } = await db.from("sub_categories").select("slug, season, gender").eq("slug", String(body.split_from)).maybeSingle();
+      if (!ex || ex.gender !== gender) return bad("The sub-category to split was not found.");
+      splitFrom = { slug: ex.slug, season: wantSeason === "summer" ? "winter" : "summer" };
+    }
+    const dup = await duplicateSub(db, gender, name, wantSeason, splitFrom?.slug);
+    if (dup) return NextResponse.json({ error: dup.message, duplicate: dup }, { status: 400 });
     // Numbers come from a sibling in the same category, else from the gender's most common values.
     const { data: siblings } = await db.from("sub_categories").select("weight_kg, profile_code, value_index, measure_type, standard_cost_pkr, season, code, slug").eq("category_slug", cat.slug).order("standard_cost_pkr", { ascending: false, nullsFirst: false });
+    // A split copies its numbers from the row it splits from, not the dearest sibling.
+    if (splitFrom) { const twin = (siblings ?? []).find((s) => s.slug === splitFrom!.slug); if (twin) siblings!.splice(0, siblings!.length, twin); }
     const { data: all } = await db.from("sub_categories").select("code, slug, standard_cost_pkr, measure_type").eq("gender", gender);
     const { data: every } = await db.from("sub_categories").select("code, slug");
     const model = siblings?.[0] ?? null;
@@ -109,15 +131,19 @@ export async function POST(request: Request) {
     const letters = name.toUpperCase().replace(/[^A-Z]/g, "");
     let code = [words.map((w) => w[0]).join("").slice(0, 3), letters.slice(0, 3), (words[0] ?? "").slice(0, 2) + (words[1]?.[0] ?? "")].filter((c) => c.length === 3).find((c) => !usedCodes.has(c));
     if (!code) { for (let i = 0; i < 26 * 26 && !code; i++) { const c = letters.slice(0, 1).padEnd(1, "X") + String.fromCharCode(65 + Math.floor(i / 26)) + String.fromCharCode(65 + (i % 26)); if (!usedCodes.has(c)) code = c; } }
-    let slug = `${gender}-${slugify(name)}`;
-    for (let i = 2; usedSlugs.has(slug); i++) slug = `${gender}-${slugify(name)}-${i}`;
+    let slug = `${gender}-${slugify(name)}${wantSeason === "all" ? "" : `-${wantSeason}`}`;
+    for (let i = 2; usedSlugs.has(slug); i++) slug = `${gender}-${slugify(name)}${wantSeason === "all" ? "" : `-${wantSeason}`}-${i}`;
     const row = {
       slug, code, category_slug: cat.slug, gender, name, active: true, per_piece_share: 0,
       weight_kg: model ? Number(model.weight_kg) : 0.3, profile_code: model?.profile_code ?? "standard", value_index: model ? Number(model.value_index) : 1,
-      measure_type: model?.measure_type ?? guessMeasure, season: model?.season ?? "all", standard_cost_pkr: model?.standard_cost_pkr != null ? Number(model.standard_cost_pkr) : median,
+      measure_type: model?.measure_type ?? guessMeasure, season: wantSeason !== "all" ? wantSeason : (model?.season ?? "all"), standard_cost_pkr: model?.standard_cost_pkr != null ? Number(model.standard_cost_pkr) : median,
     };
     const { error } = await db.from("sub_categories").insert(row);
     if (error) return bad(error.message);
+    if (splitFrom) {
+      await db.from("sub_categories").update({ season: splitFrom.season }).eq("slug", splitFrom.slug);
+      await audit(db, me, "sub_categories", splitFrom.slug, { season: "all" }, { season: splitFrom.season }, `split by season: this one keeps ${splitFrom.season}, ${slug} is the ${wantSeason} version`);
+    }
     await audit(db, me, "sub_categories", slug, null, row, model ? `created from the catalogue tree; numbers copied from ${model.slug}` : "created from the catalogue tree; numbers are the gender's typical values");
     return NextResponse.json({ ok: true, slug, code, copied_from: model?.slug ?? null, cost: row.standard_cost_pkr });
   }
@@ -129,7 +155,7 @@ export async function POST(request: Request) {
     if (name.length < 2) return bad("Give it a name.");
     const { data: before } = await db.from(table).select("name, gender").eq("slug", body.slug).maybeSingle();
     if (!before) return bad("No such row.");
-    if (table === "sub_categories") { const dup = await duplicateSub(db, String(before.gender), name, body.slug); if (dup) return bad(dup); }
+    if (table === "sub_categories") { const { data: mine } = await db.from("sub_categories").select("season").eq("slug", body.slug).maybeSingle(); const dup = await duplicateSub(db, String(before.gender), name, String(mine?.season ?? "all"), body.slug); if (dup) return bad(dup.message); }
     if (table === "categories") {
       const { data: cats } = await db.from("categories").select("slug, name").eq("gender", before.gender);
       const hit = (cats ?? []).find((c) => c.slug !== body.slug && sameName(c.name, name));
@@ -153,8 +179,11 @@ export async function POST(request: Request) {
 
   if (body.action === "set_season") {
     if (table !== "sub_categories" || !["summer", "winter", "all"].includes(String(body.season))) return bad("season must be summer, winter or all.");
-    const { data: before } = await db.from("sub_categories").select("season").eq("slug", body.slug).maybeSingle();
+    const { data: before } = await db.from("sub_categories").select("season, name, gender").eq("slug", body.slug).maybeSingle();
     if (!before) return bad("No such sub-category.");
+    // The other season's twin must stay the only one for its season.
+    const dup = await duplicateSub(db, String(before.gender), String(before.name), String(body.season), body.slug);
+    if (dup) return bad(dup.message);
     const { error } = await db.from("sub_categories").update({ season: body.season }).eq("slug", body.slug);
     if (error) return bad(error.message);
     await audit(db, me, "sub_categories", body.slug, before, { season: body.season }, "season set from the catalogue");
