@@ -13,6 +13,7 @@
  *   PRINT_QUEUE     CUPS queue name (default EML_400L_LABEL)
  *   PRINT_MODE=zpl  Zebra: send native ZPL for the 2.25 × 1.5 label (raw), no PDF
  *   PRINT_RIBBON=no direct-thermal Zebra (default: thermal transfer, ribbon fitted)
+ *   PRINT_DARKNESS  Zebra darkness 0–30 (default 22)
  *   PRINT_POLL_MS   how often to look for jobs (default 400)
  *   PRINTER_NAME    the name the iPads pick (default: the queue name)
  *   PRINT_PAPER     the paper loaded, for the pages to default to (label2x1 / label225x15 / …)
@@ -42,6 +43,8 @@ const QUEUE = process.env.PRINT_QUEUE ?? "EML_400L_LABEL";
 // PRINT_MODE=zpl sends native Zebra commands (raw) instead of a PDF: no rasterising, label out in about a second.
 const ZPL = process.env.PRINT_MODE === "zpl";
 const THERMAL_TRANSFER = process.env.PRINT_RIBBON !== "no";
+// Zebra print darkness 0–30. Ribbon printing on these labels came out grey at the default; 22 is solid black without bleeding.
+const DARKNESS = process.env.PRINT_DARKNESS ? Number(process.env.PRINT_DARKNESS) : 22;
 const POLL_MS = Number(process.env.PRINT_POLL_MS ?? 400);
 // The printer's name as the iPads see it. Jobs name a printer; unnamed jobs go to whichever helper sees them first.
 const NAME = process.env.PRINTER_NAME ?? QUEUE;
@@ -109,7 +112,7 @@ async function printJob(job: { id: number; sku: string; format: string; copies: 
     // The two Zebra papers have native drawings; other papers fall back to the PDF route on the same queue.
     const zpl = format === "label225x15" ? zplLabel225x15 : format === "label15x225" ? zplLabel15x225 : format === "label50x50" ? zplLabel50x50 : null;
     if (zpl) {
-      fs.writeFileSync(`${file}.zpl`, zpl(item, { thermalTransfer: THERMAL_TRANSFER, copies: job.copies }));
+      fs.writeFileSync(`${file}.zpl`, zpl(item, { thermalTransfer: THERMAL_TRANSFER, darkness: DARKNESS, copies: job.copies }));
       if (DEVICE) fs.writeFileSync(DEVICE, fs.readFileSync(`${file}.zpl`));
       else if (WIN) await run("cmd.exe", ["/c", "copy", "/b", `${file}.zpl`, SHARE], { timeout: 30_000, windowsHide: true });
       else await run("lp", ["-d", QUEUE, "-o", "raw", "-t", `Tag ${job.sku}`, `${file}.zpl`], { timeout: 30_000 });
