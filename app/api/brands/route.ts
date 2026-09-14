@@ -13,12 +13,14 @@ export async function GET(request: Request) {
   if (!q) return NextResponse.json({ brands: [] });
 
   const supabase = await dbFor(await currentStaff());
-  const [prefix, all] = await Promise.all([
-    supabase.from("brands").select("id, name, tier").eq("active", true).ilike("name", `${q}%`).order("name").limit(20),
+  const [prefix, within, all] = await Promise.all([
+    supabase.from("brands").select("id, name, tier").eq("active", true).ilike("name", `${q}%`).order("name").limit(12),
+    q.length >= 3 ? supabase.from("brands").select("id, name, tier").eq("active", true).ilike("name", `%${q}%`).order("name").limit(12) : Promise.resolve({ data: null, error: null }),
     q.length >= 4 ? supabase.from("brands").select("id, name, tier").eq("active", true).limit(5000) : Promise.resolve({ data: null, error: null }),
   ]);
   if (prefix.error) return NextResponse.json({ error: prefix.error.message }, { status: 500 });
   const brands = [...(prefix.data ?? [])];
+  for (const b of within.data ?? []) if (!brands.some((x) => x.id === b.id) && brands.length < 12) brands.push(b);
   // "Did you mean": a near match that the prefix search would miss.
   const near = all.data ? matchBrand(q, all.data as { id: number; name: string; tier: string }[]) : null;
   if (near && !brands.some((b) => b.id === near.brand.id)) brands.unshift(near.brand);

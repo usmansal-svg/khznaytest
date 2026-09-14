@@ -111,6 +111,10 @@ export function TagForm() {
   const [brandHits, setBrandHits] = useState<{ name: string; tier: string }[]>([]);
   // Tier the tagger picks for a brand that is not in the list yet; High street unless changed.
   const [newBrandTier, setNewBrandTier] = useState<BrandTierCode>("regular");
+  // The suggestion list under the brand box: open while typing, arrow keys move, Enter picks, Escape closes.
+  const [brandOpen, setBrandOpen] = useState(false);
+  const [brandIdx, setBrandIdx] = useState(0);
+  const pickBrand = (name: string) => { setBrand(name); setBrandOpen(false); requestAnimationFrame(() => sizeRef.current?.focus()); };
   useEffect(() => { setNewBrandTier("regular"); }, [brand]);
   const [moreBrands, setMoreBrands] = useState(false);
   const [size, setSize] = useState("");
@@ -260,8 +264,9 @@ export function TagForm() {
   useEffect(() => { setSleeve(""); }, [selectedSub?.slug]);
   const selectedLot = ref?.lots.find((l) => String(l.id) === lotId) ?? null;
   const rejected = grade === "rejected";
+  const suggestions = useMemo(() => { const t = brand.trim().toLowerCase(); return t ? brandHits.filter((b) => b.name.toLowerCase() !== t).slice(0, 8) : []; }, [brand, brandHits]);
 
-  /* brand datalist */
+  /* brand suggestions */
   useEffect(() => {
     const q = brand.trim();
     if (!q) {
@@ -272,7 +277,7 @@ export function TagForm() {
     const t = setTimeout(() => {
       fetch(`/api/brands?q=${encodeURIComponent(q)}`, { signal: ctrl.signal })
         .then((r) => r.json())
-        .then((j) => setBrandHits(j.brands ?? []))
+        .then((j) => { setBrandHits(j.brands ?? []); setBrandIdx(0); })
         .catch(() => {});
     }, 120);
     return () => {
@@ -579,9 +584,27 @@ export function TagForm() {
                 }
                 hintTone={price?.brand && brand && (!price.brand.matched || price.brand.corrected_from) ? "warn" : undefined}
               >
-                <div className="flex items-center gap-2">
-                  <Input ref={brandRef} list="brands" value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Tap a brand below, or type a rarer one" autoComplete="off" autoFocus onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); sizeRef.current?.focus(); } }} />
+                <div className="relative flex items-center gap-2">
+                  <Input ref={brandRef} value={brand} onChange={(e) => { setBrand(e.target.value); setBrandOpen(true); }} onFocus={() => setBrandOpen(true)} onBlur={() => setTimeout(() => setBrandOpen(false), 150)} placeholder="Tap a brand below, or start typing…" autoComplete="off" autoCorrect="off" autoCapitalize="words" spellCheck={false} autoFocus
+                    onKeyDown={(e) => {
+                      const open = brandOpen && suggestions.length > 0;
+                      if (e.key === "ArrowDown" && open) { e.preventDefault(); setBrandIdx((i) => Math.min(suggestions.length - 1, i + 1)); }
+                      else if (e.key === "ArrowUp" && open) { e.preventDefault(); setBrandIdx((i) => Math.max(0, i - 1)); }
+                      else if (e.key === "Escape") { setBrandOpen(false); }
+                      else if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); if (open) pickBrand(suggestions[brandIdx].name); else sizeRef.current?.focus(); }
+                    }} />
                   {price?.brand && brand && price.brand.matched && <TierBadge tier={price.brand.tier} />}
+                  {brandOpen && suggestions.length > 0 && (
+                    <ul className="absolute left-0 top-full z-20 mt-1 max-h-72 w-full overflow-auto rounded-md border bg-background shadow-lg" role="listbox">
+                      {suggestions.map((b, i) => (
+                        <li key={b.name} role="option" aria-selected={i === brandIdx} onMouseDown={(e) => { e.preventDefault(); pickBrand(b.name); }} onMouseEnter={() => setBrandIdx(i)}
+                          className={cn("flex cursor-pointer items-center justify-between gap-2 px-3 py-2.5 text-sm md:py-2", i === brandIdx ? "bg-muted" : "")}>
+                          <span className="truncate font-medium">{b.name}</span>
+                          <TierBadge tier={b.tier} />
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
                 {price?.brand && brand && !price.brand.matched && (
                   <div className="grid gap-1.5 rounded-md border border-amber-500 bg-amber-50 p-2 dark:bg-amber-950/30">
@@ -615,7 +638,6 @@ export function TagForm() {
                     )}
                   </div>
                 )}
-                <datalist id="brands">{brandHits.map((b) => <option key={b.name} value={b.name}>{`${tierLabel(b.tier)} (${tierCode(b.tier)})`}</option>)}</datalist>
               </Field>
               {!rejected && (
                 <div className={cn("grid min-w-0 content-start gap-2 rounded-md border p-3 sm:col-span-2", rareFind && "border-amber-500 bg-amber-50 dark:bg-amber-950/40")}>
