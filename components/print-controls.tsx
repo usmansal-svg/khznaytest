@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react";
 
 import { TAG_FORMATS, saveTagFormat, type TagFormat } from "@/components/tag-faces";
-import { PRINT_ROUTES, queuePrint, readPrintRoute, savePrintRoute, watchJobs, type PrintRoute } from "@/lib/print-route";
+import { PRINT_ROUTES, listPrinters, queuePrint, readPrintRoute, readPrinter, savePrintRoute, savePrinter, watchJobs, type LabelPrinter, type PrintRoute } from "@/lib/print-route";
 
 /** The Print button plus the per-device printer and paper choices, shared by the single and batch print pages. */
 export function PrintControls({ skus, format, setFormat }: { skus: string[]; format: TagFormat; setFormat: (f: TagFormat) => void }) {
   const [route, setRoute] = useState<PrintRoute>("helper");
-  useEffect(() => { setRoute(readPrintRoute()); }, []);
+  const [printers, setPrinters] = useState<LabelPrinter[]>([]);
+  const [printer, setPrinter] = useState("");
+  useEffect(() => { setRoute(readPrintRoute()); setPrinter(readPrinter()); void listPrinters().then(setPrinters); }, []);
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   function go() {
@@ -28,6 +30,14 @@ export function PrintControls({ skus, format, setFormat }: { skus: string[]; for
           {PRINT_ROUTES.map((r) => <option key={r.code} value={r.code}>{r.label}</option>)}
         </select>
       </label>
+      {route === "helper" && printers.length > 0 && (
+        <label className="flex items-center gap-1.5 text-neutral-600">Which
+          <select value={printer} onChange={(e) => { setPrinter(e.target.value); savePrinter(e.target.value); }} className="rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm text-black">
+            <option value="">Any printer</option>
+            {printers.map((p) => <option key={p.name} value={p.name}>{p.name}{p.online ? "" : " (offline)"}</option>)}
+          </select>
+        </label>
+      )}
       <label className="flex items-center gap-1.5 text-neutral-600">Paper
         <select value={format} onChange={(e) => { const f = e.target.value as TagFormat; setFormat(f); saveTagFormat(f); }} className="rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm text-black">
           {TAG_FORMATS.map((f) => <option key={f.code} value={f.code}>{f.label}</option>)}

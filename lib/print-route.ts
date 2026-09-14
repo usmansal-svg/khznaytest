@@ -14,11 +14,21 @@ export function readPrintRoute(): PrintRoute {
 }
 export function savePrintRoute(r: PrintRoute) { try { localStorage.setItem("khz_print_route", r); } catch { /* fine */ } }
 
+export type LabelPrinter = { name: string; queue: string; mode: string; paper: string | null; host: string | null; last_seen: string; online: boolean };
+/** The printer this device sends to, by name; empty = whichever helper is free. */
+export function readPrinter(): string { try { return localStorage.getItem("khz_printer") ?? ""; } catch { return ""; } }
+export function savePrinter(name: string) { try { localStorage.setItem("khz_printer", name); } catch { /* fine */ } }
+export async function listPrinters(): Promise<LabelPrinter[]> {
+  const r = await fetch("/api/print-jobs?printers=1").catch(() => null);
+  if (!r?.ok) return [];
+  return ((await r.json()).printers ?? []) as LabelPrinter[];
+}
+
 export type QueuedJob = { id: number; sku: string; status: "queued" | "printing" | "done" | "error"; error?: string | null };
 
 /** Queue tags for the helper. Resolves with the job ids; throws with the server's message. */
-export async function queuePrint(skus: string[], format: string, copies = 1): Promise<QueuedJob[]> {
-  const r = await fetch("/api/print-jobs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ skus, format, copies }) });
+export async function queuePrint(skus: string[], format: string, copies = 1, printer: string = readPrinter()): Promise<QueuedJob[]> {
+  const r = await fetch("/api/print-jobs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ skus, format, copies, printer: printer || null }) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error ?? "Could not queue the print.");
   return (j.jobs as { id: number; sku: string }[]).map((x) => ({ ...x, status: "queued" as const }));

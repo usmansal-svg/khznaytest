@@ -9,7 +9,13 @@
  *   npm run print-agent            (or the launch agent installed by scripts/install-print-agent.sh)
  *
  * Needs: .env.local with the service-role key, Google Chrome, and the CUPS
- * queue named below (lpstat -p to list). Override with PRINT_QUEUE / CHROME.
+ * queue named below (lpstat -p to list). Environment:
+ *   PRINT_QUEUE     CUPS queue name (default EML_400L_LABEL)
+ *   PRINT_MODE=zpl  Zebra: send native ZPL for the 2.25 × 1.5 label (raw), no PDF
+ *   PRINT_RIBBON=no direct-thermal Zebra (default: thermal transfer, ribbon fitted)
+ *   PRINT_POLL_MS   how often to look for jobs (default 400)
+ *   PRINTER_NAME    the name the iPads pick (default: the queue name)
+ *   PRINT_PAPER     the paper loaded, for the pages to default to (label2x1 / label225x15 / …)
  */
 import { createClient } from "@supabase/supabase-js";
 import { execFile } from "node:child_process";
@@ -20,16 +26,27 @@ import { promisify } from "node:util";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import puppeteer, { type Browser } from "puppeteer-core";
+
 import { TAG_FORMATS, TagFaces, tagCss, type TagFormat, type TagItem } from "../components/tag-faces";
+import { zplLabel225x15 } from "../lib/print/zpl";
 import { toSvg } from "../lib/barcode/code128";
 import { qrSvg } from "../lib/barcode/qr";
 import { loadRareReasons, rareTagLine } from "../lib/pricing/rare-reasons";
 
 const run = promisify(execFile);
 const QUEUE = process.env.PRINT_QUEUE ?? "EML_400L_LABEL";
+// PRINT_MODE=zpl sends native Zebra commands (raw) instead of a PDF: no rasterising, label out in about a second.
+const ZPL = process.env.PRINT_MODE === "zpl";
+const THERMAL_TRANSFER = process.env.PRINT_RIBBON !== "no";
+const POLL_MS = Number(process.env.PRINT_POLL_MS ?? 400);
+// The printer's name as the iPads see it. Jobs name a printer; unnamed jobs go to whichever helper sees them first.
+const NAME = process.env.PRINTER_NAME ?? QUEUE;
+const PAPER = process.env.PRINT_PAPER ?? (ZPL ? "label225x15" : "label2x1");
 const CHROME = process.env.CHROME ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const AGENT = `${os.hostname()}:${process.pid}`;
 const TAILWIND = "https://cdn.tailwindcss.com";
+let tailwindJs: string | null = null; // fetched once, inlined into every label page: no network per label
 
 const env = Object.fromEntries(fs.readFileSync(path.join(process.cwd(), ".env.local"), "utf8").split("\n").filter((l) => l.includes("=")).map((l) => { const i = l.indexOf("="); return [l.slice(0, i).trim(), l.slice(i + 1).trim()]; }));
 if (!env.NEXT_PUBLIC_SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) { console.error("print-agent: .env.local needs NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY"); process.exit(1); }
@@ -62,7 +79,17 @@ async function html(item: TagItem, format: TagFormat): Promise<string> {
     .replace(/src="\/api\/tags\/[^"]*\/barcode\?bare=1"/g, `src="${bare}"`)
     .replace(/src="\/api\/tags\/[^"]*\/barcode"/g, `src="${full}"`)
     .replace(/src="\/api\/tags\/[^"]*\/qr"/g, `src="${qr}"`);
-  return `<!doctype html><html><head><meta charset="utf-8"><script src="${TAILWIND}"></script><style>${tagCss(format)} body{margin:0}</style></head><body>${body}</body></html>`;
+  if (tailwindJs == null) { try { tailwindJs = await (await fetch(TAILWIND)).text(); } catch { tailwindJs = null; } }
+  const tw = tailwindJs ? `<script>${tailwindJs}</script>` : `<script src="${TAILWIND}"></script>`;
+  return `<!doctype html><html><head><meta charset="utf-8">${tw}<style>${tagCss(format)} body{margin:0}</style></head><body>${body}</body></html>`;
+}
+
+// One Chrome stays open for the PDF route; launching it per label cost 2–4 s.
+let browser: Browser | null = null;
+async function chrome(): Promise<Browser> {
+  if (browser?.connected) return browser;
+  browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ["--disable-gpu", "--no-first-run"] });
+  return browser;
 }
 
 async function printJob(job: { id: number; sku: string; format: string; copies: number }) {
@@ -70,15 +97,28 @@ async function printJob(job: { id: number; sku: string; format: string; copies: 
   const paper = TAG_FORMATS.find((f) => f.code === format)!;
   const item = await loadItem(job.sku);
   const file = path.join(tmp, `${job.id}-${job.sku}`);
-  fs.writeFileSync(`${file}.html`, await html(item, format));
-  await run(CHROME, ["--headless=new", "--disable-gpu", "--no-pdf-header-footer", "--virtual-time-budget=4000", `--print-to-pdf=${file}.pdf`, `file://${file}.html`], { timeout: 30_000 });
+  if (ZPL) {
+    // Only the 2.25 × 1.5 label has a ZPL drawing; other papers fall back to the PDF route on the same queue.
+    if (format === "label225x15") {
+      fs.writeFileSync(`${file}.zpl`, zplLabel225x15(item, { thermalTransfer: THERMAL_TRANSFER, copies: job.copies }));
+      await run("lp", ["-d", QUEUE, "-o", "raw", "-t", `Tag ${job.sku}`, `${file}.zpl`], { timeout: 30_000 });
+      fs.rmSync(`${file}.zpl`, { force: true });
+      return;
+    }
+  }
+  const page = await (await chrome()).newPage();
+  try {
+    await page.setContent(await html(item, format), { waitUntil: "load", timeout: 20_000 });
+    await new Promise((r) => setTimeout(r, 250)); // Tailwind builds its styles right after load
+    await page.pdf({ path: `${file}.pdf`, width: `${paper.w}mm`, height: `${paper.h}mm`, printBackground: true, preferCSSPageSize: true });
+  } finally { await page.close(); }
   const media = `Custom.${Math.round((paper.w * 72) / 25.4)}x${Math.round((paper.h * 72) / 25.4)}`;
   await run("lp", ["-d", QUEUE, "-n", String(job.copies), "-o", `media=${media}`, "-t", `Tag ${job.sku}`, `${file}.pdf`], { timeout: 30_000 });
-  fs.rmSync(`${file}.html`, { force: true }); fs.rmSync(`${file}.pdf`, { force: true });
+  fs.rmSync(`${file}.pdf`, { force: true });
 }
 
 async function tick() {
-  const { data: queued, error } = await db.from("print_jobs").select("id, sku, format, copies").eq("status", "queued").order("id").limit(10);
+  const { data: queued, error } = await db.from("print_jobs").select("id, sku, format, copies, printer").eq("status", "queued").or(`printer.eq.${NAME},printer.is.null`).order("id").limit(10);
   if (error) { log("queue read failed:", error.message); return; }
   for (const job of queued ?? []) {
     const { data: claimed } = await db.from("print_jobs").update({ status: "printing", claimed_at: new Date().toISOString(), agent: AGENT }).eq("id", job.id).eq("status", "queued").select("id");
@@ -98,4 +138,8 @@ async function tick() {
 log(`print-agent up: queue ${QUEUE}, agent ${AGENT}`);
 // Anything left "printing" by a helper that died goes back to the queue.
 await db.from("print_jobs").update({ status: "queued", agent: null, claimed_at: null }).eq("status", "printing").lt("claimed_at", new Date(Date.now() - 120_000).toISOString());
-for (;;) { await tick().catch((e) => log("tick failed:", (e as Error).message)); await new Promise((r) => setTimeout(r, 2000)); }
+log(`printer "${NAME}", mode ${ZPL ? "ZPL (native Zebra)" : "PDF"}, ribbon ${THERMAL_TRANSFER ? "yes" : "no"}, paper ${PAPER}, polling every ${POLL_MS} ms`);
+// Heartbeat: the print pages list printers seen in the last minute.
+const beat = () => db.from("label_printers").upsert({ name: NAME, queue: QUEUE, mode: ZPL ? "zpl" : "pdf", host: os.hostname(), paper: PAPER, last_seen: new Date().toISOString() }).then(({ error: e }) => { if (e) log("heartbeat failed:", e.message); });
+await beat(); setInterval(() => void beat(), 15_000);
+for (;;) { await tick().catch((e) => log("tick failed:", (e as Error).message)); await new Promise((r) => setTimeout(r, POLL_MS)); }
