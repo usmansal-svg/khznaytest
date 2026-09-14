@@ -424,7 +424,7 @@ function SubCategoryEditor() {
                     </tr>
                   )}
                   <tr className={cn("hover:bg-muted/30", !v.active && "opacity-50")}>
-                    <td className="py-1 pl-2 pr-2"><Input value={v.name} onChange={(ev) => edit(r.slug, { name: ev.target.value })} className={cn("h-7 w-32 text-xs", changed("name") && "border-amber-500")} /></td>
+                    <td className="py-1 pl-2 pr-2"><Input value={v.name} onChange={(ev) => edit(r.slug, { name: ev.target.value })} title={v.name} className={cn("h-7 w-48 min-w-48 text-xs", changed("name") && "border-amber-500")} /></td>
                     <td className="py-1 pr-2"><Input type="number" step="10" min="1" value={v.standard_cost_pkr ?? ""} placeholder="set me" onChange={(ev) => edit(r.slug, { standard_cost_pkr: ev.target.value === "" ? null : Number(ev.target.value) })} className={cn("h-7 w-20 text-xs", changed("standard_cost_pkr") && "border-amber-500", !v.standard_cost_pkr && "border-amber-500")} /></td>
                     <td className="py-1 pr-2">
                       {v.heavy_cost_pkr == null ? (
